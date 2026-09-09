@@ -95,3 +95,16 @@ class Envelope(BaseModel):
 
     tool: str
     input: dict[str, Any] = Field(default_factory=dict)
+
+
+def validate_payload(schema: dict[str, Any], payload: Any, *, kind: str) -> None:
+    """按 JSON Schema 2020-12 校验载荷；不过即用户错误，提交时拦截。"""
+    from jsonschema import Draft202012Validator
+
+    from core.errors import ToolUserError
+
+    validator = Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(payload), key=lambda e: e.json_path)
+    if errors:
+        first = errors[0]
+        raise ToolUserError(f"{kind} 不符合 schema（{first.json_path}）: {first.message}")

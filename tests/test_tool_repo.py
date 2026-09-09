@@ -8,7 +8,7 @@ from core.protocol import ToolManifest
 from store.db import Db
 from store.tool_repo import ToolRepo
 
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://command:root@192.168.8.41:5432/command_dev")
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://command_dev:root@192.168.8.41:5432/command_dev")
 
 
 def _db_reachable() -> bool:

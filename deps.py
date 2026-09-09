@@ -44,7 +44,12 @@ def get_registry_service() -> RegistryService:
 
 @lru_cache(maxsize=1)
 def get_dispatch_service() -> DispatchService:
-    return DispatchService(db=get_db(), task_repo=get_task_repo(), tool_repo=get_tool_repo())
+    return DispatchService(
+        db=get_db(),
+        task_repo=get_task_repo(),
+        tool_repo=get_tool_repo(),
+        event_repo=get_event_repo(),
+    )
 
 
 @lru_cache(maxsize=1)

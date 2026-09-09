@@ -1,32 +1,49 @@
-"""L3 任务路由：提交（信封）/ 驱动 handle 生命周期（S2 实现入库与 SSE）。"""
+"""L3 任务路由：提交（信封校验）/ 查询 / 列表 / 取消；SSE 事件流于 S2b。"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
+import deps
 from api.schemas import TaskCreate
+from core.errors import (
+    TaskConflictError,
+    TaskNotFoundError,
+    ToolNotFoundError,
+    ToolUserError,
+)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-@router.post("", status_code=501)
+@router.post("", status_code=202)
 def create_task(body: TaskCreate) -> dict:
-    raise HTTPException(status_code=501, detail="任务提交将在 S2 实现（PG 队列 + dispatch_service）")
+    try:
+        return deps.get_dispatch_service().submit(body.tool, body.input)
+    except ToolNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ToolUserError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.get("", status_code=501)
-def list_tasks() -> dict:
-    raise HTTPException(status_code=501, detail="任务列表将在 S2 实现")
+@router.get("")
+def list_tasks(
+    status: str | None = Query(default=None), limit: int = Query(default=50, le=200)
+) -> dict:
+    return {"tasks": deps.get_dispatch_service().list(status=status, limit=limit)}
 
 
-@router.get("/{handle}", status_code=501)
+@router.get("/{handle}")
 def get_task(handle: str) -> dict:
-    raise HTTPException(status_code=501, detail=f"任务详情将在 S2 实现: {handle}")
+    try:
+        return deps.get_dispatch_service().get(handle)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/{handle}/cancel", status_code=501)
+@router.post("/{handle}/cancel")
 def cancel_task(handle: str) -> dict:
-    raise HTTPException(status_code=501, detail=f"协作取消将在 S2 实现: {handle}")
-
-
-@router.get("/{handle}/events", status_code=501)
-def task_events(handle: str) -> dict:
-    raise HTTPException(status_code=501, detail=f"SSE 事件流将在 S2 实现: {handle}")
+    try:
+        return deps.get_dispatch_service().cancel(handle)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

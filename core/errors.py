@@ -17,6 +17,18 @@ EXIT_CODE = {ToolUserError: 1, ToolSystemError: 2, ToolDomainError: 3}
 HTTP_STATUS = {ToolUserError: 422, ToolSystemError: 500, ToolDomainError: 503}
 
 
+class ToolNotFoundError(Exception):
+    """工具不存在于注册表（活跃状态）。"""
+
+
+class TaskNotFoundError(Exception):
+    """任务 handle 不存在。"""
+
+
+class TaskConflictError(Exception):
+    """任务状态冲突（终态后取消、重复终态等）。"""
+
+
 def exit_code_for(exc: Exception) -> int:
     for cls, code in EXIT_CODE.items():
         if isinstance(exc, cls):
