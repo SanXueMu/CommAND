@@ -88,8 +88,14 @@ class Scheduler:
     def _execute(self, task: dict[str, Any], cancel_event: threading.Event) -> None:
         handle = task["handle"]
 
-        def emit(type: str, data: dict[str, Any]) -> None:
-            self._event_repo.append(handle, type, data)
+        def emit(event) -> None:
+            # 工具契约：单参事件 dict → 事件类型收敛为 progress（phase 存 data 内，
+            # 满足 task_events_type_check 枚举）；兼容旧双参 (type, data) 调用
+            if isinstance(event, dict):
+                data = event
+            else:
+                data = {"detail": event}
+            self._event_repo.append(handle, "progress", data)
             self._task_repo.heartbeat(handle)
 
         try:

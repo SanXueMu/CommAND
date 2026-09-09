@@ -53,9 +53,13 @@ def stack():
         on_task_done=pipeline_service.advance)
     yield pipeline_service, scheduler, task_repo
     with db.pool.connection() as conn:
+        # 只清理本测试创建的数据（共享 dev 库，禁止宽清理误伤其他管线任务）
+        conn.execute(
+            "DELETE FROM tasks WHERE pipeline_run IN (SELECT id FROM pipeline_runs WHERE pipeline_id = %s)",
+            (PIPELINE_ID,),
+        )
         conn.execute("DELETE FROM pipeline_runs WHERE pipeline_id = %s", (PIPELINE_ID,))
         conn.execute("DELETE FROM pipelines WHERE id = %s", (PIPELINE_ID,))
-        conn.execute("DELETE FROM tasks WHERE pipeline_run IS NOT NULL")
     db.close()
 
 
