@@ -52,4 +52,10 @@ class Db:
 
     @property
     def pool(self) -> ConnectionPool:
+        self.open()
         return self._pool
+
+    def close(self) -> None:
+        if self._opened:
+            self._pool.close()
+            self._opened = False

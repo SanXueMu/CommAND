@@ -34,8 +34,11 @@ def cmd_register(args: argparse.Namespace) -> None:
 
     import deps
 
-    result = deps.get_registry_service().scan()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    try:
+        result = deps.get_registry_service().scan()
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    finally:
+        deps.get_db().close()
 
 
 def main() -> None:

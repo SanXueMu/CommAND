@@ -1,0 +1,20 @@
+[tool]
+id = "text.llm.translate"
+name = "纯翻译"
+version = "1.0.0"
+description = "LLM 批量翻译（segments → translations）；术语词典、缓存、上下文滑窗由 S2 微协议接入"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.complete[]"]
+output_types = ["text.translated[]"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 3600
+concurrency = 2
+max_attempts = 3
