@@ -1,21 +1,21 @@
 [tool]
 id = "text.llm.translate"
-name = "纯翻译"
-version = "1.0.0"
-tags = ["文本", "翻译"]
-description = "LLM 批量翻译（segments → translations）；术语词典、缓存、上下文滑窗由 S2 微协议接入"
+name = "LLM 翻译"
+version = "2.0.0"
+tags = ["llm", "翻译"]
+description = "纯文本→文本批量翻译：编号直存 + 分隔符/JSON/逐条三路线 + 熔断 + 质检重译 + 字典缓存（机制全内化，对管线零耦合）"
 
 [io]
 input_schema = "input.schema.json"
 output_schema = "output.schema.json"
-input_types = ["text.complete[]"]
-output_types = ["text.translated[]"]
+input_types = ["text.unique", "text.raw[]"]
+output_types = ["text.translated"]
 
 [runtime]
 kind = "inproc"
 entry = "main.py:run"
 
 [resources]
-timeout_s = 3600
+timeout_s = 7200
 concurrency = 2
 max_attempts = 3

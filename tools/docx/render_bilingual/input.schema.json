@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["units", "ranges", "index_map", "date_maps", "translations", "statuses"],
+  "properties": {
+    "units": {"type": "array", "description": "提取工具输出的单元组（table|text）"},
+    "ranges": {"type": "array", "description": "classify 的 ranges"},
+    "index_map": {"type": "array", "items": {"type": "integer"}},
+    "date_maps": {"type": "array", "items": {"type": "object"}},
+    "translations": {"type": "array", "items": {"type": "string"}},
+    "statuses": {"type": "array", "items": {"enum": ["ok", "review"]}},
+    "col_classes": {"type": "object", "description": "table 单元需要（classify 的 col_classes)"},
+    "segments": {"type": "array", "items": {"type": "string"}},
+    "file": {"type": "string", "description": "源文件路径（产物命名/来源标注用）"},
+    "out_name": {"type": "string", "description": "产物文件名；缺省 <源名>_中文翻译.docx"}
+  }
+}

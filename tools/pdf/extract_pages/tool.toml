@@ -1,0 +1,21 @@
+[tool]
+id = "pdf.extract.pages"
+name = "pdf 提取"
+version = "1.0.0"
+tags = ["提取", "文档"]
+description = "文本型 PDF → 每页 text 单元 + 表格 table 单元（页眉页脚/页码过滤，扫描页标记 no_text）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf"]
+output_types = ["table.extracted", "doc.pages"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

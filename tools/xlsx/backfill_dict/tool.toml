@@ -1,0 +1,21 @@
+[tool]
+id = "xlsx.backfill.dict"
+name = "xlsx 回填"
+version = "1.0.0"
+tags = ["回填", "表格"]
+description = "单元组 × 列分类 × 显式映射 × 译文 → 中文版 xlsx（每单元一 sheet + 对照字典 sheet；review 格保留原文加 ⚠️）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["table.extracted"]
+output_types = ["file.xlsx"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 1

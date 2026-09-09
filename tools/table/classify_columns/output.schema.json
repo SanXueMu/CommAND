@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["col_classes", "segments", "ranges"],
+  "properties": {
+    "col_classes": {
+      "type": "object",
+      "description": "{unit_id: [{col, class, unique}]}",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["col", "class", "unique"],
+          "properties": {
+            "col": {"type": "integer"},
+            "class": {"enum": ["skip", "enum", "text"]},
+            "unique": {"type": "integer"}
+          }
+        }
+      }
+    },
+    "segments": {"type": "array", "items": {"type": "string"}},
+    "ranges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["unit_id", "start", "count"],
+        "properties": {
+          "unit_id": {"type": "string"},
+          "start": {"type": "integer"},
+          "count": {"type": "integer"}
+        }
+      }
+    }
+  }
+}

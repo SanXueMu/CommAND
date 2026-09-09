@@ -1,0 +1,21 @@
+[tool]
+id = "text.verify.fidelity"
+name = "译文保真质检"
+version = "1.0.0"
+tags = ["质检", "翻译"]
+description = "原文/译文对 → 四规则保真质检（数字缺失/占位符丢失/未翻译/截断），独立可复用（人翻校验同样适用）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.translated"]
+output_types = ["verify.report"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 60
+concurrency = 4
+max_attempts = 1

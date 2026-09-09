@@ -1,12 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["translations"],
+  "required": ["translations", "statuses", "model", "usage", "review_count"],
   "properties": {
-    "translations": {
-      "type": "array",
-      "items": {"type": "string"},
-      "minItems": 1
-    }
+    "translations": {"type": "array", "items": {"type": "string"}, "description": "与输入 segments 逐位对齐"},
+    "statuses": {"type": "array", "items": {"enum": ["ok", "review"]}},
+    "model": {"type": "string"},
+    "usage": {
+      "type": "object",
+      "properties": {
+        "prompt_tokens": {"type": "integer"},
+        "completion_tokens": {"type": "integer"}
+      }
+    },
+    "review_count": {"type": "integer"},
+    "cache_hits": {"type": "integer"}
   }
 }

@@ -1,0 +1,21 @@
+[tool]
+id = "text.dedup.values"
+name = "文本归一去重"
+version = "1.0.0"
+tags = ["文本", "优化"]
+description = "段落序列 → 日期归一去重：唯一段 + 显式映射（index_map/date_maps），翻译量与唯一值数成正比"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.raw[]", "table.profile"]
+output_types = ["text.unique"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 120
+concurrency = 4
+max_attempts = 1

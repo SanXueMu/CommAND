@@ -1,0 +1,21 @@
+[tool]
+id = "ocrdb.extract.units"
+name = "ocr 库提取"
+version = "1.0.0"
+tags = ["提取", "ocr"]
+description = "commOcr 结果库(sqlite records 表) → 每来源一个 table 单元；长值独立 text 单元（premium 通道）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.sqlite"]
+output_types = ["table.extracted"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 300
+concurrency = 2
+max_attempts = 2

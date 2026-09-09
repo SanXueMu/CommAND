@@ -1,0 +1,21 @@
+[tool]
+id = "xlsx.extract.values"
+name = "xlsx 提取"
+version = "1.0.0"
+tags = ["提取", "表格"]
+description = "xlsx → 每 sheet 一个 table 单元（read_only 流式，单元格全转字符串，去尾部空行）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.xlsx"]
+output_types = ["table.extracted"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 300
+concurrency = 2
+max_attempts = 2

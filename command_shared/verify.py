@@ -75,6 +75,8 @@ def retranslate_prompt(source: str, reason: str) -> str:
         "empty": "The previous translation was empty.",
         "truncated": "The previous translation was truncated. Translate the complete text.",
         "not_identical": "The source contains no translatable words. Output it unchanged, character for character.",
+        "missing_number": "The previous translation is missing numbers that appear in the source. Keep ALL numbers exactly as in the source.",
+        "missing_placeholder": "The previous translation lost a placeholder like [[DATE_1]]. Keep every placeholder exactly as in the source.",
         "untranslated": "The text was left untranslated. Translate ALL of it into Chinese, including company names, addresses and headings. Keep only real codes/IDs unchanged.",
     }.get(reason.split(":")[0], "")
     return f"{hint}\nSource: {source}" if hint else source

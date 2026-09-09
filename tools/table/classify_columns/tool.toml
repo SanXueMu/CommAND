@@ -1,0 +1,21 @@
+[tool]
+id = "table.classify.columns"
+name = "表格列分类"
+version = "1.0.0"
+tags = ["分析", "表格"]
+description = "单元组 → 逐列分类（skip/enum/text）+ 可译段收割（确定性顺序，供去重/翻译/回填对齐）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["table.extracted", "doc.pages"]
+output_types = ["table.profile"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 120
+concurrency = 4
+max_attempts = 1

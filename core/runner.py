@@ -5,6 +5,7 @@ http 契约：POST {entry}/call 信封 → 200 结果 / 422 用户错 / 503 领�
 """
 
 import importlib.util
+import sys
 import json
 import shlex
 import subprocess
@@ -57,6 +58,10 @@ class Runner:
         module_path = tool_dir / file_name
         if not module_path.exists():
             raise ToolSystemError(f"工具入口不存在: {module_path}")
+        # 仓库根入 sys.path：inproc 工具可 import command_shared 共享库
+        repo_root = str(Path(__file__).resolve().parent.parent)
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
         spec = importlib.util.spec_from_file_location(f"command_tool_{manifest.tool.id.replace('.', '_')}", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

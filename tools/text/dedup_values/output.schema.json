@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["unique", "index_map", "date_maps"],
+  "properties": {
+    "unique": {"type": "array", "items": {"type": "string"}, "description": "去重后的归一文本"},
+    "index_map": {
+      "type": "array",
+      "description": "index_map[i] = 输入段 i 对应的 unique 下标",
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "date_maps": {
+      "type": "array",
+      "description": "date_maps[i] = 输入段 i 的 {占位符: 原日期}（回插用）",
+      "items": {"type": "object", "additionalProperties": {"type": "string"}}
+    }
+  }
+}

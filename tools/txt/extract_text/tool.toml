@@ -1,0 +1,21 @@
+[tool]
+id = "txt.extract.text"
+name = "txt 提取"
+version = "1.0.0"
+tags = ["提取", "文本"]
+description = "txt / md → 整文件一个 text 单元"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.txt"]
+output_types = ["text.raw"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 60
+concurrency = 4
+max_attempts = 2

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["units", "col_classes", "ranges", "segments", "index_map", "date_maps", "translations", "statuses"],
+  "properties": {
+    "units": {"type": "array", "description": "提取工具输出的单元组"},
+    "col_classes": {"type": "object", "description": "classify 的 col_classes"},
+    "ranges": {"type": "array", "description": "classify 的 ranges"},
+    "segments": {"type": "array", "items": {"type": "string"}, "description": "classify 的收割段（对照字典原文列）"},
+    "index_map": {"type": "array", "items": {"type": "integer"}},
+    "date_maps": {"type": "array", "items": {"type": "object"}},
+    "translations": {"type": "array", "items": {"type": "string"}},
+    "statuses": {"type": "array", "items": {"enum": ["ok", "review"]}},
+    "file": {"type": "string", "description": "源文件路径（产物命名用）"},
+    "out_name": {"type": "string", "description": "产物文件名；缺省 <源名>_中文版.xlsx"}
+  }
+}

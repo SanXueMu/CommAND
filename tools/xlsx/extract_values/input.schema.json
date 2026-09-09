@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file"],
+  "properties": {
+    "file": {"type": "string", "description": "xlsx 文件路径（通常来自 /api/files 上传）"}
+  }
+}

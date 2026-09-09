@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["units"],
+  "properties": {
+    "units": {
+      "type": "array",
+      "description": "提取工具输出的单元组",
+      "items": {
+        "type": "object",
+        "required": ["unit_id", "unit_type"],
+        "properties": {
+          "unit_id": {"type": "string"},
+          "unit_type": {"enum": ["table", "text"]},
+          "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "enum_max": {"type": "integer", "minimum": 1, "description": "唯一值 ≤ enum_max → 枚举列，默认 100"},
+    "skip_pattern": {"type": "string", "description": "跳过列单元格正则（默认纯数字/日期/编号模式）"}
+  }
+}

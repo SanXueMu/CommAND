@@ -1,0 +1,21 @@
+[tool]
+id = "docx.render.bilingual"
+name = "docx 渲染"
+version = "1.0.0"
+tags = ["回填", "文档"]
+description = "单元组 × 译文 → 中文翻译 docx（pdf 按页分隔 + 章节标题导航 + 表格还原；review 单元加提示条）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["table.extracted", "doc.pages"]
+output_types = ["file.docx"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 1

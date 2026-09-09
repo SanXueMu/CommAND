@@ -3,11 +3,21 @@
   "type": "object",
   "required": ["segments"],
   "properties": {
-    "segments": {
+    "segments": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "key_name": {"type": "string", "description": "keys 服务中的密钥名；缺省用 is_default，再缺省取首个"},
+    "model": {"type": "string", "description": "主力模型，默认 qwen-mt-flash"},
+    "fallback_model": {"type": "string", "description": "兜底/重译模型，默认 qwen3.7-flash"},
+    "premium": {"type": "boolean", "description": "走高价值长文模型（qwen3.7-plus），默认 false"},
+    "target_lang": {"type": "string", "description": "目标语言，默认 Chinese"},
+    "source_lang": {"type": ["string", "null"]},
+    "terms": {
       "type": "array",
-      "items": {"type": "string"},
-      "minItems": 1
+      "description": "术语对 [[原文, 译文], ...]（跨批次译名一致；术语原文不走缓存）",
+      "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}}
     },
-    "target_lang": {"type": "string", "default": "English"}
+    "batch_size": {"type": "integer", "minimum": 1},
+    "concurrency": {"type": "integer", "minimum": 1},
+    "max_batch_chars": {"type": "integer", "minimum": 100},
+    "use_cache": {"type": "boolean", "description": "字典缓存开关（默认开；缓存只认 ok 条目）"}
   }
 }
