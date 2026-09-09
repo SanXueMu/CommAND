@@ -7,7 +7,7 @@ from psycopg.types.json import Json
 from core.protocol import ToolManifest
 from store.db import Db
 
-_COLUMNS = "id, name, version, description, input_types, output_types, runtime_kind"
+_COLUMNS = "id, name, version, description, input_types, output_types, runtime_kind, path"
 
 
 class ToolRepo:
@@ -16,12 +16,12 @@ class ToolRepo:
     def __init__(self, db: Db) -> None:
         self._db = db
 
-    def upsert(self, manifest: ToolManifest) -> None:
+    def upsert(self, manifest: ToolManifest, path: str | None = None) -> None:
         with self._db.pool.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO tools (id, name, version, description, manifest, input_types, output_types, runtime_kind)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO tools (id, name, version, description, manifest, input_types, output_types, runtime_kind, path)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name,
                     version = EXCLUDED.version,
@@ -30,6 +30,7 @@ class ToolRepo:
                     input_types = EXCLUDED.input_types,
                     output_types = EXCLUDED.output_types,
                     runtime_kind = EXCLUDED.runtime_kind,
+                    path = EXCLUDED.path,
                     updated_at = now()
                 """,
                 (
@@ -41,6 +42,7 @@ class ToolRepo:
                     manifest.io.input_types,
                     manifest.io.output_types,
                     manifest.runtime.kind,
+                    path,
                 ),
             )
 
@@ -59,8 +61,8 @@ class ToolRepo:
             ).fetchone()
         if row is None:
             return None
-        view = self._to_view(row[:7])
-        view["manifest"] = row[7]
+        view = self._to_view(row[:8])
+        view["manifest"] = row[8]
         return view
 
     @staticmethod
@@ -73,4 +75,5 @@ class ToolRepo:
             "input_types": row[4],
             "output_types": row[5],
             "runtime_kind": row[6],
+            "path": row[7],
         }

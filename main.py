@@ -4,19 +4,29 @@ import argparse
 
 
 def create_app():
+    from contextlib import asynccontextmanager
+
     from fastapi import FastAPI
 
     import deps
     from api import pipelines_router, system_router, tasks_router, tools_router
 
-    app = FastAPI(title="CommAND", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(app):
+        db = deps.get_db()
+        db.open()
+        db.apply_migrations()
+        scheduler = deps.get_scheduler()
+        scheduler.start()
+        yield
+        scheduler.stop()
+        db.close()
+
+    app = FastAPI(title="CommAND", version="0.1.0", lifespan=lifespan)
     app.include_router(system_router.router, prefix="/api")
     app.include_router(tools_router.router, prefix="/api")
     app.include_router(tasks_router.router, prefix="/api")
     app.include_router(pipelines_router.router, prefix="/api")
-    db = deps.get_db()
-    db.open()
-    db.apply_migrations()
     return app
 
 

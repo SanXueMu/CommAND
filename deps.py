@@ -3,6 +3,8 @@
 from functools import lru_cache
 
 from config import Config, load_config
+from core.runner import Runner
+from core.scheduler import Scheduler
 from services.dispatch_service import DispatchService
 from services.pipeline_service import PipelineService
 from services.registry_service import RegistryService
@@ -49,6 +51,24 @@ def get_dispatch_service() -> DispatchService:
         task_repo=get_task_repo(),
         tool_repo=get_tool_repo(),
         event_repo=get_event_repo(),
+        scheduler=get_scheduler(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_runner() -> Runner:
+    return Runner()
+
+
+@lru_cache(maxsize=1)
+def get_scheduler() -> Scheduler:
+    return Scheduler(
+        db=get_db(),
+        runner=get_runner(),
+        task_repo=get_task_repo(),
+        tool_repo=get_tool_repo(),
+        event_repo=get_event_repo(),
+        config=get_config(),
     )
 
 

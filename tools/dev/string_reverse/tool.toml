@@ -1,0 +1,20 @@
+[tool]
+id = "dev.string.reverse"
+name = "字符串反转"
+version = "1.0.0"
+description = "subprocess 契约参考实现：stdin 信封 JSON → stdout 结果 JSON"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.raw[]"]
+output_types = ["text.reversed[]"]
+
+[runtime]
+kind = "subprocess"
+entry = "python3 main.py"
+
+[resources]
+timeout_s = 60
+concurrency = 4
+max_attempts = 1

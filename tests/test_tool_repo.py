@@ -27,6 +27,7 @@ def repo():
     db.apply_migrations()
     yield ToolRepo(db)
     with db.pool.connection() as conn:
+        conn.execute("DELETE FROM tasks WHERE tool_id = 'text.llm.translate'")
         conn.execute("DELETE FROM tools WHERE id = 'text.llm.translate'")
 
 

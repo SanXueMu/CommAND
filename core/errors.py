@@ -13,6 +13,10 @@ class ToolDomainError(Exception):
     """领域错误：运行中可恢复（限流、单条质检不过），按 max_attempts 重试。"""
 
 
+class TaskCancelled(Exception):
+    """协作取消：工具在检查点主动抛出或 subprocess 被 SIGTERM 后转译。"""
+
+
 EXIT_CODE = {ToolUserError: 1, ToolSystemError: 2, ToolDomainError: 3}
 HTTP_STATUS = {ToolUserError: 422, ToolSystemError: 500, ToolDomainError: 503}
 

@@ -25,11 +25,13 @@ class DispatchService:
         task_repo: TaskRepo,
         tool_repo: ToolRepo,
         event_repo: EventRepo,
+        scheduler: Any | None = None,
     ) -> None:
         self._db = db
         self._task_repo = task_repo
         self._tool_repo = tool_repo
         self._event_repo = event_repo
+        self._scheduler = scheduler
 
     def submit(self, tool_id: str, input: dict[str, Any]) -> dict[str, Any]:
         tool = self._tool_repo.get(tool_id)
@@ -56,4 +58,6 @@ class DispatchService:
         if task["status"] == "queued":
             self._task_repo.cancel_queued(handle)
             return {"handle": handle, "status": "cancelled"}
-        raise NotImplementedError("运行中任务的协作取消将在 S2b 提供（Scheduler 接入后）")
+        if self._scheduler is not None and self._scheduler.request_cancel(handle):
+            return {"handle": handle, "status": "cancelling"}
+        raise TaskConflictError("运行中任务不在本调度器管理内，无法取消")

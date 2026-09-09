@@ -27,7 +27,7 @@ class RegistryService:
             except Exception as exc:
                 invalid.append({"path": str(path), "error": str(exc)})
                 continue
-            self._tool_repo.upsert(manifest)
+            self._tool_repo.upsert(manifest, path=str(path.parent))
             valid.append(manifest.tool.id)
         return {
             "found": len(found),
