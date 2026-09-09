@@ -17,10 +17,13 @@ class Db:
 
     def __init__(self, database_url: str) -> None:
         self._pool = ConnectionPool(database_url, min_size=1, max_size=8, open=False)
+        self._opened = False
 
     def open(self) -> None:
-        if not self._pool.opened:
-            self._pool.open()
+        if self._opened:
+            return
+        self._pool.open()
+        self._opened = True
 
     def ping(self) -> bool:
         try:
