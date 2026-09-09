@@ -23,12 +23,16 @@ def create_app():
 def cmd_serve(args: argparse.Namespace) -> None:
     import uvicorn
 
+    import deps
+
     config = deps.get_config()
     uvicorn.run("main:create_app", factory=True, host=config.host, port=config.port)
 
 
 def cmd_register(args: argparse.Namespace) -> None:
     import json
+
+    import deps
 
     result = deps.get_registry_service().scan()
     print(json.dumps(result, ensure_ascii=False, indent=2))
