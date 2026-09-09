@@ -30,6 +30,7 @@ class Scheduler:
         event_repo: EventRepo,
         config: Config,
         on_task_done: Callable[[dict[str, Any]], None] | None = None,
+        key_repo: Any | None = None,
     ) -> None:
         self._db = db
         self._runner = runner
@@ -38,6 +39,7 @@ class Scheduler:
         self._event_repo = event_repo
         self._config = config
         self._on_task_done = on_task_done
+        self._key_repo = key_repo
         self._stop = threading.Event()
         self._running: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
@@ -99,8 +101,9 @@ class Scheduler:
                 return
             manifest = ToolManifest.model_validate(tool["manifest"])
             tool_dir = Path(tool["path"])
+            keys = self._key_repo.all_for_runtime() if self._key_repo is not None else {}
             ctx = RunContext(handle=handle, attempt=task["attempt"],
-                             cancel_event=cancel_event, emit=emit)
+                             cancel_event=cancel_event, emit=emit, keys=keys)
             result = self._runner.run(manifest, tool_dir, task["input"], ctx)
             self._task_repo.finish(handle, "succeeded", output=result)
         except TaskCancelled:

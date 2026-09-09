@@ -10,6 +10,7 @@ from services.pipeline_service import PipelineService
 from services.registry_service import RegistryService
 from store.db import Db
 from store.event_repo import EventRepo
+from store.key_repo import KeyRepo
 from store.pipeline_repo import PipelineRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
@@ -46,6 +47,11 @@ def get_pipeline_repo() -> PipelineRepo:
 
 
 @lru_cache(maxsize=1)
+def get_key_repo() -> KeyRepo:
+    return KeyRepo(get_db())
+
+
+@lru_cache(maxsize=1)
 def get_registry_service() -> RegistryService:
     return RegistryService(db=get_db(), tools_dir=get_config().tools_dir, tool_repo=get_tool_repo())
 
@@ -77,6 +83,7 @@ def get_scheduler() -> Scheduler:
         config=get_config(),
         # 惰性解析打断 dispatch→scheduler→pipeline→dispatch 构造环
         on_task_done=lambda task: get_pipeline_service().advance(task),
+        key_repo=get_key_repo(),
     )
 
 

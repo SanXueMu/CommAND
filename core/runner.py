@@ -26,13 +26,15 @@ Emit = Callable[[str, dict], None]
 
 
 class RunContext:
-    """inproc 工具上下文：取消事件由工具在检查点自查，实现协作取消。"""
+    """inproc 工具上下文：取消事件由工具在检查点自查；keys 为 CommAND keys 服务的运行时注入。"""
 
-    def __init__(self, handle: str, attempt: int, cancel_event: Any, emit: Emit) -> None:
+    def __init__(self, handle: str, attempt: int, cancel_event: Any, emit: Emit,
+                 keys: dict[str, dict[str, str]] | None = None) -> None:
         self.handle = handle
         self.attempt = attempt
         self.cancel_event = cancel_event
         self.emit = emit
+        self.keys: dict[str, dict[str, str]] = keys or {}
 
 
 class Runner:
@@ -70,7 +72,8 @@ class Runner:
     @staticmethod
     def _run_subprocess(manifest: ToolManifest, tool_dir: Path, input: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
         envelope = {"tool": manifest.tool.id, "input": input,
-                    "ctx": {"handle": ctx.handle, "attempt": ctx.attempt}}
+                    "ctx": {"handle": ctx.handle, "attempt": ctx.attempt,
+                            **({"keys": ctx.keys} if ctx.keys else {})}}
         proc = subprocess.Popen(
             shlex.split(manifest.runtime.entry),
             cwd=tool_dir,

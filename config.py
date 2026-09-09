@@ -14,6 +14,7 @@ class Config:
     heartbeat_interval_s: int
     heartbeat_timeout_s: int
     tools_dir: Path
+    data_dir: Path
 
 
 def _load_dotenv(path: Path) -> None:
@@ -40,4 +41,5 @@ def load_config(env_file: str = ".env") -> Config:
         heartbeat_interval_s=int(os.environ.get("HEARTBEAT_INTERVAL_S", "15")),
         heartbeat_timeout_s=int(os.environ.get("HEARTBEAT_TIMEOUT_S", "90")),
         tools_dir=Path(os.environ.get("TOOLS_DIR", "tools")),
+        data_dir=Path(os.environ.get("COMMAND_DATA_DIR", "data")),
     )

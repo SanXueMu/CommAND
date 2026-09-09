@@ -16,6 +16,9 @@ services:
       HEARTBEAT_INTERVAL_S: 15
       HEARTBEAT_TIMEOUT_S: 90
       TOOLS_DIR: tools
+      COMMAND_DATA_DIR: /data
+    volumes:
+      - ${COMMAND_DATA_HOST_DIR:-/opt/command/data}:/data
     ports:
       - "8800:8800"
     networks:
