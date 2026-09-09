@@ -1,0 +1,27 @@
+# 生产部署 compose（192.168.8.41）：复用宿主机已有 pglab（postgres:17），不新起 PG
+# 用法：cp .env.prod.example .env && 填好值 && docker compose -f docker-compose.prod.yml up -d --build
+services:
+  command-api:
+    image: command/api:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: command-api
+    restart: unless-stopped
+    environment:
+      COMMAND_HOST: 0.0.0.0
+      COMMAND_PORT: 8800
+      DATABASE_URL: ${DATABASE_URL}
+      WORKER_CONCURRENCY: 4
+      HEARTBEAT_INTERVAL_S: 15
+      HEARTBEAT_TIMEOUT_S: 90
+      TOOLS_DIR: tools
+    ports:
+      - "8800:8800"
+    networks:
+      - pgnet
+
+# pglab 需先接入该网络：docker network create pgnet && docker network connect pgnet pglab
+networks:
+  pgnet:
+    external: true
