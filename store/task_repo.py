@@ -1,5 +1,7 @@
 """L6 tasks 表仓储：认领（FOR UPDATE SKIP LOCKED）/ 并发闸 / 心跳 / 恢复 / 终态落盘。"""
 
+from __future__ import annotations
+
 import secrets
 from typing import Any
 
@@ -58,7 +60,7 @@ class TaskRepo:
                 UPDATE tasks SET status = 'running', claimed_by = %s,
                        started_at = now(), heartbeat_at = now()
                 WHERE handle IN (SELECT handle FROM candidate)
-                RETURNING handle, tool_id, input, attempt, max_attempts
+                RETURNING handle, tool_id, input, attempt, max_attempts, pipeline_run, step_index
                 """,
                 (worker_id,),
             ).fetchone()
@@ -70,6 +72,8 @@ class TaskRepo:
             "input": row[2],
             "attempt": row[3],
             "max_attempts": row[4],
+            "pipeline_run": row[5],
+            "step_index": row[6],
         }
 
     def heartbeat(self, handle: str) -> None:
@@ -177,6 +181,14 @@ class TaskRepo:
         params = params + (limit,)
         with self._db.pool.connection() as conn:
             rows = conn.execute(sql, params).fetchall()
+        return [self._to_view(row) for row in rows]
+
+    def list_by_pipeline_run(self, run_id: str) -> list[dict[str, Any]]:
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                f"SELECT {_COLUMNS} FROM tasks WHERE pipeline_run = %s ORDER BY step_index",
+                (run_id,),
+            ).fetchall()
         return [self._to_view(row) for row in rows]
 
     @staticmethod

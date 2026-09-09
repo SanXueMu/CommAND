@@ -27,6 +27,7 @@ def create_app():
     app.include_router(tools_router.router, prefix="/api")
     app.include_router(tasks_router.router, prefix="/api")
     app.include_router(pipelines_router.router, prefix="/api")
+    app.include_router(pipelines_router.runs_router, prefix="/api")
     return app
 
 

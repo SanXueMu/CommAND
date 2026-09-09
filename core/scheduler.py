@@ -1,9 +1,10 @@
-"""L5 调度循环：认领执行 / 心跳 / 恢复 / 协作取消注册表。"""
+"""L5 调度循环：认领执行 / 心跳 / 恢复 / 协作取消注册表 / 管线推进钩子。"""
 
+import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from config import Config
 from core.errors import TaskCancelled, ToolDomainError, ToolUserError
@@ -13,6 +14,8 @@ from store.db import Db
 from store.event_repo import EventRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
+
+logger = logging.getLogger("command.scheduler")
 
 
 class Scheduler:
@@ -26,6 +29,7 @@ class Scheduler:
         tool_repo: ToolRepo,
         event_repo: EventRepo,
         config: Config,
+        on_task_done: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self._db = db
         self._runner = runner
@@ -33,6 +37,7 @@ class Scheduler:
         self._tool_repo = tool_repo
         self._event_repo = event_repo
         self._config = config
+        self._on_task_done = on_task_done
         self._stop = threading.Event()
         self._running: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
@@ -112,6 +117,15 @@ class Scheduler:
         except Exception as exc:
             self._task_repo.finish(handle, "failed", error={
                 "kind": "system", "message": f"{type(exc).__name__}: {exc}"})
+        finally:
+            if self._on_task_done is not None and task.get("pipeline_run"):
+                finished = self._task_repo.get(handle)
+                if finished is not None:
+                    try:
+                        self._on_task_done(finished)
+                    except Exception:
+                        logger.exception("管线推进钩子异常 run=%s handle=%s",
+                                         task.get("pipeline_run"), handle)
 
     def _worker_loop(self, worker_id: str) -> None:
         while not self._stop.is_set():

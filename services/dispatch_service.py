@@ -33,13 +33,22 @@ class DispatchService:
         self._event_repo = event_repo
         self._scheduler = scheduler
 
-    def submit(self, tool_id: str, input: dict[str, Any]) -> dict[str, Any]:
+    def submit(
+        self,
+        tool_id: str,
+        input: dict[str, Any],
+        pipeline_run: str | None = None,
+        step_index: int = 0,
+    ) -> dict[str, Any]:
         tool = self._tool_repo.get(tool_id)
         if tool is None:
             raise ToolNotFoundError(f"工具未注册或不活跃: {tool_id}")
         validate_payload(tool["manifest"]["io"]["input_schema"], input, kind="input")
         max_attempts = tool["manifest"]["resources"].get("max_attempts", 1)
-        handle = self._task_repo.enqueue(tool_id, input, max_attempts=max_attempts)
+        handle = self._task_repo.enqueue(
+            tool_id, input, max_attempts=max_attempts,
+            pipeline_run=pipeline_run, step_index=step_index,
+        )
         return {"handle": handle, "status": "queued"}
 
     def get(self, handle: str) -> dict[str, Any]:
