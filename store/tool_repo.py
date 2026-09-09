@@ -49,9 +49,9 @@ class ToolRepo:
     def list_active(self) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
             rows = conn.execute(
-                f"SELECT {_COLUMNS} FROM tools WHERE status = 'active' ORDER BY id"
+                f"SELECT {_COLUMNS}, manifest FROM tools WHERE status = 'active' ORDER BY id"
             ).fetchall()
-        return [self._to_view(row) for row in rows]
+        return [self._with_manifest_extras(self._to_view(row[:8]), row[8]) for row in rows]
 
     def get(self, tool_id: str) -> dict[str, Any] | None:
         with self._db.pool.connection() as conn:
@@ -61,8 +61,14 @@ class ToolRepo:
             ).fetchone()
         if row is None:
             return None
-        view = self._to_view(row[:8])
+        view = self._with_manifest_extras(self._to_view(row[:8]), row[8])
         view["manifest"] = row[8]
+        return view
+
+    @staticmethod
+    def _with_manifest_extras(view: dict[str, Any], manifest: dict[str, Any] | None) -> dict[str, Any]:
+        """列表/详情视图附带 tags（存于 manifest JSONB，无需独立列）。"""
+        view["tags"] = (manifest or {}).get("tool", {}).get("tags", [])
         return view
 
     @staticmethod

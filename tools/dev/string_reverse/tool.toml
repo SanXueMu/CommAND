@@ -2,6 +2,7 @@
 id = "dev.string.reverse"
 name = "字符串反转"
 version = "1.0.0"
+tags = ["文本", "开发"]
 description = "subprocess 契约参考实现：stdin 信封 JSON → stdout 结果 JSON"
 
 [io]

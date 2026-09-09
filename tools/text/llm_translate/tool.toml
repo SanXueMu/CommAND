@@ -2,6 +2,7 @@
 id = "text.llm.translate"
 name = "纯翻译"
 version = "1.0.0"
+tags = ["文本", "翻译"]
 description = "LLM 批量翻译（segments → translations）；术语词典、缓存、上下文滑窗由 S2 微协议接入"
 
 [io]
