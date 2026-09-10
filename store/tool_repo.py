@@ -7,7 +7,7 @@ from psycopg.types.json import Json
 from core.protocol import ToolManifest
 from store.db import Db
 
-_COLUMNS = "id, name, version, description, input_types, output_types, runtime_kind, path"
+_COLUMNS = "id, name, version, description, input_types, output_types, runtime_kind, path, status, hidden"
 
 
 class ToolRepo:
@@ -32,6 +32,7 @@ class ToolRepo:
                     runtime_kind = EXCLUDED.runtime_kind,
                     path = EXCLUDED.path,
                     updated_at = now()
+                -- status/hidden 归 PATCH 管理（06 D1），注册 upsert 不覆盖运行时启停
                 """,
                 (
                     manifest.tool.id,
@@ -46,26 +47,49 @@ class ToolRepo:
                 ),
             )
 
-    def list_active(self) -> list[dict[str, Any]]:
-        """列表瘦身：SQL 侧提取 tags，不下发整份 manifest（详情端点才带）。"""
+    def list_active(self, include_hidden: bool = False) -> list[dict[str, Any]]:
+        """列表瘦身：SQL 侧提取 tags，不下发整份 manifest（详情端点才带）。
+        hidden 默认不返回（06 D1）；disabled 工具仍返回（前端置灰），由 enabled 字段区分。"""
+        hidden_clause = "" if include_hidden else "AND hidden = false"
         with self._db.pool.connection() as conn:
             rows = conn.execute(
                 f"SELECT {_COLUMNS}, manifest->'tool'->'tags' AS tags "
-                "FROM tools WHERE status = 'active' ORDER BY id"
+                f"FROM tools WHERE status IN ('active','disabled') {hidden_clause} ORDER BY id"
             ).fetchall()
-        return [{**self._to_view(row[:8]), "tags": row[8] or []} for row in rows]
+        return [self._to_view(row) for row in rows]
 
-    def get(self, tool_id: str) -> dict[str, Any] | None:
+    def get(self, tool_id: str, include_disabled: bool = False) -> dict[str, Any] | None:
+        status_clause = "" if include_disabled else "AND status = 'active'"
         with self._db.pool.connection() as conn:
             row = conn.execute(
-                f"SELECT {_COLUMNS}, manifest FROM tools WHERE id = %s AND status = 'active'",
+                f"SELECT {_COLUMNS}, manifest FROM tools WHERE id = %s {status_clause}",
                 (tool_id,),
             ).fetchone()
         if row is None:
             return None
-        view = self._with_manifest_extras(self._to_view(row[:8]), row[8])
-        view["manifest"] = row[8]
+        view = self._with_manifest_extras(self._to_view(row), row[10])
+        view["manifest"] = row[10]
         return view
+
+    def set_availability(self, tool_id: str, *, enabled: bool | None = None,
+                         hidden: bool | None = None) -> dict[str, Any] | None:
+        """06 D1：启停/显隐 PATCH——只动 status/hidden 两列。"""
+        sets, params = [], []
+        if enabled is not None:
+            sets.append("status = %s")
+            params.append("active" if enabled else "disabled")
+        if hidden is not None:
+            sets.append("hidden = %s")
+            params.append(hidden)
+        if not sets:
+            return self.get(tool_id, include_disabled=True)
+        params.append(tool_id)
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                f"UPDATE tools SET {', '.join(sets)} WHERE id = %s RETURNING {_COLUMNS}",
+                tuple(params),
+            ).fetchone()
+        return self._to_view(row) if row else None
 
     @staticmethod
     def _with_manifest_extras(view: dict[str, Any], manifest: dict[str, Any] | None) -> dict[str, Any]:
@@ -75,7 +99,7 @@ class ToolRepo:
 
     @staticmethod
     def _to_view(row: tuple) -> dict[str, Any]:
-        return {
+        view = {
             "id": row[0],
             "name": row[1],
             "version": row[2],
@@ -84,4 +108,7 @@ class ToolRepo:
             "output_types": row[5],
             "runtime_kind": row[6],
             "path": row[7],
+            "enabled": row[8] != "disabled",
+            "hidden": row[9],
         }
+        return view
