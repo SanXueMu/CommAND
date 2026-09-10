@@ -45,6 +45,28 @@ def get_pipeline(pipeline_id: str) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.put("/{pipeline_id}", status_code=200)
+def update_pipeline(pipeline_id: str, body: PipelineCreate) -> dict:
+    if body.id != pipeline_id:
+        raise HTTPException(status_code=422, detail="body.id 与路径 pipeline_id 不一致")
+    try:
+        return deps.get_pipeline_service().register(body.id, body.name, body.steps, doc_md=body.doc_md)
+    except ToolUserError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ToolNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/{pipeline_id}")
+def delete_pipeline(pipeline_id: str) -> dict:
+    try:
+        return deps.get_pipeline_service().delete(pipeline_id)
+    except ToolUserError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ToolNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/{pipeline_id}/run", status_code=202)
 def run_pipeline(pipeline_id: str, body: PipelineRunCreate) -> dict:
     try:

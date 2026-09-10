@@ -61,6 +61,15 @@ class PipelineService:
     def list(self) -> list[dict[str, Any]]:
         return self._pipeline_repo.list_definitions()
 
+    def delete(self, pipeline_id: str) -> dict[str, Any]:
+        if self._pipeline_repo.get_definition(pipeline_id) is None:
+            raise TaskNotFoundError(f"管线不存在: {pipeline_id}")
+        active = self._pipeline_repo.count_active_runs(pipeline_id)
+        if active:
+            raise ToolUserError(f"管线有 {active} 个运行中/暂停的 run，先终止再删除")
+        self._pipeline_repo.delete_definition(pipeline_id)
+        return {"id": pipeline_id, "status": "deleted"}
+
     def get(self, pipeline_id: str) -> dict[str, Any]:
         definition = self._pipeline_repo.get_definition(pipeline_id)
         if definition is None:

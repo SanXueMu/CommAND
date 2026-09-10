@@ -117,3 +117,18 @@ def test_run_idempotent_advance(stack):
     pipeline_service.advance(task)  # 已收口后再推进 → 无副作用
     run = pipeline_service._pipeline_repo.get_run(result["run_id"])  # noqa: SLF001
     assert run["status"] == "succeeded"
+
+
+def test_pipeline_crud(stack):
+    service, scheduler, task_repo = stack
+    steps = [{"tool": REVERSE_ID, "input": {"text": "x"}}]
+    try:
+        created = service.register("test.crud_pipe", "CRUD", steps)
+        assert created["status"] == "registered"
+        updated = service.register("test.crud_pipe", "CRUD-v2", steps)
+        assert updated["name"] == "CRUD-v2"
+        assert service.delete("test.crud_pipe")["status"] == "deleted"
+        with pytest.raises(Exception):
+            service.get("test.crud_pipe")
+    finally:
+        service._pipeline_repo.delete_definition("test.crud_pipe")

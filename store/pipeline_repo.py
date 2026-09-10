@@ -44,6 +44,18 @@ class PipelineRepo:
             {"id": r[0], "name": r[1], "steps": r[2], "created_at": r[3]} for r in rows
         ]
 
+    def count_active_runs(self, pipeline_id: str) -> int:
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                "SELECT count(*) FROM pipeline_runs WHERE pipeline_id = %s AND status IN ('running','paused')",
+                (pipeline_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def delete_definition(self, pipeline_id: str) -> None:
+        with self._db.pool.connection() as conn:
+            conn.execute("DELETE FROM pipelines WHERE id = %s", (pipeline_id,))
+
     def create_run(self, pipeline_id: str, input: dict[str, Any]) -> str:
         run_id = "p_" + secrets.token_hex(8)
         with self._db.pool.connection() as conn:
