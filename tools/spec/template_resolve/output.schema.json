@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "hooks": {
+      "type": "array"
+    },
+    "record_mode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lenient": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "category",
+    "prompt",
+    "fields",
+    "hooks",
+    "lenient"
+  ]
+}

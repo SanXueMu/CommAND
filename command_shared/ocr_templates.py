@@ -19,8 +19,22 @@ CATEGORIES = ("invoice", "contract", "audit", "custom")
 
 
 def templates_dir(data_dir: str | None = None) -> Path:
-    root = Path(os.environ.get("COMMAND_DATA_DIR", data_dir or "data"))
+    root = Path(data_dir or os.environ.get("COMMAND_DATA_DIR", "data"))
     return root / "ocr" / "templates"
+
+
+def render_prompt(template_text: str, fields: list[str], rules=None, example=None) -> str:
+    """CommOCR 同款逐占位符替换（str.format 会被模板内 JSON 花括号炸掉）。"""
+    prompt = template_text
+    replacements = {
+        "{field_count}": str(len(fields)),
+        "{fields}": "、".join(fields),
+        "{rules}": "\n".join(rules) if isinstance(rules, list) else (rules or ""),
+        "{example}": json.dumps(example, ensure_ascii=False, indent=2) if example else "",
+    }
+    for placeholder, value in replacements.items():
+        prompt = prompt.replace(placeholder, value)
+    return prompt
 
 
 class TemplateStore:

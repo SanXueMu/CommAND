@@ -1,0 +1,19 @@
+[tool]
+id = "spec.template.resolve"
+name = "识别模版解析"
+version = "1.0.0"
+tags = ["模板", "识别"]
+description = "按 id 取启用模版并渲染提示词（占位符替换），输出 vl.extract 可直驱的 prompt/hooks/fields 全量（E2）"
+
+[io]
+input_types = ["ocr.template.query"]
+output_types = ["ocr.template.resolved"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 30
+concurrency = 4
+max_attempts = 1
