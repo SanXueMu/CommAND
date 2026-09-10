@@ -27,11 +27,24 @@ TEMPLATES = [
         "rules": VOUCHER_RULES, "example": VOUCHER_EXAMPLE,
         "hooks": [{"name": "凭证金额校验与大写兜底", "code": VOUCHER_POSTPROCESS_CODE}],
         "record_mode": "page", "lenient": False,
+        # I2：模版增量输入声明（级联表单数据源）——选模版后表单随之变化
+        "input_schema": {
+            "type": "object",
+            "properties": {"key_name": {"type": "string", "title": "记录主键名", "default": "voucher"}},
+        },
     },
     {
         "id": "tpl.contract.history", "name": "历史合同识别", "category": "contract",
         "prompt_template": CONTRACT_TEMPLATE, "fields": CONTRACT_FIELDS,
         "hooks": [], "record_mode": "page", "lenient": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "key_name": {"type": "string", "title": "记录主键名", "default": "contract"},
+                "skip_text_pdf": {"type": "boolean", "title": "文本层PDF直读", "default": False,
+                                   "description": "历史合同扫描件建议关闭"},
+            },
+        },
     },
     {
         "id": "tpl.audit.shenbao", "name": "决算审定表识别", "category": "audit",
@@ -39,6 +52,10 @@ TEMPLATES = [
         "rules": SHENBAO_RULES, "example": SHENBAO_EXAMPLE,
         "hooks": [{"name": "审定表金额归一与勾稽校验", "code": SHENBAO_POSTPROCESS_CODE}],
         "record_mode": "page", "lenient": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {"key_name": {"type": "string", "title": "记录主键名", "default": "shenbao"}},
+        },
     },
 ]
 

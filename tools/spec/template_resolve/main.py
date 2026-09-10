@@ -17,4 +17,6 @@ def run(input: dict, ctx, emit) -> dict:
         "hooks": tpl.get("hooks") or [],
         "record_mode": tpl.get("record_mode"),
         "lenient": bool(tpl.get("lenient")),
+        "view_spec": tpl.get("view_spec"),  # I/J：视图定义透传（全链导出步直读）
+        "input_schema": tpl.get("input_schema"),  # I2：模版增量输入声明（级联表单数据源）
     }

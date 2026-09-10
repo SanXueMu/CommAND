@@ -58,6 +58,13 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "skip_text_pdf": {"type": "boolean", "title": "文本层PDF直读", "description": "开启后带文本层的 PDF 不走视觉识别"},
             "export_units": {"type": "boolean", "title": "导出识别单元", "description": "识别完成后导出可翻译单元（供翻译流使用）"},
         },
+        # I2：级联表单声明——选模版后由模版 input_schema 渲染增量字段
+        "x-form-cascade": {
+            "keyField": "template_id",
+            "listPath": "/ocr/templates",
+            "detailPath": "/ocr/templates/{id}",
+            "schemaFrom": "input_schema",
+        },
     },
     "flow.ocr.translate": {
         "type": "object",
@@ -113,6 +120,8 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "new_template_id": {"type": "string", "title": "新模版 ID", "description": "生成的模版以此 ID 入库"},
             "new_template_name": {"type": "string", "title": "新模版名称"},
             "output_db": {"type": "string", "title": "结果库名", "description": "试识别结果的入库标识"},
+            "export_units": {"type": "boolean", "title": "识别后导出视图", "description": "开启后提取记录并按模版视图导出 xlsx"},
+            "export_name": {"type": "string", "title": "导出文件名", "description": "留空用「视图导出」"},
         },
     },
 }
@@ -230,7 +239,7 @@ FLOWS: dict[str, dict] = {
 # E3：真嵌套工作流示范——模板生成（子流）→ 三件套转模版 → 模版驱动识别（子流）
 WORKFLOWS: dict[str, dict] = {
     "wf.ocr.fullchain": {
-        "name": "全链工作流（模板生成→校验→入库为模版→模版驱动识别）",
+        "name": "全链工作流（模板生成→入库→识别→记录提取→视图查询→xlsx 导出）",
         "steps": [
             {"pipeline": "flow.specgen.img", "input": {
                 "file": "{{ input.file }}",
@@ -249,7 +258,21 @@ WORKFLOWS: dict[str, dict] = {
                 "file": "{{ input.file }}",
                 "output_db": "{{ input.output_db }}",
                 "key_name": "{{ input.key_name }}",
-                "model": "{{ input.model }}"}},
+                "model": "{{ input.model }}",
+                "export_units": "{{ input.export_units }}"}},
+            {"tool": "ocrdb.extract.units", "input": {
+                "file": "{{ input.output_db }}", "mode": "records"},
+             "when": {"input.export_units": True}},
+            {"tool": "records.view.query", "input": {
+                "records": "{{ step[4].output.records }}",
+                "view_spec": "{{ step[1].output.view_spec }}"},
+             "when": {"step[1].output.view_spec": "@exists", "input.export_units": True}},
+            {"tool": "records.export.xlsx", "input": {
+                "columns": "{{ step[5].output.columns }}",
+                "rows": "{{ step[5].output.rows }}",
+                "splits": "{{ step[5].output.splits }}",
+                "name": "{{ input.export_name }}"},
+             "when": {"step[5].output.columns": "@exists", "input.export_units": True}},
         ],
     },
 }

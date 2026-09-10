@@ -102,6 +102,9 @@ class TemplateStore:
         record_mode = template.get("record_mode")
         if record_mode not in (None, "page", "record"):
             raise ToolDomainError(f"record_mode 只能 page/record: {record_mode}")
+        input_schema = template.get("input_schema")
+        if input_schema is not None and not isinstance(input_schema, dict):
+            raise ToolDomainError("input_schema 须为对象（模版增量输入声明，级联表单数据源）")
 
         from datetime import datetime
         now = datetime.now().isoformat(timespec="seconds")

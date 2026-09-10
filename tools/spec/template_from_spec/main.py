@@ -11,7 +11,7 @@ def run(input: dict, ctx, emit) -> dict:
     prompt_template = template
     if "{fields}" not in prompt_template:
         prompt_template = f"{prompt_template}\n\n请识别以下字段：{{fields}}"
-    return TemplateStore().upsert({
+    stored = TemplateStore().upsert({
         "id": input["id"], "name": input["name"], "category": input["category"],
         "prompt_template": prompt_template,
         "fields": spec.get("fields"),
@@ -22,3 +22,6 @@ def run(input: dict, ctx, emit) -> dict:
         "lenient": bool(spec.get("lenient")),
         "view_spec": input.get("view_spec") or {},
     })
+    # J2 全链：view_spec 随输出带出（后续视图/导出步直读，免二次查询）
+    stored["view_spec"] = input.get("view_spec") or {}
+    return stored

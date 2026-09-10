@@ -17,10 +17,13 @@ def test_builtin_site_views_shape() -> None:
             assert set(view["when"]) == {"capability"}, "when 仅支持 capability 条件"
 
 
-def test_builtin_includes_protocol_and_ocr_views() -> None:
+def test_builtin_includes_protocol_and_manager_views() -> None:
     ids = set(ids for ids in (v["id"] for v in BUILTIN_SITE_VIEWS))
     assert {"tools", "flows", "tasks", "work", "settings"} <= ids, "协议级通用视图必须在内置声明中"
-    assert {"ocr-recognize", "ocr-results", "ocr-views", "ocr-specgen"} <= ids, "OCR 业务声明必须在内置声明中"
+    assert "templates" in ids, "模版管理视图必须在内置声明中"
+    # 裁定五（乱归 Tab）：OCR 子功能按三级概念归流库，不得再占导航 Tab
+    assert not ({"ocr-recognize", "ocr-results", "ocr-views", "ocr-specgen"} & ids), \
+        "OCR 专属视图已按三级概念退场，不允许回归内置声明"
 
 
 def test_meta_site_serves_from_repo(monkeypatch) -> None:

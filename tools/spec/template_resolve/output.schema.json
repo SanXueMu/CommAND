@@ -27,6 +27,18 @@
     },
     "lenient": {
       "type": "boolean"
+    },
+    "view_spec": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "input_schema": {
+      "type": [
+        "object",
+        "null"
+      ]
     }
   },
   "required": [
