@@ -7,6 +7,8 @@ description = "识别规则模版新建/更新（整份校验：fields/prompt �
 
 
 [io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
 input_types = ["ocr.template.query"]
 output_types = ["ocr.template"]
 

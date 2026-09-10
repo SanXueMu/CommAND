@@ -6,6 +6,8 @@ tags = ["模板", "识别"]
 description = "specgen 三件套(task_spec/postprocess/view_spec)转识别模版库条目；template 缺 {fields} 占位时自动补识别字段行（E3）"
 
 [io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
 input_types = ["ocr.spec.checked"]
 output_types = ["ocr.template"]
 

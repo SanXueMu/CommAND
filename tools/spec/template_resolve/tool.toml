@@ -6,6 +6,8 @@ tags = ["模板", "识别"]
 description = "按 id 取启用模版并渲染提示词（占位符替换），输出 vl.extract 可直驱的 prompt/hooks/fields 全量（E2）"
 
 [io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
 input_types = ["ocr.template.query"]
 output_types = ["ocr.template.resolved"]
 

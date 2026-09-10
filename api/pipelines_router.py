@@ -64,10 +64,10 @@ def update_pipeline(pipeline_id: str, body: PipelineCreate) -> dict:
 def delete_pipeline(pipeline_id: str) -> dict:
     try:
         return deps.get_pipeline_service().delete(pipeline_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ToolUserError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ToolNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{pipeline_id}/run", status_code=202)

@@ -7,6 +7,8 @@ description = "识别规则模版库检索：enabled/category/keyword 过滤，�
 
 
 [io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
 input_types = ["ocr.template.query"]
 output_types = ["ocr.template"]
 
