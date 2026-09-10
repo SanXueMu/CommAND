@@ -6,6 +6,7 @@
   ],
   "properties": {
     "file": {
+      "title": "文件路径",
       "type": "string"
     }
   }

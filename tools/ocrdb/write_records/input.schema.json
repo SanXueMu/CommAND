@@ -7,18 +7,22 @@
   ],
   "properties": {
     "records": {
+      "title": "记录数组",
       "type": "array",
       "items": {
         "type": "object"
       }
     },
     "db": {
+      "title": "结果库路径",
       "type": "string"
     },
     "source_path": {
+      "title": "源文件路径",
       "type": "string"
     },
     "file_hash": {
+      "title": "文件哈希",
       "type": "string"
     }
   }

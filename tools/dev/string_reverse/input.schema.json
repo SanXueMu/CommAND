@@ -3,6 +3,6 @@
   "type": "object",
   "required": ["segments"],
   "properties": {
-    "segments": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+    "segments": {"title": "输入字符串数组", "type": "array", "items": {"type": "string"}, "minItems": 1}
   }
 }

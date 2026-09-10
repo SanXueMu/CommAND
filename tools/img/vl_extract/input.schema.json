@@ -6,22 +6,27 @@
   ],
   "properties": {
     "file": {
+      "title": "识别文件",
       "type": "string",
       "description": "PDF/图片路径（/api/files 上传）"
     },
     "db": {
+      "title": "结果库路径",
       "type": "string",
       "description": "结果库路径（缺省 DATA_DIR/ocr/<文件名>.ocr_results.db）"
     },
     "key_name": {
+      "title": "密钥名",
       "type": "string",
       "description": "keys 服务密钥名（缺省默认密钥）"
     },
     "model": {
+      "title": "视觉模型",
       "type": "string",
       "description": "视觉模型（缺省 qwen-vl-max）"
     },
     "fields": {
+      "title": "识别字段集",
       "type": [
         "array",
         "null"
@@ -32,18 +37,22 @@
       "description": "识别字段集（TaskSpec 核心）"
     },
     "prompt": {
+      "title": "角色模板",
       "type": "string",
       "description": "角色模板（TaskSpec.template）"
     },
     "rules": {
+      "title": "字段规则说明",
       "type": "string",
       "description": "字段规则说明（TaskSpec.rules）"
     },
     "example": {
+      "title": "输出示例",
       "type": "string",
       "description": "输出示例（TaskSpec.example）"
     },
     "record_mode": {
+      "title": "记录模式",
       "type": "string",
       "enum": [
         "page",
@@ -52,6 +61,7 @@
       "description": "page=逐页逐记录 / record=整文档一记录"
     },
     "postprocess": {
+      "title": "页级钩子链",
       "type": [
         "array",
         "null"
@@ -73,6 +83,7 @@
       "description": "页级钩子链 [{name, code}]，code 定义 page_hook(fields, add_note)"
     },
     "lenient_fields": {
+      "title": "宽松字段名单",
       "type": [
         "array",
         "null"
@@ -83,22 +94,28 @@
       "description": "宽松模式允许缺省的字段"
     },
     "skip_text_pdf": {
+      "title": "文本型PDF直提",
       "type": "boolean",
       "description": "文本型 PDF 直提跳过（缺省 true）"
     },
     "render_scale": {
+      "title": "渲染倍率",
       "type": "number"
     },
     "image_max_side": {
+      "title": "图片最长边像素",
       "type": "integer"
     },
     "page_concurrency": {
+      "title": "页并发数",
       "type": "integer"
     },
     "fail_circuit": {
+      "title": "连续失败熔断阈值",
       "type": "integer"
     },
     "raw_prompt": {
+      "title": "提示词直通",
       "type": [
         "boolean",
         "null"
@@ -106,6 +123,7 @@
       "description": "true=prompt 为完整提示词直通（模板管线固化字段/规则/示例时用）；false=按 fields/rules/example 装配"
     },
     "lenient": {
+      "title": "全局宽松开关",
       "type": "boolean",
       "description": "全局宽松开关：true=允许任一字段缺席（补空串）；与 lenient_fields 名单互斥时优先本开关"
     }

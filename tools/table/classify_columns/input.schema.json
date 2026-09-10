@@ -4,6 +4,7 @@
   "required": ["units"],
   "properties": {
     "units": {
+      "title": "单元组",
       "type": "array",
       "description": "提取工具输出的单元组",
       "items": {
@@ -17,7 +18,7 @@
         }
       }
     },
-    "enum_max": {"type": "integer", "minimum": 1, "description": "唯一值 ≤ enum_max → 枚举列，默认 100"},
-    "skip_pattern": {"type": "string", "description": "跳过列单元格正则（默认纯数字/日期/编号模式）"}
+    "enum_max": {"title": "枚举列阈值", "type": "integer", "minimum": 1, "description": "唯一值 ≤ enum_max → 枚举列，默认 100"},
+    "skip_pattern": {"title": "跳过列正则", "type": "string", "description": "跳过列单元格正则（默认纯数字/日期/编号模式）"}
   }
 }

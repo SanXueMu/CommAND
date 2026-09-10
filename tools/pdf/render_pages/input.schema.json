@@ -6,15 +6,19 @@
   ],
   "properties": {
     "file": {
+      "title": "PDF 路径",
       "type": "string"
     },
     "render_scale": {
+      "title": "渲染倍率",
       "type": "number"
     },
     "image_max_side": {
+      "title": "图片最长边像素",
       "type": "integer"
     },
     "image_format": {
+      "title": "图片格式",
       "type": "string"
     }
   }

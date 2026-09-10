@@ -6,15 +6,18 @@
   ],
   "properties": {
     "file": {
+      "title": "结果库路径",
       "type": "string",
       "description": "commOcr 结果库路径（.db/.sqlite）"
     },
     "long_value_chars": {
+      "title": "长值阈值",
       "type": "integer",
       "minimum": 1,
       "description": "长值阈值，默认 200"
     },
     "mode": {
+      "title": "提取模式",
       "type": "string",
       "enum": [
         "units",

@@ -5,10 +5,12 @@
   ],
   "properties": {
     "file": {
+      "title": "PDF 路径",
       "type": "string",
       "description": "PDF 路径（文本层布局分析）"
     },
     "max_pages": {
+      "title": "最多分析页数",
       "type": "integer",
       "description": "最多分析页数（默认50）"
     }

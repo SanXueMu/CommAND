@@ -3,6 +3,6 @@
   "type": "object",
   "required": ["file"],
   "properties": {
-    "file": {"type": "string", "description": "txt/md 文件路径"}
+    "file": {"title": "文件路径", "type": "string", "description": "txt/md 文件路径"}
   }
 }

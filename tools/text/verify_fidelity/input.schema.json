@@ -3,7 +3,7 @@
   "type": "object",
   "required": ["sources", "translations"],
   "properties": {
-    "sources": {"type": "array", "items": {"type": "string"}},
-    "translations": {"type": "array", "items": {"type": "string"}, "description": "与 sources 逐位对齐"}
+    "sources": {"title": "原文数组", "type": "array", "items": {"type": "string"}},
+    "translations": {"title": "译文数组", "type": "array", "items": {"type": "string"}, "description": "与 sources 逐位对齐"}
   }
 }

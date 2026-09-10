@@ -3,15 +3,15 @@
   "type": "object",
   "required": ["units", "col_classes", "ranges", "segments", "index_map", "date_maps", "translations", "statuses"],
   "properties": {
-    "units": {"type": "array", "description": "提取工具输出的单元组"},
-    "col_classes": {"type": "object", "description": "classify 的 col_classes"},
-    "ranges": {"type": "array", "description": "classify 的 ranges"},
-    "segments": {"type": "array", "items": {"type": "string"}, "description": "classify 的收割段（对照字典原文列）"},
-    "index_map": {"type": "array", "items": {"type": "integer"}},
-    "date_maps": {"type": "array", "items": {"type": "object"}},
-    "translations": {"type": "array", "items": {"type": "string"}},
-    "statuses": {"type": "array", "items": {"enum": ["ok", "review"]}},
-    "file": {"type": "string", "description": "源文件路径（产物命名用）"},
-    "out_name": {"type": "string", "description": "产物文件名；缺省 <源名>_中文版.xlsx"}
+    "units": {"title": "单元组", "type": "array", "description": "提取工具输出的单元组"},
+    "col_classes": {"title": "列类型映射", "type": "object", "description": "classify 的 col_classes"},
+    "ranges": {"title": "分类区间", "type": "array", "description": "classify 的 ranges"},
+    "segments": {"title": "收割段落", "type": "array", "items": {"type": "string"}, "description": "classify 的收割段（对照字典原文列）"},
+    "index_map": {"title": "单元索引映射", "type": "array", "items": {"type": "integer"}},
+    "date_maps": {"title": "日期映射", "type": "array", "items": {"type": "object"}},
+    "translations": {"title": "译文数组", "type": "array", "items": {"type": "string"}},
+    "statuses": {"title": "状态标记", "type": "array", "items": {"enum": ["ok", "review"]}},
+    "file": {"title": "源文件路径", "type": "string", "description": "源文件路径（产物命名用）"},
+    "out_name": {"title": "产物文件名", "type": "string", "description": "产物文件名；缺省 <源名>_中文版.xlsx"}
   }
 }

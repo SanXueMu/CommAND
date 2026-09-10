@@ -6,6 +6,7 @@
   ],
   "properties": {
     "segments": {
+      "title": "输入段落",
       "type": "array",
       "items": {
         "type": "string"

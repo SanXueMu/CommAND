@@ -6,20 +6,25 @@
   ],
   "properties": {
     "file": {
+      "title": "图片路径",
       "type": "string"
     },
     "tile_size": {
+      "title": "块边长像素",
       "type": "integer",
       "description": "块边长像素（缺省 1600）"
     },
     "overlap": {
+      "title": "相邻块重叠像素",
       "type": "integer",
       "description": "相邻块重叠像素（缺省 120）"
     },
     "max_tiles": {
+      "title": "最大块数",
       "type": "integer"
     },
     "render_scale": {
+      "title": "渲染倍率",
       "type": "number"
     }
   }
