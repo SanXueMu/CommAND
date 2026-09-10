@@ -108,13 +108,14 @@ class PipelineRepo:
             rows = conn.execute(
                 """
                 SELECT DISTINCT ON (step_index)
-                    step_index, handle, status, attempt, input
+                    step_index, handle, status, attempt, input, output
                 FROM tasks WHERE pipeline_run = %s
                 ORDER BY step_index, created_at DESC
                 """,
                 (run_id,),
             ).fetchall()
-        return {r[0]: {"step_index": r[0], "handle": r[1], "status": r[2], "attempt": r[3], "input": r[4]} for r in rows}
+        return {r[0]: {"step_index": r[0], "handle": r[1], "status": r[2], "attempt": r[3],
+                       "input": r[4], "output": r[5]} for r in rows}
 
     def active_task_handles(self, run_id: str) -> list[str]:
         with self._db.pool.connection() as conn:

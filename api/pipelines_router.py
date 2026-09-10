@@ -98,6 +98,41 @@ def abort_run(run_id: str) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@runs_router.post("/{run_id}/steps/{step_index}/abort")
+def abort_step(run_id: str, step_index: int) -> dict:
+    try:
+        return deps.get_pipeline_service().abort_step(run_id, step_index)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+class StepRerun(BaseModel):
+    override: dict[str, Any] | None = None
+
+
+@runs_router.post("/{run_id}/steps/{step_index}/rerun")
+def rerun_step(run_id: str, step_index: int, body: StepRerun | None = None) -> dict:
+    try:
+        return deps.get_pipeline_service().rerun_step(
+            run_id, step_index, override=(body.override if body else None))
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ToolUserError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@runs_router.get("/{run_id}/snapshot")
+def run_snapshot(run_id: str) -> dict:
+    try:
+        return deps.get_pipeline_service().run_snapshot(run_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @runs_router.get("/{run_id}/events")
 def list_run_events(run_id: str, limit: int = 200) -> dict:
     try:
