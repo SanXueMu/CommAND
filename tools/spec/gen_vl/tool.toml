@@ -1,0 +1,15 @@
+id = "spec.gen.vl"
+name = "模板生成(多模态)"
+version = "0.1.0"
+description = "多模态LLM直读样例页图生成识别三件套(方案二，扫描件/图片通用)"
+domain = "spec"
+
+[input]
+schema = "input.schema.json"
+
+[output]
+schema = "output.schema.json"
+
+[engine]
+runtime = "inproc"
+entrypoint = "main:run"

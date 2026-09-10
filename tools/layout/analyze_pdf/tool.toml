@@ -1,0 +1,15 @@
+id = "layout.analyze.pdf"
+name = "PDF布局分析"
+version = "0.1.0"
+description = "fitz非LLM分析PDF布局：表格线框/表头候选/字段标签，产出布局JSON供模板生成"
+domain = "layout"
+
+[input]
+schema = "input.schema.json"
+
+[output]
+schema = "output.schema.json"
+
+[engine]
+runtime = "inproc"
+entrypoint = "main:run"

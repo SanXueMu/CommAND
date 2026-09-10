@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": [
+    "file",
+    "rows_count"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "rows_count": {
+      "type": "integer"
+    },
+    "columns": {
+      "type": "array"
+    }
+  }
+}

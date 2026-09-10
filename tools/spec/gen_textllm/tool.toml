@@ -1,0 +1,15 @@
+id = "spec.gen.textllm"
+name = "模板生成(纯语言LLM)"
+version = "0.1.0"
+description = "布局分析JSON+需求描述→纯语言LLM生成识别三件套(方案一，需文本层PDF)"
+domain = "spec"
+
+[input]
+schema = "input.schema.json"
+
+[output]
+schema = "output.schema.json"
+
+[engine]
+runtime = "inproc"
+entrypoint = "main:run"

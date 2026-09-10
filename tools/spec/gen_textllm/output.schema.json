@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "required": [
+    "task_spec",
+    "postprocess",
+    "view_spec"
+  ],
+  "properties": {
+    "task_spec": {
+      "type": "object",
+      "description": "识别任务规格 fields/rules/template/example/record_mode"
+    },
+    "postprocess": {
+      "type": "array",
+      "description": "页级钩子源码数组"
+    },
+    "view_spec": {
+      "type": "object",
+      "description": "ViewSpec"
+    },
+    "raw": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "usage": {
+      "type": "object"
+    }
+  }
+}

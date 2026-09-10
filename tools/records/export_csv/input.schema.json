@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": [
+    "rows"
+  ],
+  "properties": {
+    "rows": {
+      "type": "array",
+      "description": "视图行数组（records.view.query 产出）"
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "列序"
+    },
+    "name": {
+      "type": "string",
+      "description": "导出文件名（不含扩展名）"
+    }
+  }
+}

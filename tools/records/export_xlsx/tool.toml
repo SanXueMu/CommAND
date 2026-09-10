@@ -1,0 +1,15 @@
+id = "records.export.xlsx"
+name = "视图导出xlsx"
+version = "0.1.0"
+description = "视图行导出xlsx多sheet(主表+splits拆表)，sheet名去非法字符自动去重"
+domain = "records"
+
+[input]
+schema = "input.schema.json"
+
+[output]
+schema = "output.schema.json"
+
+[engine]
+runtime = "inproc"
+entrypoint = "main:run"

@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": [
+    "file",
+    "sheets",
+    "rows_count"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "sheets": {
+      "type": "array"
+    },
+    "rows_count": {
+      "type": "integer"
+    }
+  }
+}

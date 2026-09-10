@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "required": [
+    "task_spec",
+    "postprocess",
+    "view_spec"
+  ],
+  "properties": {
+    "task_spec": {
+      "type": "object"
+    },
+    "postprocess": {
+      "type": "array"
+    },
+    "view_spec": {
+      "type": "object"
+    },
+    "raw": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "sampled_pages": {
+      "type": "array"
+    },
+    "usage": {
+      "type": "object"
+    }
+  }
+}

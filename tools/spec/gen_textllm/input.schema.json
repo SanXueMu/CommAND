@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "required": [
+    "requirement"
+  ],
+  "properties": {
+    "requirement": {
+      "type": "string",
+      "description": "识别需求描述（要提取哪些要素）"
+    },
+    "layout": {
+      "type": "object",
+      "description": "layout.analyze.pdf 的 layout 对象"
+    },
+    "layout_json": {
+      "type": "string",
+      "description": "或其 JSON 串（二选一）"
+    },
+    "key_name": {
+      "type": "string",
+      "description": "LLM 密钥名（空=默认密钥）"
+    },
+    "model": {
+      "type": "string",
+      "description": "模型（默认 qwen-plus）"
+    },
+    "json_mode": {
+      "type": "boolean",
+      "description": "response_format json_object（默认 true）"
+    }
+  }
+}

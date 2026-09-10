@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "layout",
+    "layout_json"
+  ],
+  "properties": {
+    "layout": {
+      "type": "object",
+      "description": "布局描述：页数/表格/表头候选/字段标签"
+    },
+    "layout_json": {
+      "type": "string",
+      "description": "同上的 JSON 串（直接喂 spec.gen.textllm）"
+    }
+  }
+}

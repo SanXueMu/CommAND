@@ -1,0 +1,15 @@
+id = "spec.validate.ocrspec"
+name = "三件套校验"
+version = "0.1.0"
+description = "校验模板三件套：字段一致性/钩子可编译/ViewSpec可执行(空行干跑)，另存为管线前必过"
+domain = "spec"
+
+[input]
+schema = "input.schema.json"
+
+[output]
+schema = "output.schema.json"
+
+[engine]
+runtime = "inproc"
+entrypoint = "main:run"

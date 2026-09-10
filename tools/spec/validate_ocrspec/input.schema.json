@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "required": [
+    "task_spec"
+  ],
+  "properties": {
+    "task_spec": {
+      "type": "object",
+      "description": "识别任务规格"
+    },
+    "postprocess": {
+      "type": "array",
+      "description": "钩子源码数组"
+    },
+    "view_spec": {
+      "type": "object",
+      "description": "ViewSpec"
+    }
+  }
+}

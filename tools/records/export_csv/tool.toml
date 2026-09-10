@@ -1,0 +1,15 @@
+id = "records.export.csv"
+name = "视图导出CSV"
+version = "0.1.0"
+description = "视图行导出CSV(utf-8-sig)落DATA_DIR/outputs/exports，前端经下载端点取"
+domain = "records"
+
+[input]
+schema = "input.schema.json"
+
+[output]
+schema = "output.schema.json"
+
+[engine]
+runtime = "inproc"
+entrypoint = "main:run"

@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": [
+    "file"
+  ],
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "PDF 路径（文本层布局分析）"
+    },
+    "max_pages": {
+      "type": "integer",
+      "description": "最多分析页数（默认50）"
+    }
+  }
+}

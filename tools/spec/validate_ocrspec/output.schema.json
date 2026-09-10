@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "required": [
+    "valid",
+    "errors",
+    "warnings"
+  ],
+  "properties": {
+    "valid": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "array"
+    },
+    "warnings": {
+      "type": "array"
+    },
+    "fields": {
+      "type": "array"
+    },
+    "hooks_count": {
+      "type": "integer"
+    }
+  }
+}
