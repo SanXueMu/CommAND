@@ -32,9 +32,14 @@ def create_task(body: TaskCreate) -> dict:
 
 @router.get("")
 def list_tasks(
-    status: str | None = Query(default=None), limit: int = Query(default=50, le=200)
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, le=200),
+    kind: str | None = Query(default=None, description="归类筛选: tool/flow/workflow（06 C4）"),
 ) -> dict:
-    return {"tasks": deps.get_dispatch_service().list(status=status, limit=limit)}
+    try:
+        return {"tasks": deps.get_dispatch_service().list(status=status, limit=limit, kind=kind)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{handle}")

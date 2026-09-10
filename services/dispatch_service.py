@@ -57,8 +57,9 @@ class DispatchService:
             raise TaskNotFoundError(f"任务不存在: {handle}")
         return task
 
-    def list(self, status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-        return self._task_repo.list(status=status, limit=limit)
+    def list(self, status: str | None = None, limit: int = 50,
+             kind: str | None = None) -> list[dict[str, Any]]:
+        return self._task_repo.list(status=status, limit=limit, kind=kind)
 
     def cancel(self, handle: str) -> dict[str, Any]:
         task = self.get(handle)

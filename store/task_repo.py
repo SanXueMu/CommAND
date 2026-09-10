@@ -171,17 +171,57 @@ class TaskRepo:
             ).fetchone()
         return self._to_view(row) if row else None
 
-    def list(self, status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-        sql = f"SELECT {_COLUMNS} FROM tasks"
-        params: tuple = ()
+    def list(self, status: str | None = None, limit: int = 50,
+             kind: str | None = None) -> list[dict[str, Any]]:
+        """任务列表。C4 归类：pipeline_run 上溯根 run（限深两层）join pipeline.type
+        → kind ∈ tool/flow/workflow；root_run_id/root_pipeline_id 供下钻。"""
+        sql = """
+            SELECT t.handle, t.tool_id, t.status, t.input, t.output, t.error,
+                   t.pipeline_run, t.step_index, t.attempt, t.max_attempts,
+                   t.created_at, t.started_at, t.finished_at,
+                   r.id, r.parent_run_id, pr.id,
+                   COALESCE(p2.id, p1.id), COALESCE(p2.type, p1.type)
+            FROM tasks t
+            LEFT JOIN pipeline_runs r ON r.id = t.pipeline_run
+            LEFT JOIN pipeline_runs pr ON pr.id = r.parent_run_id
+            LEFT JOIN pipelines p1 ON p1.id = r.pipeline_id
+            LEFT JOIN pipelines p2 ON p2.id = pr.pipeline_id
+        """
+        conds: list[str] = []
+        params: list[Any] = []
         if status is not None:
-            sql += " WHERE status = %s"
-            params = (status,)
-        sql += " ORDER BY created_at DESC LIMIT %s"
-        params = params + (limit,)
+            conds.append("t.status = %s")
+            params.append(status)
+        if kind == "tool":
+            conds.append("t.pipeline_run IS NULL")
+        elif kind == "flow":
+            conds.append(
+                "t.pipeline_run IS NOT NULL AND r.parent_run_id IS NULL "
+                "AND COALESCE(p1.type, 'flow') = 'flow'")
+        elif kind == "workflow":
+            conds.append("r.parent_run_id IS NOT NULL OR COALESCE(p1.type, 'flow') = 'workflow'")
+        elif kind is not None:
+            raise ValueError(f"kind 仅支持 tool/flow/workflow: {kind}")
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY t.created_at DESC LIMIT %s"
+        params.append(limit)
         with self._db.pool.connection() as conn:
-            rows = conn.execute(sql, params).fetchall()
-        return [self._to_view(row) for row in rows]
+            rows = conn.execute(sql, tuple(params)).fetchall()
+        views = []
+        for row in rows:
+            view = self._to_view(row[:13])
+            run_id, parent_run_id, parent_parent_id, root_pid, root_type = row[13:]
+            if run_id is None:
+                view["task_kind"] = "tool"
+            elif parent_run_id is None:
+                view["task_kind"] = root_type or "flow"  # 根 run 直属任务：flow/workflow
+            else:
+                view["task_kind"] = "workflow"  # 子 run 任务：根必为 workflow（限深两层）
+            view["root_run_id"] = parent_parent_id or run_id
+            view["root_pipeline_id"] = root_pid
+            views.append(view)
+        return views
 
     def list_by_pipeline_run(self, run_id: str) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
