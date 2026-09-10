@@ -14,26 +14,26 @@ class PipelineRepo:
     def __init__(self, db: Db) -> None:
         self._db = db
 
-    def upsert_definition(self, pipeline_id: str, name: str, steps: list[dict[str, Any]]) -> None:
+    def upsert_definition(self, pipeline_id: str, name: str, steps: list[dict[str, Any]], doc_md: str | None = None) -> None:
         with self._db.pool.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO pipelines (id, name, steps) VALUES (%s, %s, %s)
+                INSERT INTO pipelines (id, name, steps, doc_md) VALUES (%s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name, steps = EXCLUDED.steps, created_at = now()
+                    name = EXCLUDED.name, steps = EXCLUDED.steps, doc_md = EXCLUDED.doc_md, created_at = now()
                 """,
-                (pipeline_id, name, Json(steps)),
+                (pipeline_id, name, Json(steps), doc_md),
             )
 
     def get_definition(self, pipeline_id: str) -> dict[str, Any] | None:
         with self._db.pool.connection() as conn:
             row = conn.execute(
-                "SELECT id, name, steps, created_at FROM pipelines WHERE id = %s",
+                "SELECT id, name, steps, doc_md, created_at FROM pipelines WHERE id = %s",
                 (pipeline_id,),
             ).fetchone()
         if row is None:
             return None
-        return {"id": row[0], "name": row[1], "steps": row[2], "created_at": row[3]}
+        return {"id": row[0], "name": row[1], "steps": row[2], "doc_md": row[3], "created_at": row[4]}
 
     def list_definitions(self) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:

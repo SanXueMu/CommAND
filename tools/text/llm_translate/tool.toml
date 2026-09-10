@@ -4,6 +4,7 @@ name = "LLM 翻译"
 version = "2.0.0"
 tags = ["llm", "翻译"]
 description = "纯文本→文本批量翻译：编号直存 + 分隔符/JSON/逐条三路线 + 熔断 + 质检重译 + 字典缓存（机制全内化，对管线零耦合）"
+doc = "README.md"
 
 [io]
 input_schema = "input.schema.json"

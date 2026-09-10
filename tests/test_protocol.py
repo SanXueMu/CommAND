@@ -133,3 +133,67 @@ def test_status_catalog_integrity():
             assert status["terminal"] is False
         else:
             assert status["terminal"] is True
+
+
+def test_manifest_reads_doc_file(tmp_path: Path):
+    (tmp_path / "input.schema.json").write_text('{"type":"object","properties":{}}', encoding="utf-8")
+    (tmp_path / "output.schema.json").write_text('{"type":"object","properties":{}}', encoding="utf-8")
+    (tmp_path / "README.md").write_text("# 工具文档\n\n正文", encoding="utf-8")
+    (tmp_path / "tool.toml").write_text(
+        """
+[tool]
+id = "a.b.c"
+name = "t"
+version = "1"
+doc = "README.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.plain"]
+output_types = ["text.plain"]
+
+[runtime]
+kind = "inproc"
+entry = "main:run"
+
+[resources]
+timeout_s = 60
+concurrency = 1
+""",
+        encoding="utf-8",
+    )
+    manifest = ToolManifest.from_toml(tmp_path / "tool.toml")
+    assert manifest.doc_md is not None
+    assert manifest.doc_md.startswith("# 工具文档")
+
+
+def test_manifest_rejects_missing_doc_file(tmp_path: Path):
+    (tmp_path / "input.schema.json").write_text('{"type":"object","properties":{}}', encoding="utf-8")
+    (tmp_path / "output.schema.json").write_text('{"type":"object","properties":{}}', encoding="utf-8")
+    (tmp_path / "tool.toml").write_text(
+        """
+[tool]
+id = "a.b.c"
+name = "t"
+version = "1"
+doc = "NOT_EXIST.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.plain"]
+output_types = ["text.plain"]
+
+[runtime]
+kind = "inproc"
+entry = "main:run"
+
+[resources]
+timeout_s = 60
+concurrency = 1
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception, match="不存在"):
+        ToolManifest.from_toml(tmp_path / "tool.toml")

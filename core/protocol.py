@@ -23,6 +23,9 @@ class ToolSection(BaseModel):
     version: str
     description: str = ""
     tags: list[str] = Field(default_factory=list)
+    # 专业化介绍文档（markdown 文件名，相对工具目录；内容由 from_toml 读取注入 doc_md）
+    doc: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     @field_validator("id")
     @classmethod
@@ -81,6 +84,8 @@ class ToolManifest(BaseModel):
     resources: ResourcesSection
     # [ui] 呈现声明：宽松 dict，骨架只透传不解释（CommWEB ToolFace 消费）
     ui: dict[str, Any] = Field(default_factory=dict)
+    # 工具文档全文（markdown），来自 [tool].doc 声明文件的读取注入，非 toml 直书
+    doc_md: str | None = None
 
     @classmethod
     def from_toml(cls, path: Path) -> "ToolManifest":
@@ -89,6 +94,12 @@ class ToolManifest(BaseModel):
         for key in ("input_schema", "output_schema"):
             if isinstance(io.get(key), str):
                 io[key] = json.loads((Path(path).parent / io[key]).read_text(encoding="utf-8"))
+        doc = (raw.get("tool") or {}).get("doc")
+        if doc is not None:
+            doc_path = Path(path).parent / doc
+            if not doc_path.is_file():
+                raise ValueError(f"tool.doc 指向的文件不存在: {doc}")
+            raw["doc_md"] = doc_path.read_text(encoding="utf-8")
         return cls.model_validate(raw)
 
 

@@ -35,7 +35,7 @@ class PipelineService:
         self._tool_repo = tool_repo
         self._dispatch = dispatch_service
 
-    def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]], doc_md: str | None = None) -> dict[str, Any]:
         if not PIPELINE_ID_PATTERN.match(pipeline_id):
             raise ToolUserError(f"管线 id 须为点分多段（小写）: {pipeline_id}")
         if not steps or not isinstance(steps, list):
@@ -47,7 +47,7 @@ class PipelineService:
                 raise ToolNotFoundError(f"第 {i} 步工具未注册: {step['tool']}")
             if not isinstance(step["input"], dict):
                 raise ToolUserError(f"第 {i} 步 input 须为对象")
-        self._pipeline_repo.upsert_definition(pipeline_id, name, steps)
+        self._pipeline_repo.upsert_definition(pipeline_id, name, steps, doc_md=doc_md)
         return {"id": pipeline_id, "name": name, "steps": steps, "status": "registered"}
 
     def list(self) -> list[dict[str, Any]]:

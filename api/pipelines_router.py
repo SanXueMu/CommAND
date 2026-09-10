@@ -15,6 +15,7 @@ class PipelineCreate(BaseModel):
     id: str
     name: str
     steps: list[dict[str, Any]] = Field(min_length=1)
+    doc_md: str | None = None
 
 
 class PipelineRunCreate(BaseModel):
@@ -24,7 +25,7 @@ class PipelineRunCreate(BaseModel):
 @router.post("", status_code=201)
 def create_pipeline(body: PipelineCreate) -> dict:
     try:
-        return deps.get_pipeline_service().register(body.id, body.name, body.steps)
+        return deps.get_pipeline_service().register(body.id, body.name, body.steps, doc_md=body.doc_md)
     except ToolUserError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ToolNotFoundError as exc:
