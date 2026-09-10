@@ -38,8 +38,19 @@ def test_seed_is_idempotent(site_stack):
     repo.seed(BUILTIN_SITE_VIEWS)
     second = {v["id"] for v in repo.list()}
     assert first == second
-    assert "ocr-recognize" in first
+    assert "ocr" in first
     assert "tools" in first
+
+
+def test_seed_syncs_stale_builtin_views(site_stack):
+    """同步化语义：代码清单删掉的内置视图，seed 时从库中清除（010 根因修复）。"""
+    repo = site_stack
+    repo.upsert({"id": "ocr-recognize", "type": "data.browser", "title": "OCR识别", "sort": 100})
+    repo.upsert({"id": "ocr-results", "type": "data.browser", "title": "OCR结果", "sort": 110})
+    repo.seed(BUILTIN_SITE_VIEWS)
+    ids = {v["id"] for v in repo.list()}
+    assert "ocr-recognize" not in ids and "ocr-results" not in ids
+    assert "ocr" in ids
 
 
 def test_upsert_overrides_and_delete(site_stack):
@@ -65,8 +76,8 @@ def test_meta_site_serves_seeded_views(site_stack, monkeypatch):
     body = client.get("/api/meta/site").json()
     views = body["site"]["views"]
     ids = [v["id"] for v in views]
-    assert "tools" in ids and "ocr-specgen" in ids
+    assert "tools" in ids and "ocr" in ids
     # when 条件下发形态与 props 保留
-    specgen = next(v for v in views if v["id"] == "ocr-specgen")
-    assert specgen["props"]["save_as"]["pipeline_prefix"] == "flow.ocr.custom."
-    assert specgen["when"] == {"capability": "has_files"}
+    ocr = next(v for v in views if v["id"] == "ocr")
+    assert ocr["props"]["recognizeFlow"] == "flow.ocr.smart"
+    assert ocr["when"] == {"capability": "has_pipelines"}

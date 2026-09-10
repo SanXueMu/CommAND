@@ -9,7 +9,7 @@ def create_app():
     from fastapi import FastAPI
 
     import deps
-    from api import data_router, files_router, keys_router, meta_router, ocr_templates_router, pipelines_router, system_router, tasks_router, tools_router
+    from api import data_router, files_router, keys_router, meta_router, ocr_records_router, ocr_templates_router, pipelines_router, system_router, tasks_router, tools_router
     from store.site_seed import BUILTIN_SITE_VIEWS
 
     @asynccontextmanager
@@ -36,6 +36,7 @@ def create_app():
     app.include_router(files_router.router, prefix="/api")
     app.include_router(data_router.router, prefix="/api")
     app.include_router(ocr_templates_router.router, prefix="/api")
+    app.include_router(ocr_records_router.router, prefix="/api")
     return app
 
 

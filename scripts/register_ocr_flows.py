@@ -33,7 +33,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["file"],
         "properties": {
-            "file": {"type": "string", "title": "识别文件", "description": "图片或 PDF 文件路径"},
+            "file": {"type": "string", "format": "file", "title": "识别文件", "description": "图片或 PDF 文件路径"},
             "output_db": {"type": "string", "title": "结果库名", "description": "识别结果写入的 OCR 库标识"},
             "key_name": {"type": "string", "title": "记录主键名"},
             "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
@@ -51,7 +51,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "required": ["template_id", "file"],
         "properties": {
             "template_id": {"type": "string", "title": "识别模版", "description": "选择模版后自动驱动识别（提示词/字段/钩子随模版）"},
-            "file": {"type": "string", "title": "识别文件", "description": "图片或 PDF 文件路径"},
+            "file": {"type": "string", "format": "file", "title": "识别文件", "description": "图片或 PDF 文件路径"},
             "output_db": {"type": "string", "title": "结果库名", "description": "识别结果写入的 OCR 库标识"},
             "key_name": {"type": "string", "title": "记录主键名"},
             "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
@@ -70,7 +70,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["file"],
         "properties": {
-            "file": {"type": "string", "title": "识别文件", "description": "图片或 PDF 文件路径（识别+翻译+回填一步到位）"},
+            "file": {"type": "string", "format": "file", "title": "识别文件", "description": "图片或 PDF 文件路径（识别+翻译+回填一步到位）"},
             "output_db": {"type": "string", "title": "结果库名", "description": "识别结果写入的 OCR 库标识"},
             "key_name": {"type": "string", "title": "记录主键名"},
             "fields": {"type": "string", "title": "识别字段", "description": "JSON：字段名→说明"},
@@ -93,7 +93,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["file", "requirement"],
         "properties": {
-            "file": {"type": "string", "title": "样例文件", "description": "带文本层的 PDF 样例"},
+            "file": {"type": "string", "format": "file", "title": "样例文件", "description": "带文本层的 PDF 样例"},
             "requirement": {"type": "string", "title": "识别需求描述", "description": "想从样例里得到什么字段、怎么用"},
             "key_name": {"type": "string", "title": "记录主键名"},
             "model": {"type": "string", "title": "语言模型", "description": "留空用默认模型"},
@@ -103,7 +103,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["file", "requirement"],
         "properties": {
-            "file": {"type": "string", "title": "样例文件", "description": "扫描件或图片样例"},
+            "file": {"type": "string", "format": "file", "title": "样例文件", "description": "扫描件或图片样例"},
             "requirement": {"type": "string", "title": "识别需求描述", "description": "想从样例里得到什么字段、怎么用"},
             "key_name": {"type": "string", "title": "记录主键名"},
             "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
@@ -113,7 +113,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["file", "requirement", "new_template_id"],
         "properties": {
-            "file": {"type": "string", "title": "样例文件", "description": "同一份样例既生成模版又试识别"},
+            "file": {"type": "string", "format": "file", "title": "样例文件", "description": "同一份样例既生成模版又试识别"},
             "requirement": {"type": "string", "title": "识别需求描述"},
             "key_name": {"type": "string", "title": "记录主键名"},
             "model": {"type": "string", "title": "多模态模型"},

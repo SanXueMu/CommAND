@@ -31,6 +31,21 @@ BUILTIN_SITE_VIEWS: list[dict] = [
         "id": "settings", "type": "settings.keys", "title": "设置",
         "icon": "api-outlined", "sort": 900,
     },
+    # ---- OCR 工作台（还原 CommOCR 一站式体验：选模版→传文件→识别→结果导出；
+    # 业务配置全部 props 下发，CommWEB 零业务内容） ----
+    {
+        "id": "ocr", "type": "ocr.studio", "title": "OCR 工作台",
+        "icon": "scan-outlined", "sort": 50,
+        "when": {"capability": "has_pipelines"},
+        "props": {
+            "description": "一站式识别工作台：选择识别模版，上传图片或 PDF，识别后查看结果并导出。",
+            "recognizeFlow": "flow.ocr.smart",
+            "exportFlow": "flow.ocrdb.view",
+            "genFlow": "flow.specgen.img",
+            "templatesPath": "/ocr/templates",
+            "recordsPath": "/ocr/records",
+        },
+    },
     # ---- 模版管理（批 J1 一站式；OCR 子功能按三级概念归流库，不再占导航 Tab） ----
     {
         "id": "templates", "type": "templates.manager", "title": "模版管理",
