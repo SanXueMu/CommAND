@@ -2,50 +2,16 @@
 
 协议 v2（蓝图 03）：/meta/site 站点清单——会员向 CommWEB 声明视图集
 （有哪些 Tab/页面/顺序/显隐/落地页），渲染控制权倒转给会员数据。
-静态声明起步；when 条件由前端按握手探测结果求值。
+声明存 site_views 表（纯壳准则：声明是数据不是代码），启动 lifespan
+幂等 seed 内置声明；when 条件由前端按握手探测结果求值。
 """
 
 from fastapi import APIRouter
 
+import deps
 from core.status import STATUS_CATALOG
 
 router = APIRouter(prefix="/meta", tags=["meta"])
-
-SITE_MANIFEST: dict = {
-    "site": {
-        "name": "CommAND",
-        "protocolVersion": "2",
-        "views": [
-            {
-                "id": "tools",
-                "type": "tools.grid",
-                "title": "工具库",
-                "icon": "appstore-outlined",
-                "default": True,
-                "props": {"defaultLayout": "card"},
-            },
-            {
-                "id": "flows",
-                "type": "flows.list",
-                "title": "流",
-                "icon": "node-index-outlined",
-                "when": {"capability": "has_pipelines"},
-            },
-            {
-                "id": "tasks",
-                "type": "tasks.table",
-                "title": "任务中心",
-                "icon": "unordered-list-outlined",
-            },
-            {
-                "id": "work",
-                "type": "workspace.tabs",
-                "title": "工作区",
-                "icon": "desktop-outlined",
-            },
-        ],
-    }
-}
 
 
 @router.get("/statuses")
@@ -55,4 +21,14 @@ def list_statuses() -> dict:
 
 @router.get("/site")
 def get_site() -> dict:
-    return SITE_MANIFEST
+    views = [
+        {k: v for k, v in view.items() if v is not None and k not in ("sort",)}
+        for view in deps.get_site_repo().list()
+    ]
+    return {
+        "site": {
+            "name": "CommAND",
+            "protocolVersion": "2",
+            "views": views,
+        }
+    }

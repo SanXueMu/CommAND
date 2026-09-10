@@ -11,6 +11,7 @@ from services.registry_service import RegistryService
 from store.db import Db
 from store.event_repo import EventRepo
 from store.key_repo import KeyRepo
+from store.site_repo import SiteRepo
 from store.pipeline_repo import PipelineRepo
 from store.run_event_repo import RunEventRepo
 from store.task_repo import TaskRepo
@@ -54,6 +55,10 @@ def get_run_event_repo() -> RunEventRepo:
 @lru_cache(maxsize=1)
 def get_key_repo() -> KeyRepo:
     return KeyRepo(get_db())
+
+
+def get_site_repo() -> SiteRepo:
+    return SiteRepo(get_db())
 
 
 @lru_cache(maxsize=1)

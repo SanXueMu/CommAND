@@ -10,12 +10,15 @@ def create_app():
 
     import deps
     from api import data_router, files_router, keys_router, meta_router, pipelines_router, system_router, tasks_router, tools_router
+    from store.site_seed import BUILTIN_SITE_VIEWS
 
     @asynccontextmanager
     async def lifespan(app):
         db = deps.get_db()
         db.open()
         db.apply_migrations()
+        # 纯壳准则：站点声明是数据——启动/热部署即幂等 seed 进 PG，经 /meta/site 下发
+        deps.get_site_repo().seed(BUILTIN_SITE_VIEWS)
         scheduler = deps.get_scheduler()
         scheduler.start()
         yield
