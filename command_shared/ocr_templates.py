@@ -93,8 +93,9 @@ class TemplateStore:
         fields = template.get("fields")
         if not isinstance(fields, list) or not fields or not all(isinstance(f, str) and f for f in fields):
             raise ToolDomainError("fields 须为非空字符串数组")
-        if not isinstance(template.get("prompt_template"), str) or "{fields}" not in template["prompt_template"]:
-            raise ToolDomainError("prompt_template 须为字符串且含 {fields} 占位符")
+        prompt_text = template.get("prompt_template")
+        if not isinstance(prompt_text, str) or not prompt_text.strip():
+            raise ToolDomainError("prompt_template 须为非空字符串")  # {fields} 占位可选（合同类固定提示词无占位）
         hooks = template.get("hooks") or []
         if not isinstance(hooks, list) or not all(isinstance(h, dict) and h.get("code") for h in hooks):
             raise ToolDomainError("hooks 须为含 code 的对象数组")

@@ -39,7 +39,10 @@ def test_upsert_validation(store):
     with pytest.raises(ToolDomainError, match="fields"):
         store.upsert(_valid(fields=[]))
     with pytest.raises(ToolDomainError, match="prompt_template"):
-        store.upsert(_valid(prompt_template="无占位符"))
+        store.upsert(_valid(prompt_template="   "))
+    # 无 {fields} 占位合法（合同类固定提示词，渲染时占位符无为）
+    store.upsert(_valid(prompt_template="固定提示词", tid="tpl.nofield"))
+    assert store.get("tpl.nofield")["prompt_template"] == "固定提示词"
     with pytest.raises(ToolDomainError, match="record_mode"):
         store.upsert(_valid(record_mode="bogus"))
 

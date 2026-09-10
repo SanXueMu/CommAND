@@ -1,0 +1,19 @@
+[tool]
+id = "spec.template.from_spec"
+name = "三件套转模版"
+version = "1.0.0"
+tags = ["模板", "识别"]
+description = "specgen 三件套(task_spec/postprocess/view_spec)转识别模版库条目；template 缺 {fields} 占位时自动补识别字段行（E3）"
+
+[io]
+input_types = ["ocr.spec.checked"]
+output_types = ["ocr.template"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 30
+concurrency = 2
+max_attempts = 1

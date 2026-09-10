@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "title": "目标模版id"
+    },
+    "name": {
+      "type": "string",
+      "title": "模版名称"
+    },
+    "category": {
+      "type": "string",
+      "title": "类别",
+      "enum": [
+        "invoice",
+        "contract",
+        "audit",
+        "custom"
+      ]
+    },
+    "task_spec": {
+      "type": "object",
+      "title": "三件套 task_spec"
+    },
+    "postprocess": {
+      "type": "array",
+      "title": "钩子三件套"
+    },
+    "view_spec": {
+      "type": "object",
+      "title": "视图三件套"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "category",
+    "task_spec"
+  ],
+  "additionalProperties": true
+}
