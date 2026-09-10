@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "title": "模版id"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "additionalProperties": false
+}

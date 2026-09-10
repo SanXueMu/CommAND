@@ -1,0 +1,20 @@
+[tool]
+id = "spec.template.list"
+name = "识别模版列表"
+version = "1.0.0"
+tags = ["模板", "识别", "管理"]
+description = "识别规则模版库检索：enabled/category/keyword 过滤，返回摘要（E1）"
+
+
+[io]
+input_types = ["ocr.template.query"]
+output_types = ["ocr.template"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 30
+concurrency = 4
+max_attempts = 1

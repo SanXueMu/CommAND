@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "title": "模版id"
+    },
+    "name": {
+      "type": "string",
+      "title": "名称"
+    },
+    "category": {
+      "type": "string",
+      "title": "类别",
+      "enum": [
+        "invoice",
+        "contract",
+        "audit",
+        "custom"
+      ]
+    },
+    "prompt_template": {
+      "type": "string",
+      "title": "提示词模板(含{fields}占位)"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "字段清单"
+    },
+    "rules": {
+      "type": [
+        "array",
+        "string",
+        "null"
+      ],
+      "title": "规则"
+    },
+    "example": {
+      "type": [
+        "object",
+        "array",
+        "null"
+      ],
+      "title": "示例"
+    },
+    "hooks": {
+      "type": "array",
+      "title": "后处理钩子"
+    },
+    "record_mode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "title": "记录模式",
+      "enum": [
+        "page",
+        "record",
+        null
+      ]
+    },
+    "lenient": {
+      "type": "boolean",
+      "title": "宽松模式"
+    },
+    "view_spec": {
+      "type": "object",
+      "title": "视图规格"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "category",
+    "prompt_template",
+    "fields"
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "total": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "templates",
+    "total"
+  ]
+}

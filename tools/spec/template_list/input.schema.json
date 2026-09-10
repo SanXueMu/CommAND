@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "title": "仅看启用/停用"
+    },
+    "category": {
+      "type": "string",
+      "title": "类别",
+      "enum": [
+        "invoice",
+        "contract",
+        "audit",
+        "custom"
+      ]
+    },
+    "keyword": {
+      "type": "string",
+      "title": "关键字(id/名称模糊)"
+    }
+  },
+  "additionalProperties": true
+}

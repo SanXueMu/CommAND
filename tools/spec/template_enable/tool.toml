@@ -1,0 +1,20 @@
+[tool]
+id = "spec.template.enable"
+name = "识别模版启停"
+version = "1.0.0"
+tags = ["模板", "识别", "管理"]
+description = "识别规则模版启用/停用（停用后 resolve 拒绝，列表保留可再启用）"
+
+
+[io]
+input_types = ["ocr.template.query"]
+output_types = ["ocr.template"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 30
+concurrency = 4
+max_attempts = 1

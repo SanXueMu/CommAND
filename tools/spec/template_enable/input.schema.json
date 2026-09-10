@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "title": "模版id"
+    },
+    "enabled": {
+      "type": "boolean",
+      "title": "启用?"
+    }
+  },
+  "required": [
+    "id",
+    "enabled"
+  ],
+  "additionalProperties": false
+}
