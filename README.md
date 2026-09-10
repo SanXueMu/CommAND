@@ -100,3 +100,4 @@ command/
 - PostgreSQL 16（`docker-compose.yml`，本地 5433，弱口令仅限本地）
 - Python 3.13 + uv；FastAPI + pydantic v2 + psycopg3
 - 架构蓝图与决策留档见知识库 `02Sessions/02-个人/01Projects-项目/Web/01Result/`
+| 2026-09-10 | 协议 v2：GET /api/meta/site 站点清单下发（视图集/顺序/落地页/when 能力条件），渲染控制权移交前端声明驱动（蓝图03） | 是 | — | 否 | 是（视图声明变更即前端导航变更） | 通过 |
