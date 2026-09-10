@@ -63,7 +63,12 @@ class PipelineRepo:
 
     def delete_definition(self, pipeline_id: str) -> None:
         with self._db.pool.connection() as conn:
-            conn.execute("DELETE FROM pipelines WHERE id = %s", (pipeline_id,))
+            with conn.transaction():
+                conn.execute(
+                    "UPDATE pipeline_runs SET pipeline_id = NULL WHERE pipeline_id = %s",
+                    (pipeline_id,),
+                )
+                conn.execute("DELETE FROM pipelines WHERE id = %s", (pipeline_id,))
 
     def create_run(self, pipeline_id: str, input: dict[str, Any],
                    parent_run_id: str | None = None,
