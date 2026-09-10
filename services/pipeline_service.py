@@ -107,7 +107,7 @@ class PipelineService:
         first = definition["steps"][0]
         try:
             if "pipeline" in first:  # C1：工作流首步即子流 → 直接创建子 run
-                self._spawn_subrun(run_id, 0, first, run, None, {})
+                self._spawn_subrun(run_id, 0, first, {"input": input}, None, {})
             else:
                 resolved = resolve_input(first["input"], input, None, {})
                 submitted = self._submit(definition, run_id, 0, resolved)
@@ -437,6 +437,44 @@ class PipelineService:
                             "attempt": submitted.get("attempt", 1)})
         return {"run_id": run_id, "step_index": step_index,
                 "handle": submitted["handle"], "status": "running"}
+
+    def rerun_run(self, run_id: str, input_override: dict[str, Any] | None = None) -> dict[str, Any]:
+        """C4 重跑流（06 四.1）：原 run 留档不可变，以 run.input + 覆盖起全新 run；
+        workflow 重跑自然重建子 run 树。仅终态 run 可重跑。"""
+        run = self._pipeline_repo.get_run(run_id)
+        if run is None:
+            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
+        if run["status"] in ("running", "paused"):
+            raise TaskConflictError(f"run 未终态，不可重跑: {run['status']}")
+        new_input = dict(run["input"] or {})
+        new_input.update(input_override or {})
+        # 先建新 run 再补写审计（flow_rerun 需回填 new_run_id）
+        new_run_id = self._pipeline_repo.create_run(run["pipeline_id"], new_input)
+        self._audit(run_id, None, "flow_rerun",
+                    detail={"new_run_id": new_run_id,
+                            "override": sorted(input_override) if input_override else []})
+        self._audit(new_run_id, None, "created",
+                    detail={"pipeline_id": run["pipeline_id"], "rerun_of": run_id})
+
+        definition = self._pipeline_repo.get_definition(run["pipeline_id"])
+        first = definition["steps"][0]
+        try:
+            if "pipeline" in first:
+                self._spawn_subrun(new_run_id, 0, first, {"input": new_input}, None, {})
+                first_handle = None
+            else:
+                resolved = resolve_input(first["input"], new_input, None, {})
+                first_handle = self._submit(definition, new_run_id, 0, resolved)["handle"]
+        except ToolUserError as exc:
+            self._finish_and_cascade(new_run_id, "failed", error={
+                "kind": "user", "message": f"重跑流首步无法入队: {exc}"})
+            raise
+        except ToolNotFoundError as exc:
+            self._finish_and_cascade(new_run_id, "failed", error={
+                "kind": "user", "message": f"重跑流首步工具不可用: {exc}"})
+            raise
+        return {"run_id": new_run_id, "rerun_of": run_id, "status": "running",
+                "first_handle": first_handle}
 
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
         """steps 快照：每步最新任务 + 定义工具名（工作区/任务中心的考证视图）。"""

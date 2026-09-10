@@ -93,6 +93,20 @@ def get_pipeline_run(run_id: str) -> dict:
     return {"run": deps.get_pipeline_repo().get_run(run_id), "tasks": tasks}
 
 
+@runs_router.post("/{run_id}/rerun", status_code=202)
+def rerun_run(run_id: str, body: PipelineRunCreate | None = None) -> dict:
+    """C4 重跑流：原 run 留档，以 run.input+覆盖起全新 run（06 四.1）。"""
+    try:
+        return deps.get_pipeline_service().rerun_run(
+            run_id, input_override=body.input if body else None)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (ToolUserError, ToolNotFoundError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @runs_router.post("/{run_id}/pause")
 def pause_run(run_id: str) -> dict:
     try:
