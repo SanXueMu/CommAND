@@ -7,12 +7,14 @@
   ],
   "properties": {
     "records": {
+      "title": "识别记录集",
       "type": "array",
       "items": {
         "type": "object"
       }
     },
     "view_spec": {
+      "title": "视图规则（ViewSpec）",
       "type": [
         "object",
         "string"

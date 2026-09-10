@@ -6,26 +6,32 @@
   ],
   "properties": {
     "file": {
+      "title": "样例文件",
       "type": "string",
       "description": "样例文件（PDF前N页或图片）"
     },
     "requirement": {
+      "title": "识别需求",
       "type": "string",
       "description": "识别需求描述"
     },
     "key_name": {
+      "title": "密钥名",
       "type": "string",
       "description": "VL 密钥名（空=默认）"
     },
     "model": {
+      "title": "多模态模型",
       "type": "string",
       "description": "多模态模型（默认 qwen-vl-max）"
     },
     "max_pages": {
+      "title": "采样页数",
       "type": "integer",
       "description": "采样页数（默认3）"
     },
     "render_scale": {
+      "title": "渲染倍率",
       "type": "number",
       "description": "渲染倍率（默认2.0）"
     }

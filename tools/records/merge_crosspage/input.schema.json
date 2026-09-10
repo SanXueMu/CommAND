@@ -7,16 +7,19 @@
   ],
   "properties": {
     "records": {
+      "title": "识别记录集",
       "type": "array",
       "items": {
         "type": "object"
       }
     },
     "key_field": {
+      "title": "合并键字段",
       "type": "string",
       "description": "键字段（如 合同名称线索/项目名称）"
     },
     "modes": {
+      "title": "合并模式",
       "type": "array",
       "items": {
         "type": "string",
@@ -27,6 +30,7 @@
       }
     },
     "sep": {
+      "title": "拼接分隔符",
       "type": "string"
     }
   }

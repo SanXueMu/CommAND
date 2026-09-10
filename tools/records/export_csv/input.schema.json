@@ -5,10 +5,12 @@
   ],
   "properties": {
     "rows": {
+      "title": "视图行",
       "type": "array",
       "description": "视图行数组（records.view.query 产出）"
     },
     "columns": {
+      "title": "导出列序",
       "type": "array",
       "items": {
         "type": "string"
@@ -16,6 +18,7 @@
       "description": "列序"
     },
     "name": {
+      "title": "导出文件名",
       "type": "string",
       "description": "导出文件名（不含扩展名）"
     }

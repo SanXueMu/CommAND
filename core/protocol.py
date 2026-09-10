@@ -25,7 +25,6 @@ class ToolSection(BaseModel):
     tags: list[str] = Field(default_factory=list)
     # 专业化介绍文档（markdown 文件名，相对工具目录；内容由 from_toml 读取注入 doc_md）
     doc: str | None = None
-    tags: list[str] = Field(default_factory=list)
 
     @field_validator("id")
     @classmethod

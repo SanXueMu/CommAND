@@ -5,14 +5,17 @@
   ],
   "properties": {
     "task_spec": {
+      "title": "识别任务规格",
       "type": "object",
       "description": "识别任务规格"
     },
     "postprocess": {
+      "title": "钩子源码",
       "type": "array",
       "description": "钩子源码数组"
     },
     "view_spec": {
+      "title": "视图规则（ViewSpec）",
       "type": "object",
       "description": "ViewSpec"
     }

@@ -5,10 +5,12 @@
   ],
   "properties": {
     "rows": {
+      "title": "主表视图行",
       "type": "array",
       "description": "主表视图行"
     },
     "columns": {
+      "title": "主表列序",
       "type": "array",
       "items": {
         "type": "string"
@@ -16,13 +18,16 @@
       "description": "主表列序"
     },
     "splits": {
+      "title": "子表数组",
       "type": "array",
       "description": "子表数组 [{key, columns, rows}]"
     },
     "name": {
+      "title": "导出文件名",
       "type": "string"
     },
     "sheet_name": {
+      "title": "主 Sheet 名",
       "type": "string",
       "description": "主sheet名"
     }
