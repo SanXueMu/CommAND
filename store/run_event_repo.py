@@ -8,12 +8,13 @@ from store.db import Db
 
 AUDIT_KINDS = {
     "created", "step_queued", "step_started",
-    "step_completed", "step_failed", "step_cancelled",
+    "step_completed", "step_failed", "step_cancelled", "step_skipped",
     "pause_requested", "paused_at_boundary",
     "resume_requested", "resumed",
     "abort_requested", "run_aborted", "step_abort",
-    "rerun_requested", "step_rerun",
+    "rerun_requested", "step_rerun", "flow_rerun",
     "override_applied",
+    "subrun_created", "subrun_finished",
 }
 
 
@@ -33,6 +34,16 @@ class RunEventRepo:
                 """,
                 (run_id, task_handle, kind, actor, Json(detail or {})),
             )
+
+    def skipped_steps(self, run_id: str) -> set[int]:
+        """D2：曾被 when 跳过的步骤集合（resume 重放时识别，避免把 skipped 当未到）。"""
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT detail->>'step_index' FROM run_events "
+                "WHERE run_id = %s AND kind = 'step_skipped'",
+                (run_id,),
+            ).fetchall()
+        return {int(r[0]) for r in rows}
 
     def list(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:

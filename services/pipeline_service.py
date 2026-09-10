@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError, ToolUserError
-from core.pipeline import resolve_input
+from core.pipeline import evaluate_when, resolve_input, validate_when
 from services.dispatch_service import DispatchService
 from store.db import Db
 from store.pipeline_repo import PipelineRepo
@@ -53,6 +53,8 @@ class PipelineService:
                 raise ToolUserError(f"第 {i} 步须含 tool 与 input")
             if self._tool_repo.get(step["tool"]) is None:
                 raise ToolNotFoundError(f"第 {i} 步工具未注册: {step['tool']}")
+            if "when" in step:
+                validate_when(step["when"])
             if not isinstance(step["input"], dict):
                 raise ToolUserError(f"第 {i} 步 input 须为对象")
         self._pipeline_repo.upsert_definition(pipeline_id, name, steps, doc_md=doc_md)
@@ -139,15 +141,26 @@ class PipelineService:
 
         definition = self._pipeline_repo.get_definition(run["pipeline_id"])
         steps = definition["steps"]
+        history = self._pipeline_repo.outputs_by_step(run_id)
         next_index = task["step_index"] + 1
+        prev_output = task["output"]  # prev 语义：最近一个已执行步的输出（skipped 无输出）
+
+        # D2：when 不满足 → 跳步留痕并继续向后探测（全部跳完即收口）
+        while next_index < len(steps):
+            step = steps[next_index]
+            if "when" in step and not evaluate_when(step["when"], run["input"], prev_output, history):
+                self._audit(run_id, None, "step_skipped",
+                            detail={"step_index": next_index, "when": step["when"]})
+                next_index += 1
+                continue
+            break
         if next_index >= len(steps):
             self._pipeline_repo.finish_run(run_id, "succeeded")
             return
 
         step = steps[next_index]
-        history = self._pipeline_repo.outputs_by_step(run_id)
         try:
-            resolved = resolve_input(step["input"], run["input"], task["output"], history)
+            resolved = resolve_input(step["input"], run["input"], prev_output, history)
             self._submit(definition, run_id, next_index, resolved)
         except ToolUserError as exc:
             self._pipeline_repo.finish_run(run_id, "failed", error={
@@ -191,9 +204,12 @@ class PipelineService:
         latest = self._pipeline_repo.latest_task_by_step(run_id)
         dispatched: dict[str, Any] | None = None
 
+        skipped = self._run_events.skipped_steps(run_id) if self._run_events else set()
         for n, step in enumerate(steps):
             t = latest.get(n)
             if t is None:
+                if n in skipped:
+                    continue  # D2：该步曾 when 跳过，重放时继续跳
                 prev_output = history.get(n - 1)
                 try:
                     resolved = resolve_input(step["input"], run["input"], prev_output, history)
@@ -324,6 +340,7 @@ class PipelineService:
             raise TaskNotFoundError(f"管线运行不存在: {run_id}")
         definition = self._pipeline_repo.get_definition(run["pipeline_id"])
         latest = self._pipeline_repo.latest_task_by_step(run_id)
+        skipped = self._run_events.skipped_steps(run_id) if self._run_events else set()
         steps = []
         for n, step in enumerate(definition["steps"]):
             t = latest.get(n)
@@ -331,6 +348,7 @@ class PipelineService:
                 "step_index": n,
                 "tool": step["tool"],
                 "latest": t,
+                "skipped": n in skipped,  # D2：when 跳步标记（审计留痕的可视化来源）
             })
         return {"run": run, "steps": steps}
 
