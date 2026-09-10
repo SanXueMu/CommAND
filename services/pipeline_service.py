@@ -43,22 +43,44 @@ class PipelineService:
         self._dispatch = dispatch_service
         self._run_events = run_event_repo
 
-    def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]], doc_md: str | None = None) -> dict[str, Any]:
+    def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
+                 doc_md: str | None = None, input_schema: dict[str, Any] | None = None) -> dict[str, Any]:
         if not PIPELINE_ID_PATTERN.match(pipeline_id):
             raise ToolUserError(f"管线 id 须为点分多段（小写）: {pipeline_id}")
         if not steps or not isinstance(steps, list):
             raise ToolUserError("steps 须为非空数组")
+        has_sub = False
         for i, step in enumerate(steps):
-            if not isinstance(step, dict) or "tool" not in step or "input" not in step:
-                raise ToolUserError(f"第 {i} 步须含 tool 与 input")
-            if self._tool_repo.get(step["tool"]) is None:
+            if not isinstance(step, dict) or "input" not in step:
+                raise ToolUserError(f"第 {i} 步须含 input")
+            has_tool, has_pipeline = "tool" in step, "pipeline" in step
+            if has_tool and has_pipeline:
+                raise ToolUserError(f"第 {i} 步 tool 与 pipeline 只能其一")
+            if not has_tool and not has_pipeline:
+                raise ToolUserError(f"第 {i} 步须含 tool 或 pipeline")
+            if has_pipeline:
+                has_sub = True
+                sub = self._pipeline_repo.get_definition(step["pipeline"])
+                if sub is None:
+                    raise ToolNotFoundError(f"第 {i} 步引用的流未注册: {step['pipeline']}")
+                if sub.get("type") != "flow":
+                    raise ToolUserError(
+                        f"第 {i} 步只能引用普通流（flow），不可嵌套工作流: {step['pipeline']}")
+            elif self._tool_repo.get(step["tool"]) is None:
                 raise ToolNotFoundError(f"第 {i} 步工具未注册: {step['tool']}")
             if "when" in step:
                 validate_when(step["when"])
             if not isinstance(step["input"], dict):
                 raise ToolUserError(f"第 {i} 步 input 须为对象")
-        self._pipeline_repo.upsert_definition(pipeline_id, name, steps, doc_md=doc_md)
-        return {"id": pipeline_id, "name": name, "steps": steps, "status": "registered"}
+        ptype = "workflow" if has_sub else "flow"
+        existing = self._pipeline_repo.get_definition(pipeline_id)
+        if existing is not None and existing.get("type") != ptype:
+            raise ToolUserError(
+                f"流类型不可变更: {pipeline_id} 已是 {existing.get('type')}，新定义为 {ptype}")
+        self._pipeline_repo.upsert_definition(pipeline_id, name, steps, doc_md=doc_md,
+                                              ptype=ptype, input_schema=input_schema)
+        return {"id": pipeline_id, "name": name, "type": ptype, "steps": steps,
+                "status": "registered"}
 
     def list(self) -> list[dict[str, Any]]:
         return self._pipeline_repo.list_definitions()
@@ -84,8 +106,11 @@ class PipelineService:
         self._audit(run_id, None, "created", detail={"pipeline_id": pipeline_id})
         first = definition["steps"][0]
         try:
-            resolved = resolve_input(first["input"], input, None, {})
-            submitted = self._submit(definition, run_id, 0, resolved)
+            if "pipeline" in first:  # C1：工作流首步即子流 → 直接创建子 run
+                self._spawn_subrun(run_id, 0, first, run, None, {})
+            else:
+                resolved = resolve_input(first["input"], input, None, {})
+                submitted = self._submit(definition, run_id, 0, resolved)
         except ToolUserError as exc:
             self._pipeline_repo.finish_run(run_id, "failed", error={
                 "kind": "user", "message": str(exc)})
@@ -94,7 +119,7 @@ class PipelineService:
             "run_id": run_id,
             "status": "running",
             "pipeline_id": pipeline_id,
-            "first_handle": submitted["handle"],
+            "first_handle": submitted["handle"] if "pipeline" not in first else None,
         }
 
     def _submit(self, definition: dict[str, Any], run_id: str, step_index: int,
@@ -111,6 +136,55 @@ class PipelineService:
                detail: dict[str, Any] | None = None) -> None:
         if self._run_events is not None and run_id:
             self._run_events.append(run_id, task_handle, kind, detail=detail)
+
+    def _spawn_subrun(self, parent_run_id: str, step_index: int, step: dict[str, Any],
+                      run: dict[str, Any], prev_output: Any,
+                      history: dict[int, Any]) -> dict[str, Any]:
+        """C1：workflow 遇 pipeline 步 → 创建子 run 并派发其首步。
+        07 设计：子 run 实体化（parent 两列）；同父步活跃子 run 唯一（008 唯一索引防撞）。"""
+        flow_id = step["pipeline"]
+        sub_definition = self._pipeline_repo.get_definition(flow_id)
+        if sub_definition is None or sub_definition.get("type") != "flow":
+            self._pipeline_repo.finish_run_forced(parent_run_id, "failed", error={
+                "kind": "user", "message": f"第 {step_index} 步引用的流不可用: {flow_id}"})
+            raise ToolUserError(f"第 {step_index} 步引用的流不可用: {flow_id}")
+        try:
+            resolved = resolve_input(step["input"], run["input"], prev_output, history)
+        except ToolUserError as exc:
+            self._pipeline_repo.finish_run_forced(parent_run_id, "failed", error={
+                "kind": "user", "message": f"第 {step_index} 步流输入解析失败: {exc}"})
+            raise
+        sub_run_id = self._pipeline_repo.create_run(
+            flow_id, resolved, parent_run_id=parent_run_id, parent_step_index=step_index)
+        self._audit(parent_run_id, None, "subrun_created",
+                    detail={"step_index": step_index, "subrun_id": sub_run_id,
+                            "pipeline_id": flow_id})
+        sub_first = sub_definition["steps"][0]
+        sub_resolved = resolve_input(sub_first["input"], resolved, None, {})
+        submitted = self._submit(sub_definition, sub_run_id, 0, sub_resolved)
+        return {"subrun_id": sub_run_id, "handle": submitted["handle"]}
+
+    def _finish_and_cascade(self, run_id: str, status: str,
+                            error: dict[str, Any] | None = None) -> None:
+        """07 级联收口：run 终态化；子 run 成功→合成任务喂父 advance（推进父下一步）；
+        子 run 失败→父同状态收口（部件失败=整流失败）。"""
+        self._pipeline_repo.finish_run(run_id, status, error=error)
+        run = self._pipeline_repo.get_run(run_id)
+        if run is None or run["parent_run_id"] is None:
+            return
+        parent_run_id, step_index = run["parent_run_id"], run["parent_step_index"]
+        self._audit(parent_run_id, None, "subrun_finished",
+                    detail={"step_index": step_index, "subrun_id": run_id, "status": status})
+        if status != "succeeded":
+            self._finish_and_cascade(parent_run_id, status, error=error or {
+                "kind": "system", "message": f"子流失败（步 {step_index}）"})
+            return
+        outputs = self._pipeline_repo.outputs_by_step(run_id)
+        last_output = outputs[max(outputs)] if outputs else None
+        synthetic = {"pipeline_run": parent_run_id, "step_index": step_index,
+                     "status": "succeeded", "output": last_output, "error": None,
+                     "handle": None, "attempt": 1, "input": run["input"]}
+        self.advance(synthetic)
 
     def advance(self, task: dict[str, Any]) -> None:
         """scheduler 终态钩子：succeeded → 推进下步；失败终态 → run 收口。幂等。"""
@@ -132,7 +206,7 @@ class PipelineService:
         if task["status"] in FAILURE_STATUSES:
             self._audit(run_id, task["handle"], "step_failed",
                         detail={"step_index": task["step_index"], "status": task["status"]})
-            self._pipeline_repo.finish_run(run_id, task["status"], error=task.get("error"))
+            self._finish_and_cascade(run_id, task["status"], error=task.get("error"))
             return
         if task["status"] != "succeeded":
             return
@@ -155,20 +229,26 @@ class PipelineService:
                 continue
             break
         if next_index >= len(steps):
-            self._pipeline_repo.finish_run(run_id, "succeeded")
+            self._finish_and_cascade(run_id, "succeeded")
             return
 
         step = steps[next_index]
+        if "pipeline" in step:  # C1：workflow 的子流步 → 创建子 run（级联由 _finish_and_cascade 闭环）
+            try:
+                self._spawn_subrun(run_id, next_index, step, run, prev_output, history)
+            except ToolUserError:
+                pass  # spawn 内部已收口父 run
+            return
         try:
             resolved = resolve_input(step["input"], run["input"], prev_output, history)
             self._submit(definition, run_id, next_index, resolved)
         except ToolUserError as exc:
-            self._pipeline_repo.finish_run(run_id, "failed", error={
+            self._finish_and_cascade(run_id, "failed", error={
                 "kind": "user",
                 "message": f"第 {next_index} 步无法入队: {exc}",
             })
         except ToolNotFoundError as exc:
-            self._pipeline_repo.finish_run(run_id, "failed", error={
+            self._finish_and_cascade(run_id, "failed", error={
                 "kind": "user",
                 "message": f"第 {next_index} 步工具不可用: {exc}",
             })
@@ -205,7 +285,25 @@ class PipelineService:
         dispatched: dict[str, Any] | None = None
 
         skipped = self._run_events.skipped_steps(run_id) if self._run_events else set()
+        subruns = self._pipeline_repo.get_subruns(run_id)  # C1：pipeline 步的状态载体是子 run
         for n, step in enumerate(steps):
+            if "pipeline" in step:
+                sub = subruns.get(n)
+                if sub is None:
+                    try:
+                        prev_output = history.get(n - 1)
+                        self._spawn_subrun(run_id, n, step, run, prev_output, history)
+                        dispatched = {"handle": None}
+                    except (ToolUserError, ToolNotFoundError) as exc:
+                        self._finish_and_cascade(run_id, "failed", error={
+                            "kind": "user", "message": f"恢复时第 {n} 步子流无法启动: {exc}"})
+                    break
+                if sub["status"] == "succeeded":
+                    continue  # 子流已成功，等同已完成步
+                if sub["status"] == "paused":
+                    self.resume_run(sub["id"])  # 父复活则暂停的子流一并续跑
+                    break
+                break  # running（等级联回调）或终态失败（父已被级联收口）
             t = latest.get(n)
             if t is None:
                 if n in skipped:
@@ -222,7 +320,7 @@ class PipelineService:
                 break  # 暂停期间仍有活任务，等它终态触发 advance
             if t["status"] == "succeeded":
                 if n == len(steps) - 1:
-                    self._pipeline_repo.finish_run(run_id, "succeeded")
+                    self._finish_and_cascade(run_id, "succeeded")
                 continue
             # cancelled / interrupted / failed*：以留档 input 从断点重发本步
             try:
@@ -240,7 +338,8 @@ class PipelineService:
                 "dispatched": dispatched["handle"] if dispatched else None}
 
     def abort_run(self, run_id: str) -> dict[str, Any]:
-        """立即中止：活跃任务全部发起取消，run 强制收口为 cancelled；成果留档可查。"""
+        """立即中止：活跃任务全部发起取消，run 强制收口为 cancelled；成果留档可查。
+        C1：递归中止活跃子 run（07——父终止=整树终止）。"""
         run = self._pipeline_repo.get_run(run_id)
         if run is None:
             raise TaskNotFoundError(f"管线运行不存在: {run_id}")
@@ -253,6 +352,12 @@ class PipelineService:
                 self._dispatch.cancel(handle)
             except Exception:  # noqa: BLE001 取消尽力而为，收口为准
                 pass
+        for sub in self._pipeline_repo.get_subruns(run_id).values():
+            if sub["status"] in ("running", "paused"):
+                try:
+                    self.abort_run(sub["id"])  # 递归：子树整体终止
+                except TaskConflictError:
+                    pass
         self._audit(run_id, None, "run_aborted")
         return {"run_id": run_id, "status": "cancelled"}
 
@@ -341,15 +446,22 @@ class PipelineService:
         definition = self._pipeline_repo.get_definition(run["pipeline_id"])
         latest = self._pipeline_repo.latest_task_by_step(run_id)
         skipped = self._run_events.skipped_steps(run_id) if self._run_events else set()
+        subruns = self._pipeline_repo.get_subruns(run_id)
         steps = []
         for n, step in enumerate(definition["steps"]):
             t = latest.get(n)
-            steps.append({
+            entry: dict[str, Any] = {
                 "step_index": n,
-                "tool": step["tool"],
+                "tool": step.get("tool"),
+                "pipeline": step.get("pipeline"),
                 "latest": t,
                 "skipped": n in skipped,  # D2：when 跳步标记（审计留痕的可视化来源）
-            })
+            }
+            if "pipeline" in step and n in subruns:
+                sub = subruns[n]  # C1：子流步展示子 run 状态（StepTrack 下钻入口）
+                entry["subrun"] = {"run_id": sub["id"], "status": sub["status"],
+                                   "pipeline_id": sub["pipeline_id"]}
+            steps.append(entry)
         return {"run": run, "steps": steps}
 
     def list_run_events(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:

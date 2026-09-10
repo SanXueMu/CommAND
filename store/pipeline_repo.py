@@ -14,34 +14,43 @@ class PipelineRepo:
     def __init__(self, db: Db) -> None:
         self._db = db
 
-    def upsert_definition(self, pipeline_id: str, name: str, steps: list[dict[str, Any]], doc_md: str | None = None) -> None:
+    def upsert_definition(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
+                          doc_md: str | None = None, ptype: str = "flow",
+                          input_schema: dict[str, Any] | None = None) -> None:
+        """注册/更新流定义；type 不可变（变更由 service 层拒绝），input_schema 缺省保留旧值。"""
         with self._db.pool.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO pipelines (id, name, steps, doc_md) VALUES (%s, %s, %s, %s)
+                INSERT INTO pipelines (id, name, steps, doc_md, type, input_schema)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name, steps = EXCLUDED.steps, doc_md = EXCLUDED.doc_md, created_at = now()
+                    name = EXCLUDED.name, steps = EXCLUDED.steps, doc_md = EXCLUDED.doc_md,
+                    input_schema = COALESCE(EXCLUDED.input_schema, pipelines.input_schema),
+                    created_at = now()
                 """,
-                (pipeline_id, name, Json(steps), doc_md),
+                (pipeline_id, name, Json(steps), doc_md, ptype,
+                 Json(input_schema) if input_schema is not None else None),
             )
 
     def get_definition(self, pipeline_id: str) -> dict[str, Any] | None:
         with self._db.pool.connection() as conn:
             row = conn.execute(
-                "SELECT id, name, steps, doc_md, created_at FROM pipelines WHERE id = %s",
+                "SELECT id, name, steps, doc_md, created_at, type, input_schema FROM pipelines WHERE id = %s",
                 (pipeline_id,),
             ).fetchone()
         if row is None:
             return None
-        return {"id": row[0], "name": row[1], "steps": row[2], "doc_md": row[3], "created_at": row[4]}
+        return {"id": row[0], "name": row[1], "steps": row[2], "doc_md": row[3],
+                "created_at": row[4], "type": row[5] or "flow", "input_schema": row[6]}
 
     def list_definitions(self) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
             rows = conn.execute(
-                "SELECT id, name, steps, created_at FROM pipelines ORDER BY id"
+                "SELECT id, name, steps, created_at, type, input_schema FROM pipelines ORDER BY id"
             ).fetchall()
         return [
-            {"id": r[0], "name": r[1], "steps": r[2], "created_at": r[3]} for r in rows
+            {"id": r[0], "name": r[1], "steps": r[2], "created_at": r[3],
+             "type": r[4] or "flow", "input_schema": r[5]} for r in rows
         ]
 
     def count_active_runs(self, pipeline_id: str) -> int:
@@ -56,12 +65,18 @@ class PipelineRepo:
         with self._db.pool.connection() as conn:
             conn.execute("DELETE FROM pipelines WHERE id = %s", (pipeline_id,))
 
-    def create_run(self, pipeline_id: str, input: dict[str, Any]) -> str:
+    def create_run(self, pipeline_id: str, input: dict[str, Any],
+                   parent_run_id: str | None = None,
+                   parent_step_index: int | None = None) -> str:
+        """创建 run；parent 两列非空即子 run（008 唯一索引保证同父步活跃子 run 唯一）。"""
         run_id = "p_" + secrets.token_hex(8)
         with self._db.pool.connection() as conn:
             conn.execute(
-                "INSERT INTO pipeline_runs (id, pipeline_id, input) VALUES (%s, %s, %s)",
-                (run_id, pipeline_id, Json(input)),
+                """
+                INSERT INTO pipeline_runs (id, pipeline_id, input, parent_run_id, parent_step_index)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (run_id, pipeline_id, Json(input), parent_run_id, parent_step_index),
             )
         return run_id
 
@@ -69,7 +84,8 @@ class PipelineRepo:
         with self._db.pool.connection() as conn:
             row = conn.execute(
                 """
-                SELECT r.id, r.pipeline_id, r.input, r.status, r.error, r.progress, r.created_at, r.finished_at
+                SELECT r.id, r.pipeline_id, r.input, r.status, r.error, r.progress,
+                       r.created_at, r.finished_at, r.parent_run_id, r.parent_step_index
                 FROM pipeline_runs r WHERE r.id = %s
                 """,
                 (run_id,),
@@ -79,6 +95,7 @@ class PipelineRepo:
         return {
             "id": row[0], "pipeline_id": row[1], "input": row[2], "status": row[3],
             "error": row[4], "progress": row[5], "created_at": row[6], "finished_at": row[7],
+            "parent_run_id": row[8], "parent_step_index": row[9],
         }
 
     def cas_run_status(self, run_id: str, from_statuses: tuple[str, ...], to_status: str) -> bool:
@@ -150,7 +167,8 @@ class PipelineRepo:
             )
 
     def outputs_by_step(self, run_id: str) -> dict[int, Any]:
-        """每步最新成功任务的输出（DISTINCT ON 保证 rerun 后取最新成功而非旧任务）。"""
+        """每步最新成功任务的输出（DISTINCT ON 保证 rerun 后取最新成功而非旧任务）。
+        C1：pipeline 步在父 run 无任务——其输出取自该步子 run 的末步任务输出。"""
         with self._db.pool.connection() as conn:
             rows = conn.execute(
                 """
@@ -160,4 +178,32 @@ class PipelineRepo:
                 """,
                 (run_id,),
             ).fetchall()
-        return {r[0]: r[1] for r in rows}
+            outputs = {r[0]: r[1] for r in rows}
+            sub_rows = conn.execute(
+                """
+                SELECT DISTINCT ON (r.parent_step_index) r.parent_step_index, t.output
+                FROM pipeline_runs r
+                JOIN tasks t ON t.pipeline_run = r.id AND t.status = 'succeeded'
+                WHERE r.parent_run_id = %s AND r.status = 'succeeded'
+                ORDER BY r.parent_step_index, t.created_at DESC
+                """,
+                (run_id,),
+            ).fetchall()
+        for idx, out in sub_rows:  # 子输出仅补缺，不覆盖本地任务
+            outputs.setdefault(idx, out)
+        return outputs
+
+    def get_subruns(self, run_id: str) -> dict[int, dict[str, Any]]:
+        """该 run 的全部子 run（按父步索引）——resume 重放 / abort 递归 / snapshot 用。"""
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, pipeline_id, parent_step_index, status, created_at, finished_at
+                FROM pipeline_runs WHERE parent_run_id = %s
+                ORDER BY parent_step_index, created_at
+                """,
+                (run_id,),
+            ).fetchall()
+        return {r[2]: {"id": r[0], "pipeline_id": r[1], "parent_step_index": r[2],
+                       "status": r[3], "created_at": r[4], "finished_at": r[5]}
+                for r in rows}
