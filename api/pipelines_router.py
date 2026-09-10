@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 import deps
-from core.errors import TaskNotFoundError, ToolNotFoundError, ToolUserError
+from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError, ToolUserError
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -66,3 +66,41 @@ def get_pipeline_run(run_id: str) -> dict:
     except TaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"run": deps.get_pipeline_repo().get_run(run_id), "tasks": tasks}
+
+
+@runs_router.post("/{run_id}/pause")
+def pause_run(run_id: str) -> dict:
+    try:
+        return deps.get_pipeline_service().pause_run(run_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@runs_router.post("/{run_id}/resume")
+def resume_run(run_id: str) -> dict:
+    try:
+        return deps.get_pipeline_service().resume_run(run_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@runs_router.post("/{run_id}/abort")
+def abort_run(run_id: str) -> dict:
+    try:
+        return deps.get_pipeline_service().abort_run(run_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@runs_router.get("/{run_id}/events")
+def list_run_events(run_id: str, limit: int = 200) -> dict:
+    try:
+        return {"events": deps.get_pipeline_service().list_run_events(run_id, limit)}
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

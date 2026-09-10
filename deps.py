@@ -12,6 +12,7 @@ from store.db import Db
 from store.event_repo import EventRepo
 from store.key_repo import KeyRepo
 from store.pipeline_repo import PipelineRepo
+from store.run_event_repo import RunEventRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
 
@@ -44,6 +45,10 @@ def get_event_repo() -> EventRepo:
 @lru_cache(maxsize=1)
 def get_pipeline_repo() -> PipelineRepo:
     return PipelineRepo(get_db())
+
+
+def get_run_event_repo() -> RunEventRepo:
+    return RunEventRepo(get_db())
 
 
 @lru_cache(maxsize=1)
@@ -95,4 +100,5 @@ def get_pipeline_service() -> PipelineService:
         task_repo=get_task_repo(),
         tool_repo=get_tool_repo(),
         dispatch_service=get_dispatch_service(),
+        run_event_repo=get_run_event_repo(),
     )

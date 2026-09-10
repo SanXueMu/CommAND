@@ -57,7 +57,7 @@ class PipelineRepo:
         with self._db.pool.connection() as conn:
             row = conn.execute(
                 """
-                SELECT r.id, r.pipeline_id, r.input, r.status, r.error, r.created_at, r.finished_at
+                SELECT r.id, r.pipeline_id, r.input, r.status, r.error, r.progress, r.created_at, r.finished_at
                 FROM pipeline_runs r WHERE r.id = %s
                 """,
                 (run_id,),
@@ -66,8 +66,63 @@ class PipelineRepo:
             return None
         return {
             "id": row[0], "pipeline_id": row[1], "input": row[2], "status": row[3],
-            "error": row[4], "created_at": row[5], "finished_at": row[6],
+            "error": row[4], "progress": row[5], "created_at": row[6], "finished_at": row[7],
         }
+
+    def cas_run_status(self, run_id: str, from_statuses: tuple[str, ...], to_status: str) -> bool:
+        """原子状态迁移（乐观 CAS）：from_statuses 内才迁移，返回是否成功。"""
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                """
+                UPDATE pipeline_runs SET status = %s,
+                    finished_at = CASE WHEN %s IN ('succeeded','failed','failed_review','cancelled','interrupted')
+                                       THEN now() ELSE finished_at END
+                WHERE id = %s AND status = ANY(%s)
+                RETURNING id
+                """,
+                (to_status, to_status, run_id, list(from_statuses)),
+            ).fetchone()
+        return row is not None
+
+    def set_run_progress(self, run_id: str, next_index: int) -> None:
+        with self._db.pool.connection() as conn:
+            conn.execute(
+                "UPDATE pipeline_runs SET progress = %s WHERE id = %s",
+                (next_index, run_id),
+            )
+
+    def finish_run_forced(self, run_id: str, status: str, error: dict[str, Any] | None = None) -> None:
+        """强制收口（不受 running 前置约束）：abort 等人工操作用。"""
+        with self._db.pool.connection() as conn:
+            conn.execute(
+                """
+                UPDATE pipeline_runs SET status = %s, error = %s, finished_at = now()
+                WHERE id = %s AND status NOT IN ('succeeded','cancelled','interrupted','failed','failed_review')
+                """,
+                (status, Json(error) if error is not None else None, run_id),
+            )
+
+    def latest_task_by_step(self, run_id: str) -> dict[int, dict[str, Any]]:
+        """每步最新任务（rerun 后同步多任务时以最新为准）。"""
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT ON (step_index)
+                    step_index, handle, status, attempt, input
+                FROM tasks WHERE pipeline_run = %s
+                ORDER BY step_index, created_at DESC
+                """,
+                (run_id,),
+            ).fetchall()
+        return {r[0]: {"step_index": r[0], "handle": r[1], "status": r[2], "attempt": r[3], "input": r[4]} for r in rows}
+
+    def active_task_handles(self, run_id: str) -> list[str]:
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT handle FROM tasks WHERE pipeline_run = %s AND status IN ('queued','running')",
+                (run_id,),
+            ).fetchall()
+        return [r[0] for r in rows]
 
     def finish_run(
         self, run_id: str, status: str, error: dict[str, Any] | None = None
@@ -82,12 +137,13 @@ class PipelineRepo:
             )
 
     def outputs_by_step(self, run_id: str) -> dict[int, Any]:
+        """每步最新成功任务的输出（DISTINCT ON 保证 rerun 后取最新成功而非旧任务）。"""
         with self._db.pool.connection() as conn:
             rows = conn.execute(
                 """
-                SELECT step_index, output FROM tasks
+                SELECT DISTINCT ON (step_index) step_index, output FROM tasks
                 WHERE pipeline_run = %s AND status = 'succeeded'
-                ORDER BY step_index
+                ORDER BY step_index, created_at DESC
                 """,
                 (run_id,),
             ).fetchall()
