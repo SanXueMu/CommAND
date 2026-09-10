@@ -1,0 +1,21 @@
+[tool]
+id = "img.vl.extract"
+name = "视觉识别"
+version = "1.0.0"
+tags = ["识别", "OCR"]
+description = "文档 → VL 视觉识别 → 字段校验 → 钩子 → 结果库（缓存断点/熔断内化，渲染不上总线）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.xlsx", "file.pdf", "file.img"]
+output_types = ["ocr.records"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

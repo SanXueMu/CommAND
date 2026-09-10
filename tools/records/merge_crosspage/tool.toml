@@ -1,0 +1,21 @@
+[tool]
+id = "records.merge.crosspage"
+name = "跨页合并"
+version = "1.0.0"
+tags = ["记录", "后处理"]
+description = "records 跨页合并（join=空键续行并入前行 / fill=键下填标题行继承），纯函数"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["ocr.records"]
+output_types = ["ocr.records"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "records",
+    "key_field"
+  ],
+  "properties": {
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "key_field": {
+      "type": "string",
+      "description": "键字段（如 合同名称线索/项目名称）"
+    },
+    "modes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "join",
+          "fill"
+        ]
+      }
+    },
+    "sep": {
+      "type": "string"
+    }
+  }
+}

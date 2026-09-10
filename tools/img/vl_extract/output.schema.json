@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "file",
+    "file_hash",
+    "db",
+    "records",
+    "records_count"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "file_hash": {
+      "type": "string"
+    },
+    "db": {
+      "type": "string"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "records_count": {
+      "type": "integer"
+    },
+    "pages_total": {
+      "type": "integer"
+    },
+    "pages_done": {
+      "type": "integer"
+    },
+    "pages_cached": {
+      "type": "integer"
+    },
+    "skipped_text_pdf": {
+      "type": "boolean"
+    },
+    "failed_pages": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "review_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

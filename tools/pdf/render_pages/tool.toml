@@ -1,0 +1,21 @@
+[tool]
+id = "pdf.render.pages"
+name = "PDF 渲染"
+version = "1.0.0"
+tags = ["PDF", "图像"]
+description = "PDF → 逐页 base64 图片（独立通用渲染；管线勿用——大 payload 不上总线）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf", "file.img"]
+output_types = ["img.pages"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

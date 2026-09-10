@@ -1,0 +1,21 @@
+[tool]
+id = "img.barcodes.extract"
+name = "条码提取"
+version = "1.0.0"
+tags = ["图像", "条码"]
+description = "PDF/图片 → 条码/二维码列表（pyzbar 纯本地零 LLM；资产盘点扫码）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf", "file.img"]
+output_types = ["img.barcodes"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

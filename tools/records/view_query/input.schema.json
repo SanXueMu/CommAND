@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "records",
+    "view_spec"
+  ],
+  "properties": {
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "view_spec": {
+      "type": [
+        "object",
+        "string"
+      ],
+      "description": "ViewSpec JSON（对象或字符串）；内置五视图见 BUILTIN_VIEWS"
+    }
+  }
+}

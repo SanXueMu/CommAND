@@ -1,0 +1,21 @@
+[tool]
+id = "ocrdb.write.records"
+name = "结果库写入"
+version = "1.0.0"
+tags = ["OCR", "存储"]
+description = "records → ocr_results.db（与 CommOCR 同构；extract.units 对偶）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["ocr.records"]
+output_types = ["ocrdb.file"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

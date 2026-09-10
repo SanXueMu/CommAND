@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "records",
+    "records_count"
+  ],
+  "properties": {
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "records_count": {
+      "type": "integer"
+    },
+    "merged_from": {
+      "type": "integer"
+    },
+    "key_field": {
+      "type": "string"
+    }
+  }
+}

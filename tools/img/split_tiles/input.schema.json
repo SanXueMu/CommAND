@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "file"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "tile_size": {
+      "type": "integer",
+      "description": "块边长像素（缺省 1600）"
+    },
+    "overlap": {
+      "type": "integer",
+      "description": "相邻块重叠像素（缺省 120）"
+    },
+    "max_tiles": {
+      "type": "integer"
+    },
+    "render_scale": {
+      "type": "number"
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "file"
+  ],
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "PDF/图片路径（/api/files 上传）"
+    },
+    "db": {
+      "type": "string",
+      "description": "结果库路径（缺省 DATA_DIR/ocr/<文件名>.ocr_results.db）"
+    },
+    "key_name": {
+      "type": "string",
+      "description": "keys 服务密钥名（缺省默认密钥）"
+    },
+    "model": {
+      "type": "string",
+      "description": "视觉模型（缺省 qwen-vl-max）"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "识别字段集（TaskSpec 核心）"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "角色模板（TaskSpec.template）"
+    },
+    "rules": {
+      "type": "string",
+      "description": "字段规则说明（TaskSpec.rules）"
+    },
+    "example": {
+      "type": "string",
+      "description": "输出示例（TaskSpec.example）"
+    },
+    "record_mode": {
+      "type": "string",
+      "enum": [
+        "page",
+        "record"
+      ],
+      "description": "page=逐页逐记录 / record=整文档一记录"
+    },
+    "postprocess": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "description": "页级钩子链 [{name, code}]，code 定义 page_hook(fields, add_note)"
+    },
+    "lenient_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "宽松模式允许缺省的字段"
+    },
+    "skip_text_pdf": {
+      "type": "boolean",
+      "description": "文本型 PDF 直提跳过（缺省 true）"
+    },
+    "render_scale": {
+      "type": "number"
+    },
+    "image_max_side": {
+      "type": "integer"
+    },
+    "page_concurrency": {
+      "type": "integer"
+    },
+    "fail_circuit": {
+      "type": "integer"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+[tool]
+id = "records.view.query"
+name = "视图查询"
+version = "1.0.0"
+tags = ["视图", "查询"]
+description = "records + ViewSpec → 表行（过滤/分组/聚合/判定/排序/拆表，CommOCR 视图引擎）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["ocr.records"]
+output_types = ["view.rows"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 2

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "file",
+    "barcodes",
+    "count"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "count": {
+      "type": "integer"
+    },
+    "pages": {
+      "type": "integer"
+    },
+    "values": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "barcodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "页码": {
+            "type": "integer"
+          },
+          "value": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "w": {
+            "type": "integer"
+          },
+          "h": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

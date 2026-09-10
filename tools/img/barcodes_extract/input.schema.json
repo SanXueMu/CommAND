@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "file"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "render_scale": {
+      "type": "number"
+    },
+    "image_max_side": {
+      "type": "integer",
+      "description": "0=不降采样（条码保真，缺省 0）"
+    }
+  }
+}

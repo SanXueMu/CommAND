@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "file",
+    "pages",
+    "page_count"
+  ],
+  "properties": {
+    "file": {
+      "type": "string"
+    },
+    "page_count": {
+      "type": "integer"
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "image_base64": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

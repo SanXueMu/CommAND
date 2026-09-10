@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "records",
+    "db"
+  ],
+  "properties": {
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "db": {
+      "type": "string"
+    },
+    "source_path": {
+      "type": "string"
+    },
+    "file_hash": {
+      "type": "string"
+    }
+  }
+}
