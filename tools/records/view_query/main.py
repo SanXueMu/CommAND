@@ -39,4 +39,4 @@ def run(input: dict, ctx, emit) -> dict:
 
     emit({"type": "progress", "phase": "view",
           "message": f"视图「{spec.name or '未命名'}」：{len(result['rows'])} 行"})
-    return {**result, "view_name": spec.name}
+    return {**result, "splits": result.get("splits", []), "view_name": spec.name}

@@ -1,9 +1,26 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["file"],
+  "required": [
+    "file"
+  ],
   "properties": {
-    "file": {"type": "string", "description": "commOcr 结果库路径（.db/.sqlite）"},
-    "long_value_chars": {"type": "integer", "minimum": 1, "description": "长值阈值，默认 200"}
+    "file": {
+      "type": "string",
+      "description": "commOcr 结果库路径（.db/.sqlite）"
+    },
+    "long_value_chars": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "长值阈值，默认 200"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "units",
+        "records"
+      ],
+      "description": "units=翻译单元（默认）；records=原始记录数组（视图流用）"
+    }
   }
 }

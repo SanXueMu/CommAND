@@ -1,23 +1,58 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["file", "file_hash", "kind", "units"],
+  "required": [
+    "file",
+    "file_hash",
+    "kind"
+  ],
   "properties": {
-    "file": {"type": "string"},
-    "file_hash": {"type": "string"},
-    "kind": {"type": "string"},
+    "file": {
+      "type": "string"
+    },
+    "file_hash": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
     "units": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["unit_id", "unit_type"],
+        "required": [
+          "unit_id",
+          "unit_type"
+        ],
         "properties": {
-          "unit_id": {"type": "string"},
-          "unit_type": {"enum": ["table", "text"]},
-          "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
-          "text": {"type": "string"}
+          "unit_id": {
+            "type": "string"
+          },
+          "unit_type": {
+            "enum": [
+              "table",
+              "text"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "text": {
+            "type": "string"
+          }
         }
-      }
+      },
+      "description": "mode=units 时输出：翻译单元"
+    },
+    "records": {
+      "type": "array",
+      "description": "mode=records 时输出：字段+页码+来源文件"
     }
   }
 }

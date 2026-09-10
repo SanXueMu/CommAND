@@ -57,7 +57,7 @@ def run(input: dict, ctx, emit) -> dict:
     key = _resolve_key(ctx, input.get("key_name"))
     client = chat_mod.make_client(key["api_key"], key.get("base_url") or chat_mod.DEFAULT_BASE_URL)
     model = input.get("model") or DEFAULT_MODEL
-    user_prompt = build_spec_user(requirement)
+    user_prompt = f"{SPEC_BUILDER_SYSTEM}\n\n{build_spec_user(requirement)}"
 
     pages = _sample_pages(path, int(input.get("max_pages", 3)), float(input.get("render_scale", 2.0)))
     raw, usage = "", None

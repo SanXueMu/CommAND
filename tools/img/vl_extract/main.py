@@ -43,9 +43,14 @@ def run(input: dict, ctx, emit) -> dict:
 
     fields = input.get("fields") or ["内容"]
     record_mode = input.get("record_mode") or "page"
-    prompt = ocr_engine.build_prompt(
-        input.get("prompt") or "你是专业的文档识别助手。请仔细识别图片中的全部内容。",
-        fields, input.get("rules") or "", input.get("example") or "", record_mode)
+    if input.get("raw_prompt"):
+        prompt = (input.get("prompt") or "").strip()
+        if not prompt:
+            raise ToolDomainError("raw_prompt 模式下 prompt 必填（完整提示词，含字段/规则/示例）")
+    else:
+        prompt = ocr_engine.build_prompt(
+            input.get("prompt") or "你是专业的文档识别助手。请仔细识别图片中的全部内容。",
+            fields, input.get("rules") or "", input.get("example") or "", record_mode)
 
     db_path = Path(input["db"]) if input.get("db") else (
         Path(__import__("os").environ.get("COMMAND_DATA_DIR", "data"))
@@ -64,7 +69,8 @@ def run(input: dict, ctx, emit) -> dict:
             image_format=input.get("image_format") or "jpeg",
             record_mode=record_mode,
             postprocess=input.get("postprocess") or None,
-            lenient_fields=input.get("lenient_fields") or None,
+                    lenient_fields=(fields if input.get("lenient")
+                            else (input.get("lenient_fields") or None)),
             skip_text_pdf=bool(input.get("skip_text_pdf", True)),
             render_scale=float(input.get("render_scale", 2.0)),
             image_max_side=int(input.get("image_max_side", 2200)),

@@ -25,7 +25,10 @@
       "type": "array"
     },
     "usage": {
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     }
   }
 }

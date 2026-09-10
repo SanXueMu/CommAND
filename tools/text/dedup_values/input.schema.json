@@ -1,8 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["segments"],
+  "required": [
+    "segments"
+  ],
   "properties": {
-    "segments": {"type": "array", "items": {"type": "string"}, "description": "输入段落（classify 的 segments）"}
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "输入段落（classify 的 segments）"
+    }
   }
 }

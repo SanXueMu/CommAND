@@ -81,23 +81,32 @@ def test_parse_records_bad_json_raises():
 
 def test_hook_compile_and_run():
     code = (
-        "def page_hook(fields, add_note):\n"
-        "    if not fields.get('金额'):\n"
-        "        add_note('金额缺失待审')\n"
-        "    fields['金额'] = (fields.get('金额') or '0').replace('元', '')\n"
+        "def transform_page(records, ctx):\n"
+        "    for rec in records:\n"
+        "        if not rec.get('金额'):\n"
+        "            ctx['review']('金额缺失待审')\n"
+        "            rec['金额'] = '0'\n"
+        "        else:\n"
+        "            rec['金额'] = rec['金额'].replace('元', '')\n"
+        "    return records\n"
     )
     hook = {"name": "amount", "fn": compile_page_hook("amount", code)}
-    outcome = run_page_hooks([hook], {"金额": "100元", "页码": 1})
-    assert outcome["fields"]["金额"] == "100"
-    assert outcome["notes"] == []
-    outcome = run_page_hooks([hook], {"页码": 2})
-    assert outcome["fields"]["金额"] == "0"
-    assert outcome["notes"] == ["金额缺失待审"]
+    out = run_page_hooks([hook], [{"金额": "100元"}], 1, ["金额"])
+    assert out == [{"金额": "100"}]
+    notes: list[str] = []
+    out = run_page_hooks([hook], [{"金额": ""}], 2, ["金额"], notes.append)
+    assert out == [{"金额": "0"}]
+    assert notes == ["金额缺失待审"]
 
 
 def test_hook_compile_rejects_bad_code():
     with pytest.raises(HookError):
         compile_page_hook("bad", "this is not python")
+
+
+def test_hook_requires_transform_page():
+    with pytest.raises(HookError):
+        compile_page_hook("old_style", "def page_hook(fields, add_note):\n    pass")
 
 
 # ---------- ocr_storage ----------
@@ -207,7 +216,7 @@ def test_engine_hooks_and_circuit(tmp_path, monkeypatch):
     pdf = _pdf(tmp_path / "doc.pdf", pages=3)
     connection = ocr_storage.connect(tmp_path / "o.db")
     ocr_storage.initialize(connection)
-    hook_code = "def page_hook(fields, add_note):\n    add_note('checked')\n"
+    hook_code = "def transform_page(records, ctx):\n    ctx['review']('checked')\n    return records\n"
     hook = {"name": "t", "code": hook_code}
 
     monkeypatch.setattr(ocr_engine, "call_vl",

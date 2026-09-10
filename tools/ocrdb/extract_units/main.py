@@ -35,6 +35,26 @@ def run(input: dict, ctx, emit) -> dict:
 
         raise ToolDomainError(f"文件不存在: {path}")
     long_value_chars = int(input.get("long_value_chars", 200))
+    mode = input.get("mode") or "units"
+
+    if mode == "records":
+        records: list[dict] = []
+        with sqlite3.connect(path) as conn:
+            cursor = conn.execute(
+                "SELECT source_path, page_number, data FROM records ORDER BY source_path, page_number"
+            )
+            for source_path, page_number, data_json in cursor:
+                try:
+                    data = json.loads(data_json)
+                except (TypeError, json.JSONDecodeError):
+                    data = {}
+                record = dict(data) if isinstance(data, dict) else {"数据": data}
+                record["页码"] = page_number
+                record["来源文件"] = Path(source_path).name
+                records.append(record)
+        emit({"phase": "extracted", "records": len(records)})
+        return {"file": str(path), "file_hash": _file_hash(path), "kind": "ocr_db",
+                "records": records}
 
     table_units: dict[str, dict] = {}
     text_units: list[dict] = []

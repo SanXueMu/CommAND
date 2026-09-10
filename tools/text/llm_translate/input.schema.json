@@ -9,8 +9,7 @@
       "type": "array",
       "items": {
         "type": "string"
-      },
-      "minItems": 1
+      }
     },
     "key_name": {
       "type": "string",

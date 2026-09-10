@@ -22,7 +22,10 @@
       "description": "视觉模型（缺省 qwen-vl-max）"
     },
     "fields": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       },
@@ -49,7 +52,10 @@
       "description": "page=逐页逐记录 / record=整文档一记录"
     },
     "postprocess": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "object",
         "properties": {
@@ -67,7 +73,10 @@
       "description": "页级钩子链 [{name, code}]，code 定义 page_hook(fields, add_note)"
     },
     "lenient_fields": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       },
@@ -88,6 +97,17 @@
     },
     "fail_circuit": {
       "type": "integer"
+    },
+    "raw_prompt": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "true=prompt 为完整提示词直通（模板管线固化字段/规则/示例时用）；false=按 fields/rules/example 装配"
+    },
+    "lenient": {
+      "type": "boolean",
+      "description": "全局宽松开关：true=允许任一字段缺席（补空串）；与 lenient_fields 名单互斥时优先本开关"
     }
   }
 }

@@ -20,9 +20,7 @@ GOOD_SPEC = {
     "task_spec": {"fields": ["项目名称", "送审金额"], "record_mode": "page",
                   "rules": "金额保留两位", "template": "你是决算表识别专家",
                   "example": {"项目名称": "示例", "送审金额": "100.00"}},
-    "postprocess": [{"name": "amount", "code": "def page_hook(fields, add_note):\n"
-                    "    if not fields.get('送审金额'):\n"
-                    "        add_note('送审金额缺失待审')"}],
+    "postprocess": [{"name": "amount", "code": "def transform_page(records, ctx):\n    return records"}],
     "view_spec": {"name": "决算", "columns": ["项目", "金额"],
                   "group": {"mode": "value", "field": "项目名称"},
                   "aggregates": [{"column": "项目", "op": "group_key", "field": "项目名称"},

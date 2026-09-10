@@ -5,7 +5,9 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import re
 
 _INTERNAL_KEYS = {"页码", "行号"}
@@ -72,28 +74,53 @@ def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None 
     return records
 
 
+_HOOK_CACHE: dict = {}
+
+
 def compile_page_hook(name: str, code: str):
-    """编译单条钩子源码 → page_hook 函数（模块级 globals 仅内置白名单）。"""
-    namespace: dict = {}
+    """编译钩子源码 → transform_page 可调用（CommOCR 同款协议，sha256 缓存）。
+
+    约定：code 必须定义 transform_page(records, ctx) -> records；
+    命名空间预置 re/json/math；ctx={"page", "fields", "review"}。
+    """
+    digest = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    cached = _HOOK_CACHE.get(digest)
+    if cached is not None:
+        return cached
+    namespace: dict = {
+        "__name__": f"postprocess_{digest[:8]}",
+        "re": re, "json": json, "math": math,
+    }
     try:
-        exec(code, {"__builtins__": __builtins__}, namespace)  # noqa: S102 - 用户钩子按设计可执行
+        exec(compile(code, f"<postprocess:{name or digest[:8]}>", "exec"), namespace)  # noqa: S102 - 用户钩子按设计可执行
+    except SyntaxError as exc:
+        raise HookError(f"钩子[{name}]源码语法错误: {exc}") from exc
     except Exception as exc:
         raise HookError(f"钩子 {name} 编译失败: {exc}") from exc
-    hook = namespace.get("page_hook")
-    if not callable(hook):
-        raise HookError(f"钩子 {name} 未定义 page_hook(fields, add_note)")
-    return hook
+    transform = namespace.get("transform_page")
+    if not callable(transform):
+        raise HookError(f"钩子[{name}]必须定义 transform_page(records, ctx) 函数")
+    _HOOK_CACHE[digest] = transform
+    return transform
 
 
-def run_page_hooks(hooks: list[dict], fields: dict) -> dict:
-    """顺序执行页级钩子链；返回 (被钩子改写后的 fields, notes)。"""
-    notes: list[str] = []
+def run_page_hooks(hooks: list[dict], records: list[dict], page_number: int,
+                   fields: list[str], review=None) -> list[dict]:
+    """按声明顺序执行页级钩子链；返回处理后的记录列表。
 
-    def add_note(message: str) -> None:
-        notes.append(str(message))
-
+    hooks 元素支持 {"name","code"}（现场编译，带缓存）或 {"fn"}（已编译）。
+    """
     for hook in hooks:
-        result = hook["fn"](fields, add_note)
-        if isinstance(result, dict):
-            fields = result
-    return {"fields": fields, "notes": notes}
+        transform = hook.get("fn") or compile_page_hook(hook.get("name", "hook"),
+                                                        hook.get("code", ""))
+        ctx = {"page": page_number, "fields": list(fields), "review": review}
+        try:
+            result = transform(records, ctx)
+        except HookError:
+            raise
+        except Exception as exc:
+            raise HookError(f"钩子[{hook.get('name', 'hook')}]执行失败: {exc}") from exc
+        if not isinstance(result, list) or not all(isinstance(r, dict) for r in result):
+            raise HookError(f"钩子[{hook.get('name', 'hook')}]必须返回记录列表（list[dict]）")
+        records = result
+    return records

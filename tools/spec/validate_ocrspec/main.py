@@ -1,6 +1,6 @@
 """三件套校验（spec.validate.ocrspec）：模板生成产出的守门员。
 
-校验：fields 非空且为字符串数组；record_mode 合法；钩子可编译且定义 page_hook；
+校验：fields 非空且为字符串数组；record_mode 合法；钩子可编译且定义 transform_page(records, ctx)；
 ViewSpec 可实例化 + 空行干跑（算子合法性）；view 列与 fields 交叉引用一致性（警告级）。
 """
 from __future__ import annotations

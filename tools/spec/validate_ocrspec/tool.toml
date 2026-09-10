@@ -1,15 +1,21 @@
+[tool]
 id = "spec.validate.ocrspec"
 name = "三件套校验"
-version = "0.1.0"
-description = "校验模板三件套：字段一致性/钩子可编译/ViewSpec可执行(空行干跑)，另存为管线前必过"
-domain = "spec"
+version = "1.0.0"
+tags = ["模板", "校验"]
+description = "TaskSpec/钩子/ViewSpec 合法性守门：钩子可编译、视图算子干跑、交叉引用警告"
 
-[input]
-schema = "input.schema.json"
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["ocr.spec"]
+output_types = ["ocr.spec.checked"]
 
-[output]
-schema = "output.schema.json"
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
 
-[engine]
-runtime = "inproc"
-entrypoint = "main:run"
+[resources]
+timeout_s = 120
+concurrency = 2
+max_attempts = 2

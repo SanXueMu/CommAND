@@ -1,15 +1,21 @@
+[tool]
 id = "spec.gen.vl"
 name = "模板生成(多模态)"
-version = "0.1.0"
-description = "多模态LLM直读样例页图生成识别三件套(方案二，扫描件/图片通用)"
-domain = "spec"
+version = "1.0.0"
+tags = ["模板", "生成"]
+description = "样例页图+需求 → 多模态LLM直读 → 识别三件套（方案二）"
 
-[input]
-schema = "input.schema.json"
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf", "file.img"]
+output_types = ["ocr.spec"]
 
-[output]
-schema = "output.schema.json"
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
 
-[engine]
-runtime = "inproc"
-entrypoint = "main:run"
+[resources]
+timeout_s = 300
+concurrency = 2
+max_attempts = 2

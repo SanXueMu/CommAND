@@ -166,8 +166,11 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
         final[key] = "；".join(texts)
     notes: list[str] = []
     if hooks and final:
-        outcome = run_page_hooks(hooks, final)
-        final, notes = outcome["fields"], outcome["notes"]
+        def _review(note: str) -> None:
+            notes.append(str(note))
+        page_number = page_jobs[0][1] if page_jobs else 1
+        merged_records = run_page_hooks(hooks, [final], page_number, fields, _review)
+        final = merged_records[0] if merged_records else final
     if final:
         final["页码"] = page_jobs[0][1] if page_jobs else 1
         ocr_storage.append_records(connection, file_hash, source_path, [(1, final)])
@@ -197,12 +200,12 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
                 raise _AuthFail(message) from exc
             raise
         notes: list[str] = []
+        if hooks and records:
+            def _review(note: str) -> None:
+                notes.append(str(note))
+            records = run_page_hooks(hooks, records, page_number, fields, _review)
         for record in records:
             record["页码"] = page_number
-            if hooks:
-                outcome = run_page_hooks(hooks, record)
-                record = outcome["fields"]
-                notes.extend(outcome["notes"])
         return records, notes
 
     future_map: dict = {}
