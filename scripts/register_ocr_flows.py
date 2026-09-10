@@ -26,6 +26,97 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 API = "http://127.0.0.1:8000"
 
+# 06 步8/C3：流级 input_schema——流表单声明驱动（中文 title/description，CommWEB
+# resolveForm 直读；缺省时前端回退模板猜键，显示英文键名）。
+INPUT_SCHEMAS: dict[str, dict] = {
+    "flow.ocr.recognize": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+            "file": {"type": "string", "title": "识别文件", "description": "图片或 PDF 文件路径"},
+            "output_db": {"type": "string", "title": "结果库名", "description": "识别结果写入的 OCR 库标识"},
+            "key_name": {"type": "string", "title": "记录主键名"},
+            "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
+            "fields": {"type": "string", "title": "识别字段", "description": "JSON：字段名→说明"},
+            "prompt": {"type": "string", "title": "识别提示词"},
+            "rules": {"type": "string", "title": "识别规则"},
+            "example": {"type": "string", "title": "输出示例"},
+            "record_mode": {"type": "string", "title": "记录模式"},
+            "skip_text_pdf": {"type": "boolean", "title": "文本层PDF直读", "description": "开启后带文本层的 PDF 不走视觉识别"},
+            "postprocess": {"type": "string", "title": "后处理钩子", "description": "JSON 数组：字段名→规则表达式"},
+        },
+    },
+    "flow.ocr.smart": {
+        "type": "object",
+        "required": ["template_id", "file"],
+        "properties": {
+            "template_id": {"type": "string", "title": "识别模版", "description": "选择模版后自动驱动识别（提示词/字段/钩子随模版）"},
+            "file": {"type": "string", "title": "识别文件", "description": "图片或 PDF 文件路径"},
+            "output_db": {"type": "string", "title": "结果库名", "description": "识别结果写入的 OCR 库标识"},
+            "key_name": {"type": "string", "title": "记录主键名"},
+            "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
+            "skip_text_pdf": {"type": "boolean", "title": "文本层PDF直读", "description": "开启后带文本层的 PDF 不走视觉识别"},
+            "export_units": {"type": "boolean", "title": "导出识别单元", "description": "识别完成后导出可翻译单元（供翻译流使用）"},
+        },
+    },
+    "flow.ocr.translate": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+            "file": {"type": "string", "title": "识别文件", "description": "图片或 PDF 文件路径（识别+翻译+回填一步到位）"},
+            "output_db": {"type": "string", "title": "结果库名", "description": "识别结果写入的 OCR 库标识"},
+            "key_name": {"type": "string", "title": "记录主键名"},
+            "fields": {"type": "string", "title": "识别字段", "description": "JSON：字段名→说明"},
+            "prompt": {"type": "string", "title": "识别提示词"},
+            "record_mode": {"type": "string", "title": "记录模式"},
+            "translate_key_name": {"type": "string", "title": "译文写入键名"},
+            "target_lang": {"type": "string", "title": "目标语言"},
+        },
+    },
+    "flow.ocrdb.view": {
+        "type": "object",
+        "required": ["db", "view_spec"],
+        "properties": {
+            "db": {"type": "string", "title": "OCR 库名", "description": "要导出的 OCR 结果库标识"},
+            "view_spec": {"type": "string", "title": "视图定义", "description": "JSON：列/拆分 sheet 规则"},
+            "name": {"type": "string", "title": "导出文件名"},
+        },
+    },
+    "flow.specgen.pdf": {
+        "type": "object",
+        "required": ["file", "requirement"],
+        "properties": {
+            "file": {"type": "string", "title": "样例文件", "description": "带文本层的 PDF 样例"},
+            "requirement": {"type": "string", "title": "识别需求描述", "description": "想从样例里得到什么字段、怎么用"},
+            "key_name": {"type": "string", "title": "记录主键名"},
+            "model": {"type": "string", "title": "语言模型", "description": "留空用默认模型"},
+        },
+    },
+    "flow.specgen.img": {
+        "type": "object",
+        "required": ["file", "requirement"],
+        "properties": {
+            "file": {"type": "string", "title": "样例文件", "description": "扫描件或图片样例"},
+            "requirement": {"type": "string", "title": "识别需求描述", "description": "想从样例里得到什么字段、怎么用"},
+            "key_name": {"type": "string", "title": "记录主键名"},
+            "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
+        },
+    },
+    "wf.ocr.fullchain": {
+        "type": "object",
+        "required": ["file", "requirement", "new_template_id"],
+        "properties": {
+            "file": {"type": "string", "title": "样例文件", "description": "同一份样例既生成模版又试识别"},
+            "requirement": {"type": "string", "title": "识别需求描述"},
+            "key_name": {"type": "string", "title": "记录主键名"},
+            "model": {"type": "string", "title": "多模态模型"},
+            "new_template_id": {"type": "string", "title": "新模版 ID", "description": "生成的模版以此 ID 入库"},
+            "new_template_name": {"type": "string", "title": "新模版名称"},
+            "output_db": {"type": "string", "title": "结果库名", "description": "试识别结果的入库标识"},
+        },
+    },
+}
+
 LEGACY_FLOWS = ("flow.ocr.invoice", "flow.ocr.contract", "flow.ocr.audit")
 
 FLOWS: dict[str, dict] = {
@@ -201,6 +292,9 @@ def main() -> None:
     for group_id, group in (("flow", FLOWS), ("workflow", WORKFLOWS)):
         for pid, spec in group.items():
             body = {"id": pid, "name": spec["name"], "steps": spec["steps"]}
+            schema = INPUT_SCHEMAS.get(pid)
+            if schema:
+                body["input_schema"] = schema  # 06 C3：流表单中文声明（缺省则前端猜键）
             api("/api/pipelines", method="POST", body=body)
             mark = "更新" if pid in existing else "新增"
             print(f"[{mark}] {pid}  ({len(spec['steps'])} 步)")

@@ -56,7 +56,12 @@ class ToolRepo:
                 f"SELECT {_COLUMNS}, manifest->'tool'->'tags' AS tags "
                 f"FROM tools WHERE status IN ('active','disabled') {hidden_clause} ORDER BY id"
             ).fetchall()
-        return [self._to_view(row) for row in rows]
+        views = []
+        for row in rows:
+            view = self._to_view(row)
+            view["tags"] = row[len(_COLUMNS.split(","))] or []  # SQL 侧提取的 tags 列（索引 = _COLUMNS 列数）
+            views.append(view)
+        return views
 
     def get(self, tool_id: str, include_disabled: bool = False) -> dict[str, Any] | None:
         status_clause = "" if include_disabled else "AND status = 'active'"

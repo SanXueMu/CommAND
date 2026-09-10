@@ -37,7 +37,8 @@ def test_upsert_idempotent_and_roundtrip(repo, sample_manifest_toml):
     repo.upsert(manifest)
 
     tools = repo.list_active()
-    assert any(t["id"] == "text.llm.translate" for t in tools)
+    found = next(t for t in tools if t["id"] == "text.llm.translate")
+    assert found["tags"] == manifest.tool.tags  # 列表瘦身路径 tags 不丢（曾因 _to_view 只读前 10 列全空）
 
     one = repo.get("text.llm.translate")
     assert one is not None
