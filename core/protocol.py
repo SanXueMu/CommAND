@@ -79,6 +79,8 @@ class ToolManifest(BaseModel):
     io: IoSection
     runtime: RuntimeSection
     resources: ResourcesSection
+    # [ui] 呈现声明：宽松 dict，骨架只透传不解释（CommWEB ToolFace 消费）
+    ui: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def from_toml(cls, path: Path) -> "ToolManifest":

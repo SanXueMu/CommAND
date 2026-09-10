@@ -9,7 +9,7 @@ def create_app():
     from fastapi import FastAPI
 
     import deps
-    from api import files_router, keys_router, pipelines_router, system_router, tasks_router, tools_router
+    from api import files_router, keys_router, meta_router, pipelines_router, system_router, tasks_router, tools_router
 
     @asynccontextmanager
     async def lifespan(app):
@@ -24,6 +24,7 @@ def create_app():
 
     app = FastAPI(title="CommAND", version="0.1.0", lifespan=lifespan)
     app.include_router(system_router.router, prefix="/api")
+    app.include_router(meta_router.router, prefix="/api")
     app.include_router(tools_router.router, prefix="/api")
     app.include_router(tasks_router.router, prefix="/api")
     app.include_router(pipelines_router.router, prefix="/api")

@@ -47,11 +47,13 @@ class ToolRepo:
             )
 
     def list_active(self) -> list[dict[str, Any]]:
+        """列表瘦身：SQL 侧提取 tags，不下发整份 manifest（详情端点才带）。"""
         with self._db.pool.connection() as conn:
             rows = conn.execute(
-                f"SELECT {_COLUMNS}, manifest FROM tools WHERE status = 'active' ORDER BY id"
+                f"SELECT {_COLUMNS}, manifest->'tool'->'tags' AS tags "
+                "FROM tools WHERE status = 'active' ORDER BY id"
             ).fetchall()
-        return [self._with_manifest_extras(self._to_view(row[:8]), row[8]) for row in rows]
+        return [{**self._to_view(row[:8]), "tags": row[8] or []} for row in rows]
 
     def get(self, tool_id: str) -> dict[str, Any] | None:
         with self._db.pool.connection() as conn:
