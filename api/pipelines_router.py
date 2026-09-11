@@ -93,6 +93,23 @@ def run_pipeline(pipeline_id: str, body: PipelineRunCreate) -> dict:
 runs_router = APIRouter(prefix="/pipeline-runs", tags=["pipelines"])
 
 
+@runs_router.get("")
+def list_runs(pipeline_id: str | None = None, limit: int = 50, offset: int = 0) -> dict:
+    """job 粒度运行列表（翻译工作台任务区）。pipeline_id 缺省即全部。"""
+    return deps.get_pipeline_service().list_runs(
+        pipeline_id=pipeline_id, limit=limit, offset=offset)
+
+
+@runs_router.delete("/{run_id}")
+def delete_run(run_id: str) -> dict:
+    try:
+        return deps.get_pipeline_service().delete_run(run_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TaskConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @runs_router.get("/{run_id}")
 def get_pipeline_run(run_id: str) -> dict:
     service = deps.get_pipeline_service()

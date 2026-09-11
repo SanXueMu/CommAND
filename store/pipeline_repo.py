@@ -61,6 +61,43 @@ class PipelineRepo:
             ).fetchone()
         return int(row[0]) if row else 0
 
+    def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
+                  offset: int = 0) -> list[dict[str, Any]]:
+        """运行列表（job 粒度，按创建时间倒序）——translee 任务列表体验。"""
+        sql = ("SELECT id, pipeline_id, input, status, error, progress, created_at, finished_at "
+               "FROM pipeline_runs")
+        params: list[Any] = []
+        if pipeline_id:
+            sql += " WHERE pipeline_id = %s"
+            params.append(pipeline_id)
+        sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        params += [limit, offset]
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [
+            {"id": r[0], "pipeline_id": r[1], "input": r[2], "status": r[3], "error": r[4],
+             "progress": r[5], "created_at": r[6], "finished_at": r[7]}
+            for r in rows
+        ]
+
+    def count_runs(self, pipeline_id: str | None = None) -> int:
+        sql = "SELECT count(*) FROM pipeline_runs"
+        params: list[Any] = []
+        if pipeline_id:
+            sql += " WHERE pipeline_id = %s"
+            params.append(pipeline_id)
+        with self._db.pool.connection() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return int(row[0]) if row else 0
+
+    def delete_run(self, run_id: str) -> None:
+        """删除 run：先解绑其任务（保留任务历史），再删 run（子 run 一并删）。"""
+        with self._db.pool.connection() as conn:
+            with conn.transaction():
+                conn.execute("UPDATE tasks SET pipeline_run = NULL WHERE pipeline_run = %s", (run_id,))
+                conn.execute("DELETE FROM pipeline_runs WHERE parent_run_id = %s", (run_id,))
+                conn.execute("DELETE FROM pipeline_runs WHERE id = %s", (run_id,))
+
     def delete_definition(self, pipeline_id: str) -> None:
         with self._db.pool.connection() as conn:
             with conn.transaction():

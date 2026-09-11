@@ -40,6 +40,10 @@ def main() -> int:
     ap.add_argument("--file", required=True)
     ap.add_argument("--key", default="mock")
     ap.add_argument("--mock-base", default="http://127.0.0.1:8765/v1")
+    ap.add_argument("--source-lang", default="English")
+    ap.add_argument("--target-lang", default="Chinese")
+    ap.add_argument("--terms", default='[["Audit Report","审计报告"]]',
+                    help="术语表 JSON（[[原文,译文],...]）")
     ap.add_argument("--no-mock-key", action="store_true",
                     help="跳过 mock 密钥注册（真实 key 已就绪时使用）")
     ap.add_argument("--timeout", type=int, default=120)
@@ -55,7 +59,8 @@ def main() -> int:
         print(f"mock 密钥就绪: {args.key} → {args.mock_base}")
     run = call(args.api, "POST", f"/api/pipelines/{args.flow}/run",
                {"input": {"file": path, "key_name": args.key,
-                          "target_lang": "中文", "model": ""}})
+                          "target_lang": args.target_lang, "source_lang": args.source_lang,
+                          "model": "", "terms": json.loads(args.terms)}})
     run_id = run["run_id"]
     print(f"管线运行: {run_id}")
 
@@ -74,6 +79,11 @@ def main() -> int:
                 if t.get("error"):
                     line += f"  错误: {t['error'].get('message', '')[:200]}"
                 print(line)
+            print("--- 运行摘要（job 级）---")
+            listing = call(args.api, "GET", f"/api/pipeline-runs?pipeline_id={args.flow}&limit=5")
+            for r in listing.get("runs", []):
+                if r["id"] == run_id:
+                    print(json.dumps(r.get("summary"), ensure_ascii=False))
             return 0 if status == "succeeded" else 1
         time.sleep(1)
     print("超时未收口")

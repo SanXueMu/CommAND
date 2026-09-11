@@ -513,3 +513,56 @@ class PipelineService:
         if self._pipeline_repo.get_run(run_id) is None:
             raise TaskNotFoundError(f"管线运行不存在: {run_id}")
         return self._task_repo.list_by_pipeline_run(run_id)
+
+    def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
+                  offset: int = 0) -> dict[str, Any]:
+        """job 粒度运行列表 + 每 run 摘要（产物/用量/统计）——翻译工作台任务区数据面。"""
+        runs = self._pipeline_repo.list_runs(pipeline_id=pipeline_id, limit=limit, offset=offset)
+        for run in runs:
+            run["summary"] = self._run_summary(run)
+        return {"runs": runs, "total": self._pipeline_repo.count_runs(pipeline_id)}
+
+    def _run_summary(self, run: dict[str, Any]) -> dict[str, Any]:
+        outputs = self._pipeline_repo.outputs_by_step(run["id"])
+        latest = self._pipeline_repo.latest_task_by_step(run["id"])
+        definition = self._pipeline_repo.get_definition(run["pipeline_id"] or "")
+        artifacts: list[dict[str, Any]] = []
+        translate: dict[str, Any] | None = None
+        verify: dict[str, Any] | None = None
+        for out in outputs.values():
+            if not isinstance(out, dict):
+                continue
+            if out.get("path"):
+                artifacts.append({"name": out.get("name"), "path": out.get("path")})
+            if "usage_by_model" in out or "usage" in out:
+                translate = out
+            if "statuses" in out:
+                verify = out
+        summary: dict[str, Any] = {
+            "artifacts": artifacts,
+            "steps_total": len(definition["steps"]) if definition else None,
+            "steps_done": sum(1 for t in latest.values()
+                              if t.get("status") in ("succeeded", "skipped")),
+        }
+        if translate is not None or verify is not None:
+            statuses = (verify or {}).get("statuses") or (translate or {}).get("statuses") or []
+            review = (sum(1 for s in statuses if s == "review") if statuses
+                      else (translate or {}).get("review_count") or 0)
+            summary.update({
+                "usage": (translate or {}).get("usage"),
+                "usage_by_model": (translate or {}).get("usage_by_model"),
+                "calls": (translate or {}).get("calls"),
+                "cache_hits": (translate or {}).get("cache_hits"),
+                "review_count": review,
+                "ok_count": max(len(statuses) - review, 0) if statuses else None,
+            })
+        return summary
+
+    def delete_run(self, run_id: str) -> dict[str, Any]:
+        run = self._pipeline_repo.get_run(run_id)
+        if run is None:
+            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
+        if run["status"] in ("running", "paused"):
+            raise TaskConflictError(f"运行中不可删除（请先取消）: {run_id}")
+        self._pipeline_repo.delete_run(run_id)
+        return {"id": run_id, "status": "deleted"}

@@ -37,6 +37,30 @@ def _resolve_key(ctx, key_name: str | None) -> dict:
     return next(iter(keys.values()))
 
 
+def _parse_terms(raw) -> list[tuple[str, str]]:
+    """术语表：接受 [[原文,译文],...] 或字符串（每行「原文 => 译文」，兼容 tab/->/→）。"""
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        pairs: list[tuple[str, str]] = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            for sep in ("=>", "\t", "->", "→", "＝"):
+                if sep in line:
+                    src, _, tgt = line.partition(sep)
+                    if src.strip() and tgt.strip():
+                        pairs.append((src.strip(), tgt.strip()))
+                    break
+        return pairs
+    out: list[tuple[str, str]] = []
+    for t in raw:
+        if isinstance(t, (list, tuple)) and len(t) >= 2 and str(t[0]).strip():
+            out.append((str(t[0]).strip(), str(t[1]).strip()))
+    return out
+
+
 def run(input: dict, ctx, emit) -> dict:
     segments: list[str] = input["segments"]
     key = _resolve_key(ctx, input.get("key_name"))
@@ -46,20 +70,26 @@ def run(input: dict, ctx, emit) -> dict:
     fallback_model = input.get("fallback_model") or DEFAULT_FALLBACK_MODEL
     target_lang = input.get("target_lang") or "Chinese"
     source_lang = input.get("source_lang")
-    terms = [tuple(t) for t in (input.get("terms") or [])]
+    terms = _parse_terms(input.get("terms"))
     use_cache = input.get("use_cache", True)
 
     usage_total: dict | None = None
+    usage_by_model: dict[str, dict] = {}
+    calls = 0
     cache_hits = 0
 
     def _progress(event: dict) -> None:
-        nonlocal usage_total
+        nonlocal usage_total, calls
         if event.get("phase") == "usage":
-            usage_total = merge_usage(
-                usage_total,
-                {"prompt_tokens": event.get("prompt_tokens") or 0,
-                 "completion_tokens": event.get("completion_tokens") or 0},
-            )
+            pt = event.get("prompt_tokens") or 0
+            ct = event.get("completion_tokens") or 0
+            usage_total = merge_usage(usage_total, {"prompt_tokens": pt, "completion_tokens": ct})
+            calls += 1
+            m = event.get("model") or model
+            slot = usage_by_model.setdefault(m, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0})
+            slot["calls"] += 1
+            slot["prompt_tokens"] += pt
+            slot["completion_tokens"] += ct
         else:
             emit(event)
 
@@ -122,6 +152,8 @@ def run(input: dict, ctx, emit) -> dict:
         "statuses": statuses,
         "model": DEFAULT_PREMIUM_MODEL if input.get("premium") else model,
         "usage": usage_total or {"prompt_tokens": 0, "completion_tokens": 0},
+        "usage_by_model": usage_by_model,
+        "calls": calls,
         "review_count": review_count,
         "cache_hits": cache_hits,
     }

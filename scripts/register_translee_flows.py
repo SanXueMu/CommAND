@@ -32,6 +32,9 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "key_name": {"type": "string", "title": "密钥名称", "description": "设置页已录入的 LLM 密钥名"},
             "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
             "model": {"type": "string", "title": "翻译模型", "description": "留空用密钥默认模型"},
+            "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
         },
     },
     "flow.translate.pdf": {
@@ -42,6 +45,9 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "key_name": {"type": "string", "title": "密钥名称", "description": "设置页已录入的 LLM 密钥名"},
             "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
             "model": {"type": "string", "title": "翻译模型", "description": "留空用密钥默认模型"},
+            "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
         },
     },
     "flow.translate.txt": {
@@ -52,6 +58,9 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "key_name": {"type": "string", "title": "密钥名称", "description": "设置页已录入的 LLM 密钥名"},
             "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
             "model": {"type": "string", "title": "翻译模型", "description": "留空用密钥默认模型"},
+            "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
         },
     },
 }
@@ -67,6 +76,8 @@ FLOWS: dict[str, dict] = {
                 "segments": "{{ prev.unique }}",
                 "key_name": "{{ input.key_name }}",
                 "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
                 "model": "{{ input.model }}"}},
             {"tool": "text.verify.fidelity", "input": {
                 "sources": "{{ step[2].output.unique }}",
@@ -93,6 +104,8 @@ FLOWS: dict[str, dict] = {
                 "segments": "{{ prev.unique }}",
                 "key_name": "{{ input.key_name }}",
                 "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
                 "model": "{{ input.model }}",
                 "premium": True}},
             {"tool": "text.verify.fidelity", "input": {
@@ -118,6 +131,8 @@ FLOWS: dict[str, dict] = {
                 "segments": "{{ prev.unique }}",
                 "key_name": "{{ input.key_name }}",
                 "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
                 "model": "{{ input.model }}"}},
             {"tool": "text.verify.fidelity", "input": {
                 "sources": "{{ step[2].output.unique }}",
