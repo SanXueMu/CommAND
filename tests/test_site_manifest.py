@@ -26,6 +26,26 @@ def test_builtin_includes_protocol_and_manager_views() -> None:
         "OCR 专属视图已按三级概念退场，不允许回归内置声明"
 
 
+def test_ocr_view_declares_full_builtin_specs() -> None:
+    """内置视图以「名 → 完整 ViewSpec」下发：spec 须能直接过 ViewSpec 校验。
+
+    回归防线：此前只下发视图名字符串，records.view.query 侧 ViewSpec(**str) 必抛
+    TypeError，内置视图全线跑不通；现将零引用的 ocr_views.BUILTIN_VIEWS 接进声明。
+    """
+    from command_shared.ocr_views import ViewSpec
+
+    ocr = next(v for v in BUILTIN_SITE_VIEWS if v["id"] == "ocr")
+    views = ocr["props"]["builtinViews"]
+    assert views and all(isinstance(v, dict) for v in views)
+    for item in views:
+        assert item["id"] and item["name"]
+        spec = ViewSpec(**item["spec"])
+        assert spec.name == item["name"], "name 须取自 spec.name，保持与工具侧一致"
+    assert {v["name"] for v in views} == {
+        "发票凭证视图", "合同清单视图", "审批签单视图", "合同关键词视图", "决算审定表视图",
+    }
+
+
 def test_meta_site_serves_from_repo(monkeypatch) -> None:
     """端点从 repo 装配：假 repo 返回 seed 声明 → /meta/site 原样下发。"""
 
