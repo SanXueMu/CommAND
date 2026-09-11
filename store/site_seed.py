@@ -12,7 +12,21 @@ BUILTIN_SITE_VIEWS: list[dict] = [
     {
         "id": "tools", "type": "tools.grid", "title": "工具库",
         "icon": "appstore-outlined", "default": True, "sort": 10,
-        "props": {"defaultLayout": "card"},
+        # 协议 v3 槽位声明：两级筛选侧栏 + 卡片列表；detail 弹窗/详情路由为前端内置语义。
+        "props": {
+            "defaultLayout": "card",
+            "slots": {
+                "sidebar": {"template": "sidebar.filter", "props": {"width": 200}},
+                "list": {
+                    "template": "list.panel",
+                    "props": {
+                        "layout": "card", "renderer": "tool-card",
+                        "searchPlaceholder": "搜索工具（id/名称/描述/标签）", "emptyText": "没有符合条件的工具",
+                        "pagination": {"pageSize": 12},
+                    },
+                },
+            },
+        },
     },
     {
         "id": "flows", "type": "flows.list", "title": "流",
@@ -36,6 +50,20 @@ BUILTIN_SITE_VIEWS: list[dict] = [
     {
         "id": "tasks", "type": "tasks.table", "title": "任务中心",
         "icon": "unordered-list-outlined", "sort": 30,
+        # 协议 v3 槽位声明：归类侧栏 + 行列表；detail 弹窗为前端内置语义动作。
+        "props": {
+            "slots": {
+                "sidebar": {"template": "sidebar.filter", "props": {"width": 128}},
+                "list": {
+                    "template": "list.panel",
+                    "props": {
+                        "layout": "row", "renderer": "task-row",
+                        "searchPlaceholder": "搜索任务",
+                        "pagination": {"pageSize": 20},
+                    },
+                },
+            },
+        },
     },
     {
         "id": "work", "type": "workspace.tabs", "title": "工作区",
