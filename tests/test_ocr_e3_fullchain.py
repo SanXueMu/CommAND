@@ -24,7 +24,7 @@ from config import load_config
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_URL = "postgresql://command_dev:root@192.168.8.41:5432/command_dev"
 
-REVERSE_ID = "dev.string.reverse"
+REVERSE_ID = "tests.string.reverse"
 def _ids(request):
     """每测试独立 id 后缀，避免同 id 跨测试删除/注册时序撞车。"""
     tag = request.node.name.split("[")[-1].rstrip("]")[-6:].replace("-", "")[-6:] or "x"
@@ -68,8 +68,8 @@ def stack(tmp_path, monkeypatch, request):
     db.apply_migrations()
     tool_repo = ToolRepo(db)
     task_repo = TaskRepo(db)
-    tool_repo.upsert(ToolManifest.from_toml(REPO_ROOT / "tools" / "dev" / "string_reverse" / "tool.toml"),
-                     path="tools/dev/string_reverse")
+    tool_repo.upsert(ToolManifest.from_toml(REPO_ROOT / "tests" / "fixtures" / "string_reverse" / "tool.toml"),
+                     path="tests/fixtures/string_reverse")
     dispatch = DispatchService(db=db, task_repo=task_repo, tool_repo=tool_repo,
                                event_repo=EventRepo(db))
     pipeline_repo = PipelineRepo(db)

@@ -304,42 +304,6 @@ def test_tool_write_records_roundtrip(tmp_path):
     assert count == 1
 
 
-def test_tool_render_pages(tmp_path):
-    from tools.pdf.render_pages import main as tool
-    pdf = _pdf(tmp_path / "r.pdf", pages=2)
-    out = tool.run({"file": pdf, "render_scale": 1.0}, FakeCtx(), lambda e: None)
-    assert out["page_count"] == 2 and len(out["pages"]) == 2
-    assert out["pages"][0]["image_base64"]
-
-
-def test_tool_split_tiles(tmp_path):
-    from PIL import Image
-    image_path = tmp_path / "big.png"
-    Image.new("RGB", (2000, 1000), "white").save(image_path)
-    from tools.img.split_tiles import main as tool
-    out = tool.run({"file": str(image_path), "tile_size": 900, "overlap": 100},
-                   FakeCtx(), lambda e: None)
-    assert out["tile_count"] >= 4
-    first = out["tiles"][0]
-    assert first["x"] == 0 and first["w"] <= 900 and first["image_base64"]
-
-
-def test_tool_upright(tmp_path, monkeypatch):
-    from tools.pdf import upright as _  # noqa: F401  确认可导入
-    from tools.pdf.upright import main as tool
-    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
-    pdf = _pdf(tmp_path / "u.pdf", pages=1)
-    out = tool.run({"file": pdf}, FakeCtx(), lambda e: None)
-    assert out["turned_pages"] == 0  # 横排文字不转
-    assert os.path.exists(out["file"]) and out["file"].endswith("_转正.pdf")
-
-
-def test_tool_barcodes_missing_file():
-    from tools.img.barcodes_extract import main as tool
-    with pytest.raises(ToolDomainError):
-        tool.run({"file": str(Path("nope.pdf"))}, FakeCtx(), lambda e: None)
-
-
 def test_tool_vl_extract_with_fake_client(tmp_path, monkeypatch):
     import tools.img.vl_extract.main as tool_main
     from command_shared import ocr_engine as engine_mod

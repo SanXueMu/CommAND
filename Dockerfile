@@ -1,9 +1,6 @@
 # CommAND 生产镜像（amd64，目标 CentOS 7 + Docker）
 FROM python:3.13-slim
 
-# pyzbar 运行时依赖（img.barcodes.extract 工具）
-RUN apt-get update && apt-get install -y --no-install-recommends libzbar0 \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

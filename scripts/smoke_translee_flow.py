@@ -9,25 +9,18 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import subprocess
 import time
 import urllib.request
-import uuid
 from pathlib import Path
 
 
 def upload(api: str, file: Path) -> str:
-    boundary = uuid.uuid4().hex
-    data = file.read_bytes()
-    body = (
-        f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
-        f"filename=\"{file.name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
-    ).encode() + data + f"\r\n--{boundary}--\r\n".encode()
-    req = urllib.request.Request(
-        f"{api}/api/files", data=body, method="POST",
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read())["path"]
+    out = subprocess.run(
+        ["curl", "-sS", "-X", "POST", f"{api}/api/files", "-F", f"file=@{file}"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return json.loads(out)["path"]
 
 
 def call(api: str, method: str, path: str, body: dict | None = None) -> dict:
@@ -46,13 +39,23 @@ def main() -> int:
     ap.add_argument("--flow", default="flow.translate.xlsx")
     ap.add_argument("--file", required=True)
     ap.add_argument("--key", default="mock")
+    ap.add_argument("--mock-base", default="http://127.0.0.1:8765/v1")
+    ap.add_argument("--no-mock-key", action="store_true",
+                    help="跳过 mock 密钥注册（真实 key 已就绪时使用）")
     ap.add_argument("--timeout", type=int, default=120)
     args = ap.parse_args()
 
     path = upload(args.api, Path(args.file))
     print(f"已上传: {path}")
+    # mock key 幂等注册（真实环境用真实 key_name 跳过此段：--key 传真实名 + --no-mock-key）
+    if not args.no_mock_key:
+        call(args.api, "PUT", f"/api/keys/{args.key}",
+             {"name": args.key, "provider": "openai", "base_url": args.mock_base,
+              "api_key": "sk-mock", "is_default": False})
+        print(f"mock 密钥就绪: {args.key} → {args.mock_base}")
     run = call(args.api, "POST", f"/api/pipelines/{args.flow}/run",
-               {"input": {"file": path, "key_name": args.key, "target_lang": "Chinese"}})
+               {"input": {"file": path, "key_name": args.key,
+                          "target_lang": "中文", "model": ""}})
     run_id = run["run_id"]
     print(f"管线运行: {run_id}")
 
@@ -60,7 +63,7 @@ def main() -> int:
     while time.time() < deadline:
         detail = call(args.api, "GET", f"/api/pipeline-runs/{run_id}")
         status = detail["run"]["status"]
-        if status in ("succeeded", "failed"):
+        if status in ("succeeded", "failed", "failed_review", "cancelled"):
             err = detail["run"].get("error")
             print(f"状态: {status}" + (f"  错误: {err}" if err else ""))
             for t in detail.get("tasks", []):

@@ -18,7 +18,7 @@ from tests.test_task_repo import TEST_TOOL_ID, _manifest  # 复用测试 manifes
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://command_dev:root@192.168.8.41:5432/command_dev")
 
-DEV_REVERSE_ID = "dev.string.reverse"
+DEV_REVERSE_ID = "tests.string.reverse"
 
 
 def _db_reachable() -> bool:
@@ -38,8 +38,8 @@ def scheduler():
     tool_repo = ToolRepo(db)
     task_repo = TaskRepo(db)
     from core.protocol import ToolManifest
-    reverse_manifest = ToolManifest.from_toml(REPO_ROOT / "tools" / "dev" / "string_reverse" / "tool.toml")
-    tool_repo.upsert(reverse_manifest, path="tools/dev/string_reverse")
+    reverse_manifest = ToolManifest.from_toml(REPO_ROOT / "tests" / "fixtures" / "string_reverse" / "tool.toml")
+    tool_repo.upsert(reverse_manifest, path="tests/fixtures/string_reverse")
     config = load_config(".env")
     sched = Scheduler(
         db=db,

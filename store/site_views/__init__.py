@@ -16,6 +16,7 @@ from store.site_views.workspace import WORKSPACE_VIEW
 from store.site_views.settings import SETTINGS_VIEW
 from store.site_views.ocr import OCR_VIEW
 from store.site_views.templates import TEMPLATES_VIEW
+from store.site_views.translate import TRANSLATE_VIEW
 
 BUILTIN_SITE_VIEWS: list[dict] = sorted(
     [
@@ -26,6 +27,7 @@ BUILTIN_SITE_VIEWS: list[dict] = sorted(
         SETTINGS_VIEW,
         OCR_VIEW,
         TEMPLATES_VIEW,
+        TRANSLATE_VIEW,
     ],
     key=lambda v: v["sort"],
 )

@@ -24,7 +24,7 @@ from config import load_config
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://command_dev:root@192.168.8.41:5432/command_dev")
 
-REVERSE_ID = "dev.string.reverse"
+REVERSE_ID = "tests.string.reverse"
 PIPELINE_ID = "test.when_skip"
 
 # 四步流：0 反转 → 1（when input.middle_tag="go" 才执行）→ 2 再反转 → 3（input.skip_middle 键存在才执行）
@@ -54,8 +54,8 @@ def stack():
     db.apply_migrations()
     tool_repo = ToolRepo(db)
     task_repo = TaskRepo(db)
-    tool_repo.upsert(ToolManifest.from_toml(REPO_ROOT / "tools" / "dev" / "string_reverse" / "tool.toml"),
-                     path="tools/dev/string_reverse")
+    tool_repo.upsert(ToolManifest.from_toml(REPO_ROOT / "tests" / "fixtures" / "string_reverse" / "tool.toml"),
+                     path="tests/fixtures/string_reverse")
     dispatch = DispatchService(db=db, task_repo=task_repo, tool_repo=tool_repo,
                                event_repo=EventRepo(db))
     pipeline_repo = PipelineRepo(db)

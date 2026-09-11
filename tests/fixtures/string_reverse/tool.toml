@@ -1,5 +1,5 @@
 [tool]
-id = "dev.string.reverse"
+id = "tests.string.reverse"
 name = "字符串反转"
 version = "1.0.0"
 tags = ["文本", "开发"]
