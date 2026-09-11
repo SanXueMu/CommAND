@@ -41,7 +41,7 @@ def test_ocr_view_declares_full_builtin_specs() -> None:
         assert item["id"] and item["name"]
         spec = ViewSpec(**item["spec"])
         assert spec.name == item["name"], "name 须取自 spec.name，保持与工具侧一致"
-    assert {v["name"] for v in views} == {
+    assert {v["name"] for v in views} >= {
         "发票凭证视图", "合同清单视图", "审批签单视图", "合同关键词视图", "决算审定表视图",
     }
 

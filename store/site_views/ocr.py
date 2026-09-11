@@ -2,6 +2,8 @@
 
 from command_shared.ocr_views import BUILTIN_VIEWS
 
+from store.site_views.ocr_user_views import COMMOCR_USER_VIEWS
+
 # 一域一文件（协议 v3：改本文件即改该页面声明，seed 时聚合下发）。
 
 
@@ -24,6 +26,11 @@ def _builtin_views() -> list[dict]:
     ]
 
 
+def _user_views() -> list[dict]:
+    """CommOCR 用户自定义视图（移植的 6 个），形状与内置快选一致。"""
+    return [{"id": v["id"], "name": v["name"], "spec": v["spec"]} for v in COMMOCR_USER_VIEWS]
+
+
 # OCR 工作台（还原 CommOCR 一站式体验：选模版→传文件→识别→结果导出；
 # 业务配置全部 props 下发，CommWEB 零业务内容）
 OCR_VIEW: dict = {
@@ -38,11 +45,11 @@ OCR_VIEW: dict = {
         "recognizeFlow": "flow.ocr.smart",
         "exportFlow": "flow.ocrdb.view",
         "genFlow": "flow.specgen.img",
-        # 视图预览区：内置视图快选（名 → 完整 ViewSpec，点选即用）
+        # 视图预览区：预设视图快选（内置 5 + CommOCR 用户视图 6，名 → 完整 ViewSpec，点选即用）
         "viewTool": "records.view.query",
         "templatesPath": "/ocr/templates",
         "recordsPath": "/ocr/records",
         "dbsPath": "/ocr/records/dbs",
-        "builtinViews": _builtin_views(),
+        "builtinViews": _builtin_views() + _user_views(),
     },
 }
