@@ -81,3 +81,36 @@ def test_list_dbs(client):
     names = [d["name"] for d in resp.json()["dbs"]]
     assert names == ["决算.ocrdb"]
     assert resp.json()["dbs"][0]["size"] > 0
+
+
+def test_page_renders_pdf_jpeg(client):
+    """PDF 原页预览：fitz 造 2 页文档，第 1 页渲染为 jpeg 字节。"""
+    import fitz
+
+    c, tmp_path = client
+    doc = fitz.open()
+    for i in range(2):
+        p = doc.new_page()
+        p.insert_text((72, 90), f"PAGE {i + 1}", fontsize=24)
+    pdf_path = tmp_path / "doc.pdf"
+    doc.save(pdf_path)
+    r = c.get("/api/files/page", params={"path": str(pdf_path), "page": 1})
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/jpeg"
+    assert r.content[:2] == b"\xff\xd8"
+    assert c.get("/api/files/page", params={"path": str(pdf_path), "page": 3}).status_code == 422
+
+
+def test_page_passthrough_image_and_blocks(client):
+    """图片直通原样；DATA_DIR 外 403；非预览类型 422。"""
+    c, tmp_path = client
+    img = tmp_path / "scan.png"
+    img.write_bytes(b"\x89PNG-fake")
+    ok = c.get("/api/files/page", params={"path": str(img)})
+    assert ok.status_code == 200 and ok.content == b"\x89PNG-fake"
+    outside = Path("/tmp") / "outside.pdf"
+    outside.write_bytes(b"%PDF-")
+    assert c.get("/api/files/page", params={"path": str(outside)}).status_code == 403
+    txt = tmp_path / "note.txt"
+    txt.write_text("x")
+    assert c.get("/api/files/page", params={"path": str(txt)}).status_code == 422

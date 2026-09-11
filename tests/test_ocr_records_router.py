@@ -58,3 +58,26 @@ def test_corrupt_db_listed_with_zero_count(ocr_dir):
     dbs = router.list_dbs()
     bad = [x for x in dbs["dbs"] if x["name"] == "bad.db"]
     assert bad and bad[0]["records"] == 0
+
+
+def test_read_records_path_filter_and_pagination(ocr_dir):
+    """path 过滤单文件范围 + offset 分页，total 随过滤联动。"""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from api import ocr_records_router
+
+    _make_db(ocr_dir / "b.ocr_results.db", [
+        {"file_hash": f"h{i}", "source_path": "x.pdf" if i < 2 else "y.pdf",
+         "record": {"金额": str(i * 100)}}
+        for i in range(4)
+    ])
+    app = FastAPI()
+    app.include_router(ocr_records_router.router, prefix="/api")
+    with TestClient(app) as c:
+        full = c.get("/api/ocr/records", params={"db": "b.ocr_results.db"}).json()
+        assert full["total"] == 4
+        only_x = c.get("/api/ocr/records", params={"db": "b.ocr_results.db", "path": "x.pdf"}).json()
+        assert only_x["total"] == 2 and all(r["source_path"] == "x.pdf" for r in only_x["rows"])
+        paged = c.get("/api/ocr/records", params={"db": "b.ocr_results.db", "limit": 2, "offset": 2}).json()
+        assert len(paged["rows"]) == 2 and paged["offset"] == 2

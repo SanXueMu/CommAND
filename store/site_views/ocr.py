@@ -14,5 +14,7 @@ OCR_VIEW: dict = {
             "genFlow": "flow.specgen.img",
             "templatesPath": "/ocr/templates",
             "recordsPath": "/ocr/records",
+            # 视图预览区：内置视图快选（records.view.query 按 name 匹配 ocr_views 内置库）
+            "builtinViews": ["发票凭证视图", "合同清单视图", "审批签单视图", "合同关键词视图", "决算审定表视图"],
         },
     }

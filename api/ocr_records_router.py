@@ -53,18 +53,23 @@ def list_dbs() -> dict:
 
 
 @router.get("")
-def read_records(db: str, limit: int = 200, offset: int = 0) -> dict:
-    """库内记录分页读取：data JSON 逐行展开，columns 为字段并集（稳定排序）。"""
-    path = _resolve_db(db)
+def read_records(db: str, limit: int = 200, offset: int = 0, path: str | None = None) -> dict:
+    """库内记录分页读取：data JSON 逐行展开，columns 为字段并集（稳定排序）；path 过滤单文件范围。"""
+    p = _resolve_db(db)
     columns: list[str] = []
     rows: list[dict] = []
-    connection = ocr_storage.connect(path)
+    connection = ocr_storage.connect(p)
     try:
         ocr_storage.initialize(connection)
+        where, params = "", []
+        if path:
+            where = " WHERE source_path LIKE ? ESCAPE '\\'"
+            params = ["%" + path.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"]
+        total = connection.execute(f"SELECT COUNT(*) FROM records{where}", params).fetchone()[0]
         cursor = connection.execute(
             "SELECT file_hash, source_path, row_number, page_number, data"
-            " FROM records ORDER BY source_path, row_number LIMIT ? OFFSET ?",
-            (limit, offset),
+            f" FROM records{where} ORDER BY source_path, row_number LIMIT ? OFFSET ?",
+            [*params, limit, offset],
         )
         for r in cursor:
             data = json.loads(r[4] or "{}")
@@ -74,7 +79,6 @@ def read_records(db: str, limit: int = 200, offset: int = 0) -> dict:
             rows.append({
                 "source_path": r[1], "row_number": r[2], "page_number": r[3], **data,
             })
-        total = connection.execute("SELECT COUNT(*) FROM records").fetchone()[0]
     finally:
         connection.close()
     return {"columns": columns, "rows": rows, "total": int(total),

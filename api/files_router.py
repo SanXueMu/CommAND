@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 import deps
 
@@ -26,6 +26,30 @@ def download(path: str) -> FileResponse:
     if not target.is_file():
         raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
     return FileResponse(target, filename=target.name)
+
+
+@router.get("/page")
+def page_image(path: str, page: int = 1) -> Response:
+    """原页预览：PDF 按页渲染 jpeg，图片文件直通原样（限 DATA_DIR 内，防目录穿越）。"""
+    data_dir = Path(deps.get_config().data_dir).resolve()
+    target = Path(path).resolve()
+    if data_dir not in target.parents:
+        raise HTTPException(status_code=403, detail="仅允许预览 DATA_DIR 内的文件")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
+    if target.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}:
+        if page != 1:
+            raise HTTPException(status_code=422, detail="图片文件无页码概念（page 必须为 1）")
+        return FileResponse(target)
+    if target.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=422, detail=f"不支持的预览类型: {target.suffix or '未知'}")
+    import fitz
+
+    with fitz.open(target) as doc:
+        if not 1 <= page <= doc.page_count:
+            raise HTTPException(status_code=422, detail=f"页码超界: 1..{doc.page_count}")
+        pix = doc[page - 1].get_pixmap(dpi=110)
+        return Response(content=pix.tobytes("jpeg"), media_type="image/jpeg")
 
 
 @router.post("", status_code=201)
