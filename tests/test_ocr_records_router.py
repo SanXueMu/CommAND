@@ -60,6 +60,35 @@ def test_corrupt_db_listed_with_zero_count(ocr_dir):
     assert bad and bad[0]["records"] == 0
 
 
+def test_read_records_source_file_reverse_lookup(ocr_dir):
+    """原页预览：source_path 是裸文件名，上传却是 <uuid>_<原名> —— 需反查才能拿到真实路径。"""
+    uploads = ocr_dir.parent / "uploads" / "2026-09-11"
+    uploads.mkdir(parents=True)
+    (uploads / "ab12cd34_x.pdf").write_bytes(b"%PDF-")
+
+    _make_db(ocr_dir / "c.ocr_results.db", [
+        {"file_hash": "h1", "source_path": "x.pdf", "record": {"金额": "1"}},
+        {"file_hash": "h2", "source_path": "ghost.pdf", "record": {"金额": "2"}},
+    ])
+    out = router.read_records(db="c.ocr_results.db", limit=50)
+    by_src = {r["source_path"]: r for r in out["rows"]}
+    assert by_src["x.pdf"]["source_file"].endswith("ab12cd34_x.pdf"), "须反查到带 uuid 前缀的落盘文件"
+    assert by_src["ghost.pdf"]["source_file"] == "", "原文件已不在盘上时给空串（前端据此置灰）"
+    # 该行 data 内无「页码」→ 由 page_number 兜底（本夹具未传页码，故为 0）
+    assert by_src["x.pdf"]["页码"] == by_src["x.pdf"]["page_number"], "须兜底 records.view.query 的协议键"
+
+
+def test_path_filter_escapes_wildcards(ocr_dir):
+    """path 过滤走 LIKE，用户输入的 %/_ 必须转义，否则会退化为全库命中。"""
+    _make_db(ocr_dir / "d.ocr_results.db", [
+        {"file_hash": f"h{i}", "source_path": name, "record": {"v": name}}
+        for i, name in enumerate(["a.pdf", "b.pdf"])
+    ])
+    # 未转义时 "%" 会命中全部 2 条；转义后须为 0
+    assert router.read_records(db="d.ocr_results.db", path="%")["total"] == 0
+    assert router.read_records(db="d.ocr_results.db", path="_")["total"] == 0
+
+
 def test_read_records_path_filter_and_pagination(ocr_dir):
     """path 过滤单文件范围 + offset 分页，total 随过滤联动。"""
     from fastapi import FastAPI

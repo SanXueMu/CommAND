@@ -52,9 +52,35 @@ def list_dbs() -> dict:
     return {"dbs": dbs}
 
 
+def _fill_source_files(rows: list[dict], data_dir: Path) -> None:
+    """原页预览：按 source_path（裸文件名）反查 DATA_DIR 内真实路径。
+
+    ocr_engine 落库时 source_path 存的是 src.name（裸文件名），而上传落盘为
+    `<uuid8>_<原名>`，两者对不上——故先精确匹配、再按 `_原名` 后缀匹配。
+    命中即写回 row["source_file"]（空串表示原文件已不在盘上，前端据此置灰按钮）。
+    """
+    names = {str(r.get("source_path") or "") for r in rows}
+    names.discard("")
+    if not names or not data_dir.is_dir():
+        return
+    found: dict[str, str] = {}
+    for p in data_dir.rglob("*"):
+        if not p.is_file() or p.name.startswith("."):
+            continue
+        for name in names:
+            if name not in found and (p.name == name or p.name.endswith("_" + name)):
+                found[name] = str(p.resolve())
+    for r in rows:
+        r["source_file"] = found.get(str(r.get("source_path") or ""), "")
+
+
 @router.get("")
 def read_records(db: str, limit: int = 200, offset: int = 0, path: str | None = None) -> dict:
-    """库内记录分页读取：data JSON 逐行展开，columns 为字段并集（稳定排序）；path 过滤单文件范围。"""
+    """库内记录分页读取：data JSON 逐行展开，columns 为字段并集（稳定排序）；path 过滤单文件范围。
+
+    行内统一给出英文键（source_path/row_number/page_number）+ 两个兜底键：
+    source_file（原文件真实路径，供原页预览）与 页码（records.view.query 的协议键）。
+    """
     p = _resolve_db(db)
     columns: list[str] = []
     rows: list[dict] = []
@@ -77,9 +103,11 @@ def read_records(db: str, limit: int = 200, offset: int = 0, path: str | None = 
                 if key not in columns:
                     columns.append(key)
             rows.append({
-                "source_path": r[1], "row_number": r[2], "page_number": r[3], **data,
+                # 「页码」放 **data 前：engine 自带的 页码 优先，缺失时才由 page_number 兜底
+                "source_path": r[1], "row_number": r[2], "page_number": r[3], "页码": r[3], **data,
             })
     finally:
         connection.close()
+    _fill_source_files(rows, Path(os.environ.get("COMMAND_DATA_DIR", "data")))
     return {"columns": columns, "rows": rows, "total": int(total),
             "limit": limit, "offset": offset}
