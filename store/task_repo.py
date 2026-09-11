@@ -263,6 +263,34 @@ class TaskRepo:
             "avg_seconds": round(avg_seconds, 1) if avg_seconds is not None else None,
         }
 
+    def stats_by_pipeline(self, pipeline_id: str) -> dict[str, Any]:
+        """流维度的量化性能：按根管线归集（任务→run→根 run 的管线）。"""
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*),
+                       COUNT(*) FILTER (WHERE t.status IN ('succeeded','failed',
+                                                           'failed_review','cancelled','interrupted')),
+                       COUNT(*) FILTER (WHERE t.status = 'succeeded'),
+                       AVG(EXTRACT(EPOCH FROM (t.finished_at - t.started_at)))
+                           FILTER (WHERE t.status = 'succeeded'
+                                   AND t.started_at IS NOT NULL AND t.finished_at IS NOT NULL)
+                FROM tasks t
+                LEFT JOIN pipeline_runs r ON r.id = t.pipeline_run
+                LEFT JOIN pipeline_runs pr ON pr.id = r.parent_run_id
+                LEFT JOIN pipelines p1 ON p1.id = r.pipeline_id
+                LEFT JOIN pipelines p2 ON p2.id = pr.pipeline_id
+                WHERE COALESCE(p2.id, p1.id) = %s
+                """,
+                (pipeline_id,),
+            ).fetchone()
+        total, done, ok, avg_seconds = row
+        return {
+            "executions": total,
+            "success_rate": round(ok / done, 4) if done else None,
+            "avg_seconds": round(avg_seconds, 1) if avg_seconds is not None else None,
+        }
+
     def list_by_pipeline_run(self, run_id: str) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
             rows = conn.execute(

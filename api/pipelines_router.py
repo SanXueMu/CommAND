@@ -47,6 +47,16 @@ def get_pipeline(pipeline_id: str) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.get("/{pipeline_id}/stats")
+def get_pipeline_stats(pipeline_id: str) -> dict:
+    """量化性能：执行次数/成功率/平均耗时（按根管线归集）。"""
+    try:
+        deps.get_pipeline_service().get(pipeline_id)
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return deps.get_task_repo().stats_by_pipeline(pipeline_id)
+
+
 @router.put("/{pipeline_id}", status_code=200)
 def update_pipeline(pipeline_id: str, body: PipelineCreate) -> dict:
     if body.id != pipeline_id:
