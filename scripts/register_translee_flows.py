@@ -12,7 +12,7 @@ import urllib.request
 
 FLOWS = {
     "flow.translate.xlsx": {
-        "name": "xlsx 翻译全自动流（提取→分类→归一去重→翻译→质检→回填）",
+        "name": "表格翻译", "doc_md": "xlsx 翻译全自动流：提取→分类→归一去重→翻译→质检→回填。",
         "steps": [
             {"tool": "xlsx.extract.values", "input": {"file": "{{ input.file }}"}},
             {"tool": "table.classify.columns", "input": {"units": "{{ prev.units }}"}},
@@ -40,7 +40,7 @@ FLOWS = {
         ],
     },
     "flow.translate.pdf": {
-        "name": "pdf 翻译全自动流（按页提取→分类→归一去重→长文翻译→质检→docx 渲染）",
+        "name": "文档翻译", "doc_md": "pdf 翻译全自动流：按页提取→分类→归一去重→长文翻译→质检→docx 渲染。",
         "steps": [
             {"tool": "pdf.extract.pages", "input": {"file": "{{ input.file }}"}},
             {"tool": "table.classify.columns", "input": {"units": "{{ prev.units }}"}},
@@ -67,7 +67,7 @@ FLOWS = {
         ],
     },
     "flow.translate.txt": {
-        "name": "txt/md 翻译全自动流（提取→分类→归一去重→翻译→质检→docx 渲染）",
+        "name": "文本翻译", "doc_md": "txt/md 翻译全自动流：提取→分类→归一去重→翻译→质检→docx 渲染。",
         "steps": [
             {"tool": "txt.extract.text", "input": {"file": "{{ input.file }}"}},
             {"tool": "table.classify.columns", "input": {"units": "{{ prev.units }}"}},
@@ -115,7 +115,7 @@ def main() -> int:
     print(f"工具扫描: {json.dumps(scan, ensure_ascii=False)[:300]}")
 
     for pid, spec in FLOWS.items():
-        call(args.api, "POST", "/api/pipelines", {"id": pid, "name": spec["name"], "steps": spec["steps"]})
+        call(args.api, "POST", "/api/pipelines", {"id": pid, "name": spec["name"], "steps": spec["steps"], "doc_md": spec.get("doc_md")})
         print(f"管线已注册: {pid}")
     return 0
 

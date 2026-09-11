@@ -172,20 +172,25 @@ class TaskRepo:
         return self._to_view(row) if row else None
 
     def list(self, status: str | None = None, limit: int = 50,
-             kind: str | None = None) -> list[dict[str, Any]]:
+             kind: str | None = None, offset: int = 0,
+             q: str | None = None) -> dict[str, Any]:
         """任务列表。C4 归类：pipeline_run 上溯根 run（限深两层）join pipeline.type
-        → kind ∈ tool/flow/workflow；root_run_id/root_pipeline_id 供下钻。"""
+        → kind ∈ tool/flow/workflow；root_run_id/root_pipeline_id 供下钻。
+        富化：join tools/pipelines 中文名（tool_name/pipeline_name）；offset/q 分页检索，
+        返回 {tasks, total}。"""
         sql = """
             SELECT t.handle, t.tool_id, t.status, t.input, t.output, t.error,
                    t.pipeline_run, t.step_index, t.attempt, t.max_attempts,
                    t.created_at, t.started_at, t.finished_at,
                    r.id, r.parent_run_id, pr.id,
-                   COALESCE(p2.id, p1.id), COALESCE(p2.type, p1.type)
+                   COALESCE(p2.id, p1.id), COALESCE(p2.type, p1.type),
+                   tl.name, COALESCE(p2.name, p1.name)
             FROM tasks t
             LEFT JOIN pipeline_runs r ON r.id = t.pipeline_run
             LEFT JOIN pipeline_runs pr ON pr.id = r.parent_run_id
             LEFT JOIN pipelines p1 ON p1.id = r.pipeline_id
             LEFT JOIN pipelines p2 ON p2.id = pr.pipeline_id
+            LEFT JOIN tools tl ON tl.id = t.tool_id
         """
         conds: list[str] = []
         params: list[Any] = []
@@ -202,16 +207,23 @@ class TaskRepo:
             conds.append("r.parent_run_id IS NOT NULL OR COALESCE(p1.type, 'flow') = 'workflow'")
         elif kind is not None:
             raise ValueError(f"kind 仅支持 tool/flow/workflow: {kind}")
+        if q:
+            like = f"%{q}%"
+            conds.append("(tl.name ILIKE %s OR t.handle ILIKE %s OR COALESCE(p2.name, p1.name) ILIKE %s)")
+            params.extend([like, like, like])
         if conds:
             sql += " WHERE " + " AND ".join(conds)
-        sql += " ORDER BY t.created_at DESC LIMIT %s"
-        params.append(limit)
         with self._db.pool.connection() as conn:
-            rows = conn.execute(sql, tuple(params)).fetchall()
+            total = conn.execute(
+                "SELECT COUNT(*) FROM (" + sql.replace(" ORDER BY t.created_at DESC LIMIT %s", "") + ") _c",
+                tuple(params),
+            ).fetchone()[0]
+            sql += " ORDER BY t.created_at DESC LIMIT %s OFFSET %s"
+            rows = conn.execute(sql, tuple(params + [limit, offset])).fetchall()
         views = []
         for row in rows:
             view = self._to_view(row[:13])
-            run_id, parent_run_id, parent_parent_id, root_pid, root_type = row[13:]
+            run_id, parent_run_id, parent_parent_id, root_pid, root_type, tool_name, pipeline_name = row[13:]
             if run_id is None:
                 view["task_kind"] = "tool"
             elif parent_run_id is None:
@@ -220,8 +232,36 @@ class TaskRepo:
                 view["task_kind"] = "workflow"  # 子 run 任务：根必为 workflow（限深两层）
             view["root_run_id"] = parent_parent_id or run_id
             view["root_pipeline_id"] = root_pid
+            if tool_name:
+                view["tool_name"] = tool_name
+            if pipeline_name:
+                view["pipeline_name"] = pipeline_name
             views.append(view)
-        return views
+        return {"tasks": views, "total": total}
+
+    def stats_by_tool(self, tool_id: str) -> dict[str, Any]:
+        """量化性能（工具详情「量化性能」数据源）：执行次数/成功率/平均耗时。
+        成功率与耗时只按终态任务计算，运行中不参与分母。"""
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*),
+                       COUNT(*) FILTER (WHERE status IN ('succeeded','failed',
+                                                         'failed_review','cancelled','interrupted')),
+                       COUNT(*) FILTER (WHERE status = 'succeeded'),
+                       AVG(EXTRACT(EPOCH FROM (finished_at - started_at)))
+                           FILTER (WHERE status = 'succeeded'
+                                   AND started_at IS NOT NULL AND finished_at IS NOT NULL)
+                FROM tasks WHERE tool_id = %s
+                """,
+                (tool_id,),
+            ).fetchone()
+        total, done, ok, avg_seconds = row
+        return {
+            "executions": total,
+            "success_rate": round(ok / done, 4) if done else None,
+            "avg_seconds": round(avg_seconds, 1) if avg_seconds is not None else None,
+        }
 
     def list_by_pipeline_run(self, run_id: str) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:

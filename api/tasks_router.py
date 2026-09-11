@@ -34,10 +34,12 @@ def create_task(body: TaskCreate) -> dict:
 def list_tasks(
     status: str | None = Query(default=None),
     limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, description="检索：工具中文名/任务号/流中文名"),
     kind: str | None = Query(default=None, description="归类筛选: tool/flow/workflow（06 C4）"),
 ) -> dict:
     try:
-        return {"tasks": deps.get_dispatch_service().list(status=status, limit=limit, kind=kind)}
+        return deps.get_dispatch_service().list(status=status, limit=limit, kind=kind, offset=offset, q=q)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

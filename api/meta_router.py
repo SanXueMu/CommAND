@@ -19,6 +19,13 @@ def list_statuses() -> dict:
     return {"statuses": STATUS_CATALOG}
 
 
+@router.get("/tool-categories")
+def list_tool_categories() -> dict:
+    from core.tool_categories import CATEGORIES
+
+    return {"categories": CATEGORIES}
+
+
 @router.get("/site")
 def get_site() -> dict:
     views = [

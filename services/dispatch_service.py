@@ -58,8 +58,9 @@ class DispatchService:
         return task
 
     def list(self, status: str | None = None, limit: int = 50,
-             kind: str | None = None) -> list[dict[str, Any]]:
-        return self._task_repo.list(status=status, limit=limit, kind=kind)
+             kind: str | None = None, offset: int = 0,
+             q: str | None = None) -> dict[str, Any]:
+        return self._task_repo.list(status=status, limit=limit, kind=kind, offset=offset, q=q)
 
     def cancel(self, handle: str) -> dict[str, Any]:
         task = self.get(handle)

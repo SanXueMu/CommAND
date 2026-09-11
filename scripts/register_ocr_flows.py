@@ -130,7 +130,7 @@ LEGACY_FLOWS = ("flow.ocr.invoice", "flow.ocr.contract", "flow.ocr.audit")
 
 FLOWS: dict[str, dict] = {
     "flow.ocr.recognize": {
-        "name": "通用识别（参数全开放：fields/prompt/钩子自备）",
+        "name": "通用识别", "doc_md": "参数全开放的通用识别流：fields/prompt/钩子自备，适合一次性自定义识别。",
         "steps": [{
             "tool": "img.vl.extract",
             "input": {
@@ -146,7 +146,7 @@ FLOWS: dict[str, dict] = {
     },
     # E2：模版驱动识别（resolve 渲染 → vl.extract 直驱 → when 条件导出）
     "flow.ocr.smart": {
-        "name": "识别图片（模版驱动：按模板 id 渲染提示词与钩子；export_units 可选导出）",
+        "name": "识别图片", "doc_md": "模版驱动的识别流：按模板 id 渲染提示词与钩子；export_units 可选导出。",
         "steps": [
             {"tool": "spec.template.resolve",
              "input": {"id": "{{ input.template_id }}"}},
@@ -166,7 +166,7 @@ FLOWS: dict[str, dict] = {
         ],
     },
     "flow.ocr.translate": {
-        "name": "识别→批翻全自动流（OCR→提取单元→分类→去重→翻译→双语回填，复用 translee 全链）",
+        "name": "识别批翻", "doc_md": "识别→批翻全自动流：OCR→提取单元→分类→去重→翻译→双语回填，复用 translee 全链。",
         "steps": [
             {"tool": "img.vl.extract", "input": {
                 "file": "{{ input.file }}", "db": "{{ input.output_db }}",
@@ -196,7 +196,7 @@ FLOWS: dict[str, dict] = {
         ],
     },
     "flow.ocrdb.view": {
-        "name": "视图导出流（读库→ViewSpec 查询→xlsx 多 sheet 导出）",
+        "name": "视图导出", "doc_md": "结果库视图导出流：读库→ViewSpec 查询→xlsx 多 sheet 导出。",
         "steps": [
             {"tool": "ocrdb.extract.units", "input": {
                 "file": "{{ input.db }}", "mode": "records"}},
@@ -209,7 +209,7 @@ FLOWS: dict[str, dict] = {
         ],
     },
     "flow.specgen.pdf": {
-        "name": "模板生成·方案一（非LLM布局分析→纯语言LLM→三件套校验；需文本层PDF）",
+        "name": "模板生成·文档", "doc_md": "模板生成·方案一：非LLM布局分析→纯语言LLM→三件套校验；需文本层 PDF。",
         "steps": [
             {"tool": "layout.analyze.pdf", "input": {"file": "{{ input.file }}"}},
             {"tool": "spec.gen.textllm", "input": {
@@ -223,7 +223,7 @@ FLOWS: dict[str, dict] = {
         ],
     },
     "flow.specgen.img": {
-        "name": "模板生成·方案二（多模态直读样例→三件套校验；扫描件/图片通用）",
+        "name": "模板生成·扫描", "doc_md": "模板生成·方案二：多模态直读样例→三件套校验；扫描件/图片通用。",
         "steps": [
             {"tool": "spec.gen.vl", "input": {
                 "file": "{{ input.file }}", "requirement": "{{ input.requirement }}",
@@ -239,7 +239,7 @@ FLOWS: dict[str, dict] = {
 # E3：真嵌套工作流示范——模板生成（子流）→ 三件套转模版 → 模版驱动识别（子流）
 WORKFLOWS: dict[str, dict] = {
     "wf.ocr.fullchain": {
-        "name": "全链工作流（模板生成→入库→识别→记录提取→视图查询→xlsx 导出）",
+        "name": "全链工作流", "doc_md": "全链工作流：模板生成→入库→识别→记录提取→视图查询→xlsx 导出。",
         "steps": [
             {"pipeline": "flow.specgen.img", "input": {
                 "file": "{{ input.file }}",
@@ -314,7 +314,7 @@ def main() -> None:
     existing = {p["id"] for p in api("/api/pipelines").get("pipelines", [])}
     for group_id, group in (("flow", FLOWS), ("workflow", WORKFLOWS)):
         for pid, spec in group.items():
-            body = {"id": pid, "name": spec["name"], "steps": spec["steps"]}
+            body = {"id": pid, "name": spec["name"], "steps": spec["steps"], "doc_md": spec.get("doc_md")}
             schema = INPUT_SCHEMAS.get(pid)
             if schema:
                 body["input_schema"] = schema  # 06 C3：流表单中文声明（缺省则前端猜键）

@@ -5,9 +5,18 @@ from typing import Any
 from psycopg.types.json import Json
 
 from core.protocol import ToolManifest
+from core.tool_categories import category_of
 from store.db import Db
 
 _COLUMNS = "id, name, version, description, input_types, output_types, runtime_kind, path, status, hidden"
+
+
+def _category_fields(tool_id: str) -> dict[str, Any]:
+    """总类/子类（core 单一事实源推导，未登记域不给字段，前端归「未分类」）。"""
+    pair = category_of(tool_id)
+    if pair is None:
+        return {}
+    return {"category": pair[0], "subcategory": pair[1]}
 
 
 class ToolRepo:
@@ -60,6 +69,7 @@ class ToolRepo:
         for row in rows:
             view = self._to_view(row)
             view["tags"] = row[len(_COLUMNS.split(","))] or []  # SQL 侧提取的 tags 列（索引 = _COLUMNS 列数）
+            view.update(_category_fields(view["id"]))
             views.append(view)
         return views
 
@@ -74,6 +84,7 @@ class ToolRepo:
             return None
         view = self._with_manifest_extras(self._to_view(row), row[10])
         view["manifest"] = row[10]
+        view.update(_category_fields(view["id"]))
         return view
 
     def set_availability(self, tool_id: str, *, enabled: bool | None = None,

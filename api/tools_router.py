@@ -28,6 +28,14 @@ def get_tool(tool_id: str) -> dict:
     return tool
 
 
+@router.get("/{tool_id}/stats")
+def get_tool_stats(tool_id: str) -> dict:
+    """量化性能：执行次数/成功率/平均耗时（TaskRepo 聚合，详情弹窗消费）。"""
+    if deps.get_tool_repo().get(tool_id, include_disabled=True) is None:
+        raise HTTPException(status_code=404, detail=f"tool not found: {tool_id}")
+    return deps.get_task_repo().stats_by_tool(tool_id)
+
+
 @router.patch("/{tool_id}/availability")
 def patch_tool_availability(tool_id: str, body: ToolAvailability) -> dict:
     """启停/显隐（06 D1）：disabled 不参与扫描发现但仍可查详情（注册校验用）。"""

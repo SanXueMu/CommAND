@@ -88,21 +88,21 @@ def test_task_kinds_classified(stack):
     stack["svc"].run(WORKFLOW_ID, {"segments": ["x"]})         # 工作流（子 run 任务）
     _drain(stack)
 
-    all_tasks = stack["dispatch"].list(limit=100)
+    all_tasks = stack["dispatch"].list(limit=100)["tasks"]
     mine = [t for t in all_tasks if t["root_pipeline_id"] in IDS or t["pipeline_run"] is None
             and t["tool_id"] == REVERSE_ID]
     assert mine, "未取到任务"
 
-    tools = stack["dispatch"].list(limit=100, kind="tool")
+    tools = stack["dispatch"].list(limit=100, kind="tool")["tasks"]
     assert all(t["task_kind"] == "tool" and t["pipeline_run"] is None for t in tools)
     assert any(t["tool_id"] == REVERSE_ID and t["pipeline_run"] is None for t in tools)
 
-    flows = stack["dispatch"].list(limit=100, kind="flow")
+    flows = stack["dispatch"].list(limit=100, kind="flow")["tasks"]
     flow_mine = [t for t in flows if t["root_pipeline_id"] == FLOW_ID]
     assert flow_mine, "flow 归类缺失"
     assert all(t["task_kind"] == "flow" for t in flow_mine)
 
-    wfs = stack["dispatch"].list(limit=100, kind="workflow")
+    wfs = stack["dispatch"].list(limit=100, kind="workflow")["tasks"]
     wf_mine = [t for t in wfs if t["root_pipeline_id"] == WORKFLOW_ID]
     assert wf_mine, "workflow 归类缺失"
     # 子 run 任务的根上溯正确：root_run_id 指向 outer 的 run 而非子 run
@@ -116,7 +116,7 @@ def test_kind_filter_exclusive(stack):
     _drain(stack)
     seen: dict[str, set[str]] = {}
     for kind in ("tool", "flow", "workflow"):
-        for t in stack["dispatch"].list(limit=100, kind=kind):
+        for t in stack["dispatch"].list(limit=100, kind=kind)["tasks"]:
             seen.setdefault(t["handle"], set()).add(kind)
     dup = {h: k for h, k in seen.items() if len(k) > 1}
     assert not dup, f"归类互斥被破坏: {dup}"
