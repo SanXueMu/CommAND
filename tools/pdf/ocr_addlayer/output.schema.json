@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file", "source", "file_hash", "pages", "pages_ocr", "applied"],
+  "properties": {
+    "file": {"type": "string", "description": "补层后的可搜索 PDF 路径（未变则同 source）"},
+    "source": {"type": "string"},
+    "file_hash": {"type": "string"},
+    "pages": {"type": "integer"},
+    "pages_ocr": {"type": "integer", "description": "实际 OCR 的页数"},
+    "applied": {"type": "boolean", "description": "是否补过文字层"},
+    "languages": {"type": "string"}
+  }
+}

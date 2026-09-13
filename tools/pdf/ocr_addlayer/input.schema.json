@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file"],
+  "properties": {
+    "file": {"title": "PDF 路径", "type": "string", "description": "待补文字层的 PDF 路径"},
+    "languages": {"title": "OCR 语言", "type": "string", "description": "Tesseract 语言，如 eng+chi_sim（默认）"},
+    "jobs": {"title": "并发数", "type": "integer", "minimum": 1, "maximum": 8, "description": "OCR 并行页数，默认 4"},
+    "oversample": {"title": "过采样 dpi", "type": "integer", "description": "光栅化 dpi，默认 300"},
+    "max_pages": {"title": "最大页数", "type": "integer", "description": "超过则报错，默认 300"},
+    "timeout_s": {"title": "超时秒", "type": "integer", "description": "OCR 超时，默认 900"},
+    "deskew": {"title": "自动纠偏", "type": "boolean", "default": true},
+    "force": {"title": "强制重做", "type": "boolean", "default": false, "description": "即使已有文字层也整篇重 OCR"},
+    "output_name": {"title": "输出文件名", "type": "string"}
+  }
+}

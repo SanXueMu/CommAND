@@ -21,6 +21,7 @@ from store.tool_repo import ToolRepo
 from config import load_config
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+from tests._dbutil import db_reachable
 DB_URL = "postgresql://command_dev:root@192.168.8.41:5432/command_dev"
 
 REVERSE_ID = "tests.string.reverse"
@@ -43,10 +44,7 @@ IDS = (FLOW_ID, WORKFLOW_ID)
 
 
 def _db_reachable() -> bool:
-    try:
-        return Db(DB_URL).ping()
-    except Exception:
-        return False
+    return db_reachable(DB_URL)
 
 
 pytestmark = pytest.mark.skipif(not _db_reachable(), reason="dev PG 不可达，跳过集成测试")

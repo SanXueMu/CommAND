@@ -4,6 +4,15 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# 系统依赖：扫描版 PDF 的 OCR（Tesseract + OCRmyPDF 所需的 ghostscript/qpdf/unpaper）
+# 说明：均装在镜像内，宿主机零改动；Debian 源换清华镜像加速
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+    apt-get update && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
+        ghostscript qpdf unpaper pngquant \
+    && rm -rf /var/lib/apt/lists/*
+
 # 国内镜像源（pip 装 uv + uv sync 装依赖均走清华源）
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
     UV_DEFAULT_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \

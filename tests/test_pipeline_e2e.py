@@ -1,6 +1,5 @@
 """管线端到端集成测试：两步线性管线 / 失败传播 / 模板断链收口。"""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -16,22 +15,14 @@ from store.pipeline_repo import PipelineRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
 from config import load_config
+from tests._dbutil import DEFAULT_DB_URL as DB_URL, db_reachable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://command_dev:root@192.168.8.41:5432/command_dev")
-
 REVERSE_ID = "tests.string.reverse"
 PIPELINE_ID = "test.double_reverse"
 
 
-def _db_reachable() -> bool:
-    try:
-        return Db(DB_URL).ping()
-    except Exception:
-        return False
-
-
-pytestmark = pytest.mark.skipif(not _db_reachable(), reason="dev PG 不可达，跳过集成测试")
+pytestmark = pytest.mark.skipif(not db_reachable(DB_URL), reason="dev PG 不可达，跳过集成测试")
 
 
 @pytest.fixture

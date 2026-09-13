@@ -1,6 +1,5 @@
 """job 级运行列表/摘要/删除服务测试（dev PG 不可达则跳过）。"""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -15,20 +14,12 @@ from store.event_repo import EventRepo
 from store.pipeline_repo import PipelineRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
+from tests._dbutil import DEFAULT_DB_URL as DB_URL, db_reachable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://command_dev:root@192.168.8.41:5432/command_dev")
 PID = "test.runs.list"
 
-
-def _db_reachable() -> bool:
-    try:
-        return Db(DB_URL).ping()
-    except Exception:
-        return False
-
-
-pytestmark = pytest.mark.skipif(not _db_reachable(), reason="dev PG 不可达，跳过集成测试")
+pytestmark = pytest.mark.skipif(not db_reachable(DB_URL), reason="dev PG 不可达，跳过集成测试")
 
 
 def _cleanup(db: Db) -> None:

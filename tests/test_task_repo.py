@@ -9,16 +9,14 @@ from store.db import Db
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
 
+from tests._dbutil import db_reachable
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://command_dev:root@192.168.8.41:5432/command_dev")
 
 TEST_TOOL_ID = "test.dev.echo"
 
 
 def _db_reachable() -> bool:
-    try:
-        return Db(DB_URL).ping()
-    except Exception:
-        return False
+    return db_reachable(DB_URL)
 
 
 pytestmark = pytest.mark.skipif(not _db_reachable(), reason="dev PG 不可达，跳过集成测试")
