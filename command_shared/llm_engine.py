@@ -24,6 +24,8 @@ DEFAULT_BATCH_SIZE = 50
 DEFAULT_CONCURRENCY = 4
 DEFAULT_MAX_BATCH_CHARS = 6000
 DEFAULT_ALIGN_FAIL_SWITCH = 0.02
+DEFAULT_TIMEOUT_S = 120.0
+DEFAULT_MAX_RETRIES = 1
 
 
 class TranslationError(RuntimeError):
@@ -32,8 +34,10 @@ class TranslationError(RuntimeError):
 
 # ---------------------------------------------------------------- 底层调用
 
-def make_client(api_key: str, base_url: str) -> OpenAI:
-    return OpenAI(api_key=api_key, base_url=base_url)
+def make_client(api_key: str, base_url: str, timeout: float = DEFAULT_TIMEOUT_S,
+                max_retries: int = DEFAULT_MAX_RETRIES) -> OpenAI:
+    """建 OpenAI 客户端：显式超时 + 重试上限（默认值过大会让请求静默挂死）。"""
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=max_retries)
 
 
 def error_detail(exc: Exception) -> str:
@@ -75,6 +79,9 @@ def call_chat(
         extra["translation_options"] = translation_options
     if json_mode:
         extra["response_format"] = {"type": "json_object"}
+    # 非 MT 模型关闭思考：qwen3.x 默认推理会为一批 50 条吐上万 completion token（实测 87s/批）
+    if not (model or "").startswith("qwen-mt"):
+        extra["enable_thinking"] = False
     try:
         resp = client.chat.completions.create(
             model=model,
@@ -241,6 +248,34 @@ def ensure_quality(client, text, dst, target_lang, source_lang, terms, fallback_
 
 # ---------------------------------------------------------------- 引擎主循环
 
+def _quality_batch(
+    client: OpenAI,
+    pairs: list[tuple[str, str]],
+    target_lang: str,
+    source_lang: str | None,
+    terms: list | None,
+    fallback_model: str,
+    on_progress: Callable[[dict], None] | None,
+    workers: int,
+) -> dict[str, tuple[str, bool]]:
+    """并行质检：合格直接采用，不合格并行重译（原为逐条串行，长批次会拖成几分钟）。"""
+
+    def work(pair: tuple[str, str]) -> tuple[str, tuple[str, bool]]:
+        text, dst = pair
+        ok, _ = verify_pair(text, dst)
+        if ok:
+            return text, (dst, True)
+        return text, ensure_quality(
+            client, text, dst, target_lang, source_lang, terms, fallback_model, on_progress,
+        )
+
+    out: dict[str, tuple[str, bool]] = {}
+    with ThreadPoolExecutor(max_workers=max(1, int(workers))) as pool:
+        for text, res in pool.map(work, pairs):
+            out[text] = res
+    return out
+
+
 def translate_texts(
     client: OpenAI,
     texts: list[str],
@@ -402,16 +437,15 @@ def translate_texts(
                 if batch_usage and on_progress:
                     on_progress({"phase": "usage", "model": used_model, **batch_usage})
 
+                quality = _quality_batch(
+                    client, list(zip(batch_texts, out)), target_lang, source_lang,
+                    terms, fallback_model, on_progress, concurrency,
+                )
                 batch_items: dict[str, dict] = {}
                 for text, dst in zip(batch_texts, out):
-                    ok, _ = verify_pair(text, dst)
-                    if not ok:
-                        dst, ok = ensure_quality(
-                            client, text, dst, target_lang, source_lang, terms,
-                            fallback_model, on_progress,
-                        )
+                    dst2, ok = quality.get(text, (dst, True))
                     results[text] = {
-                        "translated": dst if ok else (dst or ""),
+                        "translated": dst2 if ok else (dst2 or ""),
                         "status": "ok" if ok else "review",
                         "model": used_model,
                     }

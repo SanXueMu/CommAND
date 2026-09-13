@@ -1,0 +1,73 @@
+"""翻译引擎关键行为回归：客户端超时、思考开关（qwen-mt 例外）、并行质检。
+
+背景：qwen-mt* 不接受 system 角色、也不接受 enable_thinking；而 qwen3.x 默认开思考，
+一批 50 条会吐出上万 completion token（实测 87s/批）→ 必须显式关闭。
+"""
+from types import SimpleNamespace
+
+from command_shared import llm_engine as E
+
+
+class _FakeCompletions:
+    def __init__(self):
+        self.kwargs = None
+
+    def create(self, **kwargs):
+        self.kwargs = kwargs
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="译文"))],
+            usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2),
+        )
+
+
+class _FakeClient:
+    def __init__(self):
+        self.completions = _FakeCompletions()
+        self.chat = SimpleNamespace(completions=self.completions)
+
+
+def _call_extra(model: str) -> dict:
+    client = _FakeClient()
+    E.call_chat(client, model, "SYS", "USR")
+    return client.completions.kwargs.get("extra_body") or {}
+
+
+def test_make_client_sets_timeout_and_retries(monkeypatch):
+    captured = {}
+
+    def fake_openai(**kwargs):
+        captured.update(kwargs)
+        return "client"
+
+    monkeypatch.setattr(E, "OpenAI", fake_openai)
+    assert E.make_client("k", "http://x") == "client"
+    assert captured["timeout"] == E.DEFAULT_TIMEOUT_S
+    assert captured["max_retries"] == E.DEFAULT_MAX_RETRIES
+
+
+def test_call_chat_mt_has_no_thinking_flag():
+    assert "enable_thinking" not in _call_extra("qwen-mt-flash")
+
+
+def test_call_chat_non_mt_disables_thinking():
+    assert _call_extra("qwen3.7-flash")["enable_thinking"] is False
+    assert _call_extra("qwen3.7-plus")["enable_thinking"] is False
+
+
+def test_call_chat_merges_into_single_user_message():
+    client = _FakeClient()
+    E.call_chat(client, "qwen-mt-flash", "SYS", "USR")
+    msgs = client.completions.kwargs["messages"]
+    assert [m["role"] for m in msgs] == ["user"]
+    assert "SYS" in msgs[0]["content"] and "USR" in msgs[0]["content"]
+
+
+def test_quality_batch_parallel_marks_review(monkeypatch):
+    monkeypatch.setattr(E, "verify_pair", lambda src, dst: (dst == "good", "why"))
+    monkeypatch.setattr(E, "ensure_quality", lambda *a, **k: ("fixed", False))
+    pairs = [("a", "good"), ("b", "bad"), ("c", "good")]
+    res = E._quality_batch(None, pairs, "Chinese", None, None, "fb", None, 2)
+    assert res["a"] == ("good", True)
+    assert res["b"] == ("fixed", False)
+    assert res["c"] == ("good", True)
+    assert len(res) == 3
