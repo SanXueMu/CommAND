@@ -81,3 +81,22 @@ def test_dict_browse_filter_paging_stats(data_dir):
 
     paged = router.browse_dict(limit=2, offset=0)
     assert len(paged["rows"]) == 2 and paged["total"] == 3
+
+
+def test_llm_translate_terms_schema_accepts_string_and_array():
+    """术语表入参：flow 级声明为字符串（textarea），工具 _parse_terms 兼容字符串；
+    schema 必须同时接受 array 与 string，否则工作台运行时报 $.terms 校验失败。"""
+    import json
+
+    import jsonschema
+
+    schema = json.loads(
+        (Path(__file__).resolve().parent.parent / "tools/text/llm_translate/input.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    base = {"segments": ["Audit Report"]}
+    jsonschema.validate({**base, "terms": "Audit Report => 审计报告"}, schema)
+    jsonschema.validate({**base, "terms": [["Audit Report", "审计报告"]]}, schema)
+    jsonschema.validate(base, schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**base, "terms": 123}, schema)

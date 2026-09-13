@@ -46,8 +46,11 @@
     },
     "terms": {
       "title": "术语对",
-      "type": "array",
-      "description": "术语对 [[原文, 译文], ...]（跨批次译名一致；术语原文不走缓存）",
+      "type": [
+        "array",
+        "string"
+      ],
+      "description": "术语对 [[原文, 译文], ...] 或字符串（每行「原文 => 译文」，兼容 tab/->/→）（跨批次译名一致；术语原文不走缓存）",
       "items": {
         "type": "array",
         "minItems": 2,

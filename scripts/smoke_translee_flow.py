@@ -46,6 +46,8 @@ def main() -> int:
                     help="术语表 JSON（[[原文,译文],...]）")
     ap.add_argument("--no-mock-key", action="store_true",
                     help="跳过 mock 密钥注册（真实 key 已就绪时使用）")
+    ap.add_argument("--extra", default="{}",
+                    help='附加管线入参 JSON，如 \'{"mode":"overlay"}\'')
     ap.add_argument("--timeout", type=int, default=120)
     args = ap.parse_args()
 
@@ -60,7 +62,8 @@ def main() -> int:
     run = call(args.api, "POST", f"/api/pipelines/{args.flow}/run",
                {"input": {"file": path, "key_name": args.key,
                           "target_lang": args.target_lang, "source_lang": args.source_lang,
-                          "model": "", "terms": json.loads(args.terms)}})
+                          "model": "", "terms": json.loads(args.terms),
+                          **json.loads(args.extra)}})
     run_id = run["run_id"]
     print(f"管线运行: {run_id}")
 
