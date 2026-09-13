@@ -14,17 +14,26 @@
     },
     "key_name": {
       "title": "密钥名",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "keys 服务中的密钥名；缺省用 is_default，再缺省取首个"
     },
     "model": {
       "title": "翻译模型",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "主力模型，默认 qwen-mt-flash"
     },
     "fallback_model": {
       "title": "兜底模型",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "兜底/重译模型，默认 qwen3.7-flash"
     },
     "premium": {
@@ -34,7 +43,10 @@
     },
     "target_lang": {
       "title": "目标语言",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "目标语言，默认 Chinese"
     },
     "source_lang": {
@@ -48,7 +60,8 @@
       "title": "术语对",
       "type": [
         "array",
-        "string"
+        "string",
+        "null"
       ],
       "description": "术语对 [[原文, 译文], ...] 或字符串（每行「原文 => 译文」，兼容 tab/->/→）（跨批次译名一致；术语原文不走缓存）",
       "items": {

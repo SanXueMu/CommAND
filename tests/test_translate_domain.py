@@ -98,5 +98,9 @@ def test_llm_translate_terms_schema_accepts_string_and_array():
     jsonschema.validate({**base, "terms": "Audit Report => 审计报告"}, schema)
     jsonschema.validate({**base, "terms": [["Audit Report", "审计报告"]]}, schema)
     jsonschema.validate(base, schema)
+    jsonschema.validate({**base, "terms": None}, schema)
+    # 工作台留空字段 → null：schema 必须可空，否则第 3 步入队报 $.model is not of type 'string'
+    jsonschema.validate({"segments": ["x"], "key_name": "k", "model": None,
+                         "source_lang": None, "target_lang": None, "terms": None}, schema)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**base, "terms": 123}, schema)

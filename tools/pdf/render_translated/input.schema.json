@@ -9,7 +9,7 @@
     "date_maps": {"title": "日期回插表", "type": ["array", "null"], "items": {"type": "object"}},
     "translations": {"title": "译文", "type": "array", "items": {"type": "string"}},
     "statuses": {"title": "质检状态", "type": ["array", "null"], "items": {"type": "string"}},
-    "mode": {"title": "渲染模式", "type": "string", "enum": ["overlay", "bilingual"], "default": "overlay"},
+    "mode": {"title": "渲染模式", "type": ["string", "null"], "enum": ["overlay", "bilingual", null], "default": "overlay"},
     "font_size": {"title": "基准字号", "type": ["number", "null"], "default": 11},
     "min_font_size": {"title": "最小字号", "type": ["number", "null"], "default": 5},
     "col_width": {"title": "译文栏宽", "type": ["number", "null"], "default": 300},
