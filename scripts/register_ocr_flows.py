@@ -89,6 +89,15 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "name": {"type": "string", "title": "导出文件名"},
         },
     },
+    "flow.ocr.searchable": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+            "file": {"type": "string", "format": "file", "title": "PDF 文件", "description": "扫描/图片版 PDF，补隐形文字层后成为可搜索 PDF"},
+            "languages": {"type": "string", "title": "OCR 语言", "description": "如 eng / eng+chi_sim；留空用默认"},
+            "force": {"type": "boolean", "title": "强制重建文字层", "description": "开启后忽略已有文字层，整篇重跑 OCR"},
+        },
+    },
     "flow.specgen.pdf": {
         "type": "object",
         "required": ["file", "requirement"],
@@ -206,6 +215,14 @@ FLOWS: dict[str, dict] = {
             {"tool": "records.export.xlsx", "input": {
                 "columns": "{{ prev.columns }}", "rows": "{{ prev.rows }}",
                 "splits": "{{ prev.splits }}", "name": "{{ input.name }}"}},
+        ],
+    },
+    "flow.ocr.searchable": {
+        "name": "可搜索 PDF", "doc_md": "扫描件补隐形文字层：OCRmyPDF+Tesseract 使原件可选中/复制/检索，版式不变。",
+        "steps": [
+            {"tool": "pdf.ocr.addlayer", "input": {
+                "file": "{{ input.file }}", "languages": "{{ input.languages }}",
+                "force": "{{ input.force }}"}},
         ],
     },
     "flow.specgen.pdf": {

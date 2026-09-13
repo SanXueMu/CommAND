@@ -45,6 +45,8 @@ OCR_VIEW: dict = {
         "recognizeFlow": "flow.ocr.smart",
         "exportFlow": "flow.ocrdb.view",
         "genFlow": "flow.specgen.img",
+        # 可搜索 PDF：扫描/图片版补隐形文字层（OCRmyPDF+Tesseract），版式不变、可选中检索
+        "searchableFlow": "flow.ocr.searchable",
         # 视图预览区：预设视图快选（内置 5 + CommOCR 用户视图 6，名 → 完整 ViewSpec，点选即用）
         "viewTool": "records.view.query",
         "templatesPath": "/ocr/templates",
