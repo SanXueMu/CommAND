@@ -534,6 +534,9 @@ class PipelineService:
                 continue
             if out.get("path"):
                 artifacts.append({"name": out.get("name"), "path": out.get("path")})
+            if out.get("layered_file"):
+                artifacts.append({"name": out.get("layered_name") or "可搜索.pdf",
+                                  "path": out.get("layered_file")})
             if "usage_by_model" in out or "usage" in out:
                 translate = out
             if "statuses" in out:

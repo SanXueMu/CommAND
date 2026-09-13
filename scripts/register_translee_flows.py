@@ -63,6 +63,23 @@ INPUT_SCHEMAS: dict[str, dict] = {
                       "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
         },
     },
+    "flow.translate.pdf.layout": {
+        "type": "object",
+        "required": ["file", "key_name", "target_lang"],
+        "properties": {
+            "file": {"type": "string", "format": "file", "title": "文档文件",
+                     "description": "pdf 文档（含扫描/图片版，自动 OCR 补层），按版式块翻译"},
+            "key_name": {"type": "string", "title": "密钥名称", "description": "设置页已录入的 LLM 密钥名"},
+            "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
+            "model": {"type": "string", "title": "翻译模型", "description": "留空用密钥默认模型"},
+            "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
+            "mode": {"type": "string", "title": "输出模式", "enum": ["overlay", "bilingual"],
+                     "default": "overlay",
+                     "description": "overlay=原位覆盖单语译文；bilingual=左右分栏双语对照"},
+        },
+    },
 }
 
 FLOWS: dict[str, dict] = {
@@ -97,7 +114,7 @@ FLOWS: dict[str, dict] = {
     "flow.translate.pdf": {
         "name": "文档翻译", "doc_md": "pdf 翻译全自动流：按页提取→分类→归一去重→长文翻译→质检→双语 docx 渲染。",
         "steps": [
-            {"tool": "pdf.extract.pages", "input": {"file": "{{ input.file }}"}},
+            {"tool": "pdf.extract.pages", "input": {"file": "{{ input.file }}", "auto_ocr": True}},
             {"tool": "table.classify.columns", "input": {"units": "{{ prev.units }}"}},
             {"tool": "text.dedup.values", "input": {"segments": "{{ prev.segments }}"}},
             {"tool": "text.llm.translate", "input": {
@@ -145,6 +162,33 @@ FLOWS: dict[str, dict] = {
                 "translations": "{{ step[3].output.translations }}",
                 "statuses": "{{ step[4].output.statuses }}",
                 "file": "{{ input.file }}"}},
+        ],
+    },
+    "flow.translate.pdf.layout": {
+        "name": "版式翻译", "doc_md": "pdf 版式翻译全自动流：扫描页自动 OCR 补层→版式块提取→归一去重→翻译→质检→版式渲染（原位覆盖 / 左右分栏双语）。",
+        "steps": [
+            {"tool": "pdf.extract.blocks", "input": {"file": "{{ input.file }}", "auto_ocr": True}},
+            {"tool": "pdf.blocks.to_segments", "input": {"blocks": "{{ prev.blocks }}"}},
+            {"tool": "text.dedup.values", "input": {"segments": "{{ prev.segments }}"}},
+            {"tool": "text.llm.translate", "input": {
+                "segments": "{{ prev.unique }}",
+                "key_name": "{{ input.key_name }}",
+                "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
+                "model": "{{ input.model }}",
+                "premium": True}},
+            {"tool": "text.verify.fidelity", "input": {
+                "sources": "{{ step[2].output.unique }}",
+                "translations": "{{ prev.translations }}"}},
+            {"tool": "pdf.render.translated", "input": {
+                "file": "{{ step[0].output.render_file }}",
+                "blocks": "{{ step[0].output.blocks }}",
+                "index_map": "{{ step[2].output.index_map }}",
+                "date_maps": "{{ step[2].output.date_maps }}",
+                "translations": "{{ step[3].output.translations }}",
+                "statuses": "{{ step[4].output.statuses }}",
+                "mode": "{{ input.mode }}"}},
         ],
     },
 }

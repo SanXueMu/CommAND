@@ -7,3 +7,6 @@ __pycache__/
 dist/
 .idea/
 data/
+
+# CJK 字体源文件（仅保留生成后的静态 TTF）
+assets/fonts/*-var.ttf

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file", "file_hash", "kind", "pages", "blocks"],
+  "properties": {
+    "file": {"type": "string", "description": "原始 pdf 路径"},
+    "file_hash": {"type": "string"},
+    "render_file": {"type": "string", "description": "块坐标所在文件（补层后为可搜索 PDF）"},
+    "kind": {"const": "pdf_blocks"},
+    "pages": {"type": "integer"},
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "page", "type", "bbox"],
+        "properties": {
+          "id": {"type": "string"},
+          "page": {"type": "integer"},
+          "type": {"enum": ["text", "table"]},
+          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "text": {"type": "string"},
+          "lines": {"type": "array", "items": {"type": "object"}},
+          "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+          "cells": {"type": "array", "items": {"type": "object"}},
+          "meta": {"type": "object"}
+        }
+      }
+    },
+    "ocr_applied": {"type": "boolean"},
+    "layered_file": {"type": ["string", "null"]},
+    "layered_name": {"type": ["string", "null"]},
+    "pages_ocr": {"type": "integer"}
+  }
+}

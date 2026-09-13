@@ -1,0 +1,21 @@
+[tool]
+id = "pdf.extract.blocks"
+name = "pdf 版式提取"
+version = "1.0.0"
+tags = ["提取", "文档", "版式"]
+description = "PDF → 文字/表格块 + bbox（版式叠加翻译用）；支持扫描页自动 OCR 补层"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf"]
+output_types = ["pdf.blocks"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 1200
+concurrency = 2
+max_attempts = 2

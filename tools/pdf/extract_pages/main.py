@@ -55,11 +55,39 @@ def run(input: dict, ctx, emit) -> dict:
 
         raise ToolDomainError(f"文件不存在: {path}")
 
+    import os
+
     import pymupdf
+
+    from command_shared import pdf_ocr
+
+    ocr = {"ocr_applied": False, "layered_file": None, "layered_name": None, "pages_ocr": 0}
+    source = path
+    if bool(input.get("auto_ocr")):
+        min_chars = int(input.get("min_chars_per_page") or 20)
+        if pdf_ocr.needs_ocr(path, min_chars_per_page=min_chars):
+            emit({"phase": "ocr", "message": "检测到扫描页，正在补文字层…"})
+            data_dir = Path(os.environ.get("COMMAND_DATA_DIR", "data"))
+            out_dir = data_dir / "outputs" / getattr(ctx, "handle", "adhoc")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_name = f"{path.stem}_可搜索.pdf"
+            res = pdf_ocr.add_ocr_layer(
+                path, out_dir / out_name,
+                languages=(input.get("ocr_languages") or pdf_ocr.DEFAULT_LANGUAGES).strip(),
+                jobs=int(input.get("ocr_jobs") or pdf_ocr.DEFAULT_JOBS),
+                max_pages=int(input.get("ocr_max_pages") or pdf_ocr.DEFAULT_MAX_PAGES),
+                timeout_s=int(input.get("ocr_timeout_s") or pdf_ocr.DEFAULT_TIMEOUT_S),
+                progress=lambda e: emit(e),
+            )
+            if res["applied"]:
+                source = Path(res["path"])
+                ocr = {"ocr_applied": True, "layered_file": res["path"],
+                        "layered_name": out_name, "pages_ocr": res["pages_ocr"]}
+                emit({"phase": "ocr_done", "pages_ocr": res["pages_ocr"]})
 
     fhash = _file_hash(path)
     units = []
-    with pymupdf.open(path) as doc:
+    with pymupdf.open(source) as doc:
         pages_lines = []
         for page in doc:
             pages_lines.append([l.strip() for l in page.get_text().splitlines()])
@@ -89,4 +117,4 @@ def run(input: dict, ctx, emit) -> dict:
                 emit({"phase": "extracting", "page": i, "total": npages})
 
     emit({"phase": "extracted", "pages": npages, "units": len(units)})
-    return {"file": str(path), "file_hash": fhash, "kind": "pdf", "units": units}
+    return {"file": str(path), "file_hash": fhash, "kind": "pdf", "units": units, **ocr}

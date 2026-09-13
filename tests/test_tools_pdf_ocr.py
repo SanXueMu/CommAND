@@ -173,6 +173,61 @@ def test_tool_run_writes_output_dir(monkeypatch, tmp_path):
     assert (tmp_path / "data" / "outputs" / "h-1").is_dir()
 
 
+# ── pdf.extract.pages 自动 OCR（U2）──────────────────────────────────────────
+def _extract_tool():
+    return importlib.import_module("tools.pdf.extract_pages.main")
+
+
+def test_extract_auto_ocr_noop_on_text_pdf(tmp_path):
+    src = _text_pdf(tmp_path / "text.pdf", text="AUDIT REPORT 2026 TOTAL 98765 USD")
+    out = _extract_tool().run({"file": str(src), "auto_ocr": True},
+                              types.SimpleNamespace(handle="h"), lambda e: None)
+    assert out["ocr_applied"] is False
+    assert out["layered_file"] is None
+    texts = [u.get("text", "") for u in out["units"] if u["unit_type"] == "text"]
+    assert any("AUDIT" in t for t in texts)
+
+
+def test_extract_without_auto_ocr_marks_no_text(tmp_path):
+    src = _image_pdf(tmp_path / "scan.pdf")
+    out = _extract_tool().run({"file": str(src)}, types.SimpleNamespace(handle="h"), lambda e: None)
+    assert out["ocr_applied"] is False
+    text_units = [u for u in out["units"] if u["unit_type"] == "text"]
+    assert text_units and text_units[0]["meta"].get("no_text") is True
+
+
+def test_extract_auto_ocr_applies_layer(monkeypatch, tmp_path):
+    src = _image_pdf(tmp_path / "scan.pdf")
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+
+    def fake_add(s, d, **kwargs):  # noqa: ARG001
+        Path(d).parent.mkdir(parents=True, exist_ok=True)
+        _text_pdf(Path(d), text="AUDIT REPORT 2026")
+        return {"path": str(d), "pages": 1, "pages_ocr": 1, "applied": True, "languages": "eng"}
+
+    monkeypatch.setattr(pdf_ocr, "add_ocr_layer", fake_add)
+    out = _extract_tool().run({"file": str(src), "auto_ocr": True},
+                              types.SimpleNamespace(handle="h-9"), lambda e: None)
+
+    assert out["ocr_applied"] is True
+    assert out["pages_ocr"] == 1
+    assert out["layered_file"].endswith("scan_可搜索.pdf")
+    assert out["file"] == str(src)
+    texts = [u.get("text", "") for u in out["units"] if u["unit_type"] == "text"]
+    assert any("AUDIT" in t for t in texts)
+
+
+@pytest.mark.skipif(not pdf_ocr.ocrmypdf_available(), reason="本机无 ocrmypdf，跳过真实 OCR")
+def test_extract_auto_ocr_real_scanned(tmp_path, monkeypatch):
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+    src = _image_pdf(tmp_path / "scan.pdf", text="INVOICE TOTAL 1234 USD")
+    out = _extract_tool().run({"file": str(src), "auto_ocr": True, "ocr_languages": "eng"},
+                              types.SimpleNamespace(handle="real-extract"), lambda e: None)
+    assert out["ocr_applied"] is True
+    texts = " ".join(u.get("text", "") for u in out["units"] if u["unit_type"] == "text").upper()
+    assert "INVOICE" in texts and "1234" in texts
+
+
 # ── 真实 OCR 集成（缺 ocrmypdf 时跳过）───────────────────────────────────────
 @pytest.mark.skipif(not pdf_ocr.ocrmypdf_available(), reason="本机无 ocrmypdf，跳过真实 OCR")
 def test_real_ocr_produces_searchable_text(tmp_path):

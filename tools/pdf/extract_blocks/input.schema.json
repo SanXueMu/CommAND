@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file"],
+  "properties": {
+    "file": {"title": "PDF 路径", "type": "string", "description": "pdf 文件路径"},
+    "auto_ocr": {
+      "title": "自动补文字层",
+      "type": "boolean",
+      "default": false,
+      "description": "检测到扫描页时先 OCR 补可搜索文字层，再按版式提取"
+    },
+    "ocr_languages": {"title": "OCR 语言", "type": "string", "description": "如 eng+chi_sim（默认）"},
+    "ocr_jobs": {"title": "OCR 并发", "type": "integer"},
+    "ocr_max_pages": {"title": "OCR 最大页数", "type": "integer"},
+    "ocr_timeout_s": {"title": "OCR 超时(秒)", "type": "integer"},
+    "min_chars_per_page": {"title": "判空阈值", "type": "integer", "description": "默认 20"},
+    "include_tables": {
+      "title": "包含表格",
+      "type": "boolean",
+      "default": true,
+      "description": "提取表格块（逐格 bbox）"
+    }
+  }
+}

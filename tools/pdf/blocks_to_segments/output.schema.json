@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["segments", "refs"],
+  "properties": {
+    "segments": {"type": "array", "items": {"type": "string"}},
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "block_id", "page", "kind", "bbox"],
+        "properties": {
+          "index": {"type": "integer"},
+          "block_id": {"type": "string"},
+          "page": {"type": "integer"},
+          "kind": {"enum": ["text", "cell"]},
+          "bbox": {"type": "array", "items": {"type": "number"}},
+          "row": {"type": "integer"},
+          "col": {"type": "integer"}
+        }
+      }
+    }
+  }
+}

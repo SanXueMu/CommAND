@@ -1,0 +1,21 @@
+[tool]
+id = "pdf.blocks.to_segments"
+name = "版式块转片段"
+version = "1.0.0"
+tags = ["转换", "文档", "版式"]
+description = "pdf.extract.blocks 的块 → 翻译片段（每块/每格一段 + 回填坐标），供去重/翻译/质检链复用"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["pdf.blocks"]
+output_types = ["text.segments"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 120
+concurrency = 4
+max_attempts = 2

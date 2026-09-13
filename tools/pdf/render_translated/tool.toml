@@ -1,0 +1,21 @@
+[tool]
+id = "pdf.render.translated"
+name = "版式翻译渲染"
+version = "1.0.0"
+tags = ["渲染", "文档", "翻译"]
+description = "版式块 + 译文 → 原位覆盖单语 PDF / 左右分栏双语对照 PDF（内嵌 Noto Sans SC，自动缩放，溢出统计）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf", "pdf.blocks"]
+output_types = ["file.pdf"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 900
+concurrency = 2
+max_attempts = 2

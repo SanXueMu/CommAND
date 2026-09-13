@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file", "blocks", "translations"],
+  "properties": {
+    "file": {"title": "版式源文件", "type": "string", "description": "pdf.extract.blocks 的 render_file"},
+    "blocks": {"title": "版式块", "type": "array", "items": {"type": "object"}},
+    "index_map": {"title": "去重映射", "type": ["array", "null"], "items": {"type": "integer"}},
+    "date_maps": {"title": "日期回插表", "type": ["array", "null"], "items": {"type": "object"}},
+    "translations": {"title": "译文", "type": "array", "items": {"type": "string"}},
+    "statuses": {"title": "质检状态", "type": ["array", "null"], "items": {"type": "string"}},
+    "mode": {"title": "渲染模式", "type": "string", "enum": ["overlay", "bilingual"], "default": "overlay"},
+    "font_size": {"title": "基准字号", "type": ["number", "null"], "default": 11},
+    "min_font_size": {"title": "最小字号", "type": ["number", "null"], "default": 5},
+    "col_width": {"title": "译文栏宽", "type": ["number", "null"], "default": 300},
+    "output_name": {"title": "输出文件名", "type": ["string", "null"]}
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["path", "name", "mode", "pages", "segments", "drawn", "overflow"],
+  "properties": {
+    "path": {"type": "string"},
+    "name": {"type": "string"},
+    "mode": {"enum": ["overlay", "bilingual"]},
+    "pages": {"type": "integer"},
+    "segments": {"type": "integer"},
+    "drawn": {"type": "integer"},
+    "overflow": {"type": "integer"},
+    "font": {"type": "string"}
+  }
+}
