@@ -71,3 +71,27 @@ def test_quality_batch_parallel_marks_review(monkeypatch):
     assert res["b"] == ("fixed", False)
     assert res["c"] == ("good", True)
     assert len(res) == 3
+
+
+def test_mt_batches_capped_and_others_not(monkeypatch):
+    """qwen-mt* 的批必须压到 MT_BATCH_SIZE 内（多条目分隔符协议在 20 条起截断）。"""
+    sizes = []
+
+    def fake_sep(client, model, texts, source_lang, target_lang, terms=None):
+        sizes.append(len(texts))
+        return [f"译文{i}" for i in range(len(texts))], {}
+
+    monkeypatch.setattr(E, "call_batch_separator", fake_sep)
+    monkeypatch.setattr(E, "verify_pair", lambda src, dst: (True, ""))
+
+    texts = [f"item {i}" for i in range(35)]
+
+    out = E.translate_texts(None, texts, model="qwen-mt-flash", concurrency=2)
+    assert sum(sizes) == 35
+    assert max(sizes) <= E.MT_BATCH_SIZE
+    assert len(out) == 35
+
+    sizes.clear()
+    E.translate_texts(None, texts, model="qwen3.7-flash", concurrency=2)
+    assert sum(sizes) == 35
+    assert max(sizes) == 35

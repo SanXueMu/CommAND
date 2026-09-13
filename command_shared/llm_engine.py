@@ -21,8 +21,10 @@ DEFAULT_MODEL = "qwen-mt-flash"
 DEFAULT_FALLBACK_MODEL = "qwen3.7-flash"
 DEFAULT_PREMIUM_MODEL = "qwen3.7-plus"
 DEFAULT_BATCH_SIZE = 50
-DEFAULT_CONCURRENCY = 4
+DEFAULT_CONCURRENCY = 8
 DEFAULT_MAX_BATCH_CHARS = 6000
+MT_BATCH_SIZE = 10
+MT_MAX_BATCH_CHARS = 600
 DEFAULT_ALIGN_FAIL_SWITCH = 0.02
 DEFAULT_TIMEOUT_S = 120.0
 DEFAULT_MAX_RETRIES = 1
@@ -321,6 +323,11 @@ def translate_texts(
         return results
 
     # 批切分：条数 + 字符双预算（长值自动细分批，防单批延迟爆炸）
+    # MT 专用模型（qwen-mt*）对「多条目分隔符」协议有明显上限：实测 10 条内 100% 对齐，
+    # 20 条起输出截断（ct 不再增长）→ 自动压小批，避免掉到兜底 JSON 路线。
+    if (model or "").startswith("qwen-mt"):
+        batch_size = min(batch_size, MT_BATCH_SIZE)
+        max_batch_chars = min(max_batch_chars, MT_MAX_BATCH_CHARS)
     batches: list[list[str]] = []
     cur: list[str] = []
     cur_chars = 0
