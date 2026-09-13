@@ -123,8 +123,7 @@ FLOWS: dict[str, dict] = {
                 "target_lang": "{{ input.target_lang }}",
                 "source_lang": "{{ input.source_lang }}",
                 "terms": "{{ input.terms }}",
-                "model": "{{ input.model }}",
-                "premium": True}},
+                "model": "{{ input.model }}"}},
             {"tool": "text.verify.fidelity", "input": {
                 "sources": "{{ step[2].output.unique }}",
                 "translations": "{{ prev.translations }}"}},
@@ -176,8 +175,7 @@ FLOWS: dict[str, dict] = {
                 "target_lang": "{{ input.target_lang }}",
                 "source_lang": "{{ input.source_lang }}",
                 "terms": "{{ input.terms }}",
-                "model": "{{ input.model }}",
-                "premium": True}},
+                "model": "{{ input.model }}"}},
             {"tool": "text.verify.fidelity", "input": {
                 "sources": "{{ step[2].output.unique }}",
                 "translations": "{{ prev.translations }}"}},
