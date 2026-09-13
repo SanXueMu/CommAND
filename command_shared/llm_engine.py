@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any, Callable
 
@@ -28,6 +30,13 @@ MT_MAX_BATCH_CHARS = 600
 DEFAULT_ALIGN_FAIL_SWITCH = 0.02
 DEFAULT_TIMEOUT_S = 120.0
 DEFAULT_MAX_RETRIES = 1
+# 限流：DashScope 对 qwen-mt* 有请求频率上限（实测 ~120 RPM 触发 limit_requests）。
+# 跨线程均匀限速 + 429 指数退避重试，避免一条限流就把整条 run 判死。
+MT_MIN_INTERVAL_S = 1.0
+RATE_LIMIT_RETRIES = 6
+RATE_LIMIT_BASE_SLEEP = 1.0
+_rate_lock = threading.Lock()
+_last_call: dict[str, float] = {}
 
 
 class TranslationError(RuntimeError):
@@ -53,15 +62,36 @@ def error_detail(exc: Exception) -> str:
     return f"{code or type(exc).__name__}: {msg or exc}"[:200]
 
 
+_FATAL_DETAIL_KEYS = (
+    "insufficient", "quota", "arrears", "欠费", "not authorized",
+    "permission", "invalid_api_key", "account",
+)
+_RETRIABLE_STATUS = (429, 500, 502, 503, 504)
+
+
 def _is_fatal_auth(exc: Exception) -> bool:
-    """401 致命；403/429 中限流与内容审核不致命（走兜底继续），其余（欠费/无权限）中止。"""
+    """401/欠费/无权限致命；限流（limit_requests）与内容审核一律不致命（重试或兜底）。"""
     status = getattr(exc, "status_code", None)
     if status == 401:
         return True
     if status in (403, 429):
         detail = error_detail(exc).lower()
-        return not ("throttl" in detail or "datainspection" in detail or "ratelimit" in detail)
+        if any(k in detail for k in ("limit_requests", "throttl", "ratelimit", "datainspection")):
+            return False
+        return any(k in detail for k in _FATAL_DETAIL_KEYS)
     return False
+
+
+def _throttle(key: str, min_interval: float) -> None:
+    """跨线程均匀限速：为每个 key 预留时间槽（并发下也保持稳定请求速率）。"""
+    if min_interval <= 0:
+        return
+    with _rate_lock:
+        now = time.monotonic()
+        start = max(now, _last_call.get(key, 0.0) + min_interval)
+        _last_call[key] = start
+    if start > now:
+        time.sleep(start - now)
 
 
 def call_chat(
@@ -84,26 +114,34 @@ def call_chat(
     # 非 MT 模型关闭思考：qwen3.x 默认推理会为一批 50 条吐上万 completion token（实测 87s/批）
     if not (model or "").startswith("qwen-mt"):
         extra["enable_thinking"] = False
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": f"{system}\n\n{user}"}],
-            extra_body=extra or None,
-        )
-        u = getattr(resp, "usage", None)
-        usage = (
-            {"prompt_tokens": u.prompt_tokens, "completion_tokens": u.completion_tokens}
-            if u
-            else None
-        )
-        return resp.choices[0].message.content or "", usage
-    except APIStatusError as exc:
-        if _is_fatal_auth(exc):
-            raise TranslationError(
-                f"任务中止（{exc.status_code}，模型 {model}）{error_detail(exc)}——"
-                "请检查该模型的额度/权限或 API_KEY"
-            ) from exc
-        raise
+    if (model or "").startswith("qwen-mt"):
+        _throttle("qwen-mt", MT_MIN_INTERVAL_S)
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": f"{system}\n\n{user}"}],
+                extra_body=extra or None,
+            )
+            u = getattr(resp, "usage", None)
+            usage = (
+                {"prompt_tokens": u.prompt_tokens, "completion_tokens": u.completion_tokens}
+                if u
+                else None
+            )
+            return resp.choices[0].message.content or "", usage
+        except APIStatusError as exc:
+            if _is_fatal_auth(exc):
+                raise TranslationError(
+                    f"任务中止（{exc.status_code}，模型 {model}）{error_detail(exc)}——"
+                    "请检查该模型的额度/权限或 API_KEY"
+                ) from exc
+            status = getattr(exc, "status_code", None)
+            if status in _RETRIABLE_STATUS and attempt < RATE_LIMIT_RETRIES:
+                time.sleep(RATE_LIMIT_BASE_SLEEP * (2 ** attempt))
+                continue
+            raise
+    raise TranslationError(f"重试 {RATE_LIMIT_RETRIES} 次仍失败（模型 {model}）")
 
 
 def merge_usage(a: dict | None, b: dict | None) -> dict | None:

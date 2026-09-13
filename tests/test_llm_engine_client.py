@@ -3,7 +3,10 @@
 背景：qwen-mt* 不接受 system 角色、也不接受 enable_thinking；而 qwen3.x 默认开思考，
 一批 50 条会吐出上万 completion token（实测 87s/批）→ 必须显式关闭。
 """
+import time
 from types import SimpleNamespace
+
+import pytest
 
 from command_shared import llm_engine as E
 
@@ -95,3 +98,62 @@ def test_mt_batches_capped_and_others_not(monkeypatch):
     E.translate_texts(None, texts, model="qwen3.7-flash", concurrency=2)
     assert sum(sizes) == 35
     assert max(sizes) == 35
+
+
+# ---------- 限流（429 limit_requests）不得中止整条 run ----------
+
+import httpx  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+
+def _api_error(status: int, code: str, message: str):
+    req = httpx.Request("POST", "https://example.test/chat/completions")
+    body = {"error": {"code": code, "message": message}}
+    resp = httpx.Response(status, request=req, json=body)
+    return __import__("openai").APIStatusError(message, response=resp, body=body)
+
+
+def test_rate_limit_not_fatal_but_quota_is():
+    assert E._is_fatal_auth(_api_error(429, "limit_requests", "You have exceeded your current request limit")) is False
+    assert E._is_fatal_auth(_api_error(403, "Arrearage", "insufficient quota")) is True
+    assert E._is_fatal_auth(_api_error(401, "invalid_api_key", "bad key")) is True
+
+
+class _FlakyClient:
+    def __init__(self, failures: int = 0, status: int = 429, code: str = "limit_requests",
+                 message: str = "You have exceeded your current request limit"):
+        self.failures, self.calls = failures, 0
+        self._err = (status, code, message)
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kwargs):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise _api_error(*self._err)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="译文"))], usage=None
+        )
+
+
+def test_call_chat_retries_on_rate_limit(monkeypatch):
+    monkeypatch.setattr(E, "MT_MIN_INTERVAL_S", 0.0)
+    monkeypatch.setattr(E, "RATE_LIMIT_BASE_SLEEP", 0.0)
+    client = _FlakyClient(failures=2)
+    text, usage = E.call_chat(client, "qwen-mt-flash", "sys", "user")
+    assert text == "译文"
+    assert client.calls == 3
+
+
+def test_call_chat_aborts_on_quota(monkeypatch):
+    monkeypatch.setattr(E, "MT_MIN_INTERVAL_S", 0.0)
+    with pytest.raises(E.TranslationError):
+        E.call_chat(_FlakyClient(failures=99, status=403, code="Arrearage", message="insufficient quota"),
+                    "qwen-mt-flash", "sys", "user")
+
+
+def test_throttle_spaces_calls():
+    E._last_call.clear()
+    t0 = time.monotonic()
+    E._throttle("k-test", 0.05)
+    E._throttle("k-test", 0.05)
+    assert time.monotonic() - t0 >= 0.045
