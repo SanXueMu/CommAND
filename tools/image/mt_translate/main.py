@@ -19,7 +19,8 @@ def _resolve_key(ctx, key_name: str | None) -> dict:
     if key_name:
         entry = keys.get(key_name)
         if entry is None:
-            raise _ToolError(f"密钥不存在: {key_name}")
+            raise ToolPauseError(f"密钥不存在: {key_name}",
+                                 hint="请在「设置 → APIKey管理」新增该名称的密钥后点「继续」")
         return entry
     for entry in keys.values():
         if entry.get("is_default"):
@@ -28,13 +29,13 @@ def _resolve_key(ctx, key_name: str | None) -> dict:
 
 
 def _ToolError(message: str):
-    from core.errors import ToolDomainError
+    from core.errors import ToolDomainError, ToolPauseError
 
     return ToolDomainError(message)
 
 
 from command_shared import image_translate  # noqa: E402 —— 与工具入口同层导入（inproc）
-from core.errors import ToolUnavailableError  # noqa: E402
+from core.errors import ToolPauseError, ToolUnavailableError  # noqa: E402
 
 
 def run(input: dict, ctx, emit) -> dict:

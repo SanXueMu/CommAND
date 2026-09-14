@@ -240,3 +240,42 @@ def test_tool_defaults_fallback_model_when_key_absent(tmp_path, monkeypatch):
     assert submitted == [it.DEFAULT_IMAGE_MODEL, it.DEFAULT_IMAGE_FALLBACK_MODEL], submitted
     assert out["model"] == it.DEFAULT_IMAGE_FALLBACK_MODEL
     assert out["fallback_used"] is True
+
+
+def test_missing_named_key_pauses_for_manual_fix(tmp_path, monkeypatch):
+    """指定了不存在的密钥名 → **暂停**（不是重试后 failed_review）：
+    用户去「APIKey管理」补上同名密钥，再点「继续」即可（2026-09-14 线上：key_name=测试 被重试 3 次）。"""
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+    ctx = _FakeCtx()
+    ctx.keys = {"其它密钥": {"api_key": "sk-x"}}
+    from importlib import import_module
+    from core.errors import ToolPauseError
+    tool = import_module("tools.image.mt_translate.main")
+    with pytest.raises(ToolPauseError, match="密钥不存在") as err:
+        tool.run({"file": str(_img(tmp_path)), "key_name": "测试"}, ctx, ctx.emit)
+    assert "APIKey管理" in (err.value.hint or "")
+
+
+def test_batch_aborts_early_when_model_unavailable(tmp_path, monkeypatch):
+    """模型不可用（403）→ 第 1 页就中止并抛 ToolUnavailableError，不再把其余页都试一遍。"""
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+    ctx = _FakeCtx()
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/api/v1/uploads" in str(request.url):
+            return httpx.Response(403, json={"code": "AccessDenied",
+                                             "message": "Access denied by API-Key restrictions."})
+        calls["n"] += 1
+        return httpx.Response(500, json={"message": "unexpected"})
+
+    monkeypatch.setattr(it, "make_client", lambda base_url=None, timeout=it.TIMEOUT_S: _client(handler))
+    from importlib import import_module
+    from core.errors import ToolUnavailableError
+    tool = import_module("tools.image.batch_translate.main")
+    images = []
+    for i in range(6):
+        p = tmp_path / f"p{i}.png"; p.write_bytes(b"PNG"); images.append(str(p))
+    with pytest.raises(ToolUnavailableError, match="不可用"):
+        tool.run({"images": images, "key_name": None, "target_lang": "Chinese",
+                  "concurrency": 1}, ctx, ctx.emit)

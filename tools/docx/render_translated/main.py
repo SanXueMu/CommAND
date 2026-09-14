@@ -30,7 +30,7 @@ def run(input: dict, ctx, emit) -> dict:
 
     from docx import Document
 
-    from command_shared.docx_render import render_document
+    from command_shared.docx_render import build_document_from_units, render_document
 
     data_dir = Path(os.environ.get("COMMAND_DATA_DIR", "data"))
     out_dir = data_dir / "outputs" / getattr(ctx, "handle", "adhoc")
@@ -38,7 +38,17 @@ def run(input: dict, ctx, emit) -> dict:
     out_name = input.get("output_name") or f"{path.stem}_{MODE_LABELS[mode]}.docx"
     out_path = out_dir / out_name
 
-    document = Document(str(path))
+    # 源是 docx → 在原文件副本上回填（保留样式/图片/表格）；否则（pdf/txt 文档翻译链）
+    # 按单元新建骨架——这两条流的产物就是「双语 docx」，没有可回填的原 docx。
+    built = False
+    element_map = None
+    if path.suffix.lower() in (".docx", ".docm"):
+        try:
+            document = Document(str(path))
+        except Exception:  # noqa: BLE001 —— 非 docx 包（伪装后缀/损坏）退化为新建
+            document, element_map, built = *build_document_from_units(units), True
+    else:
+        document, element_map, built = *build_document_from_units(units), True
     stats = render_document(
         document,
         units=units,
@@ -48,10 +58,13 @@ def run(input: dict, ctx, emit) -> dict:
         translations=input.get("translations"),
         statuses=input.get("statuses"),
         col_classes=input.get("col_classes"),
+        element_map=element_map,
         mode=mode,
         mark_review=bool(input.get("mark_review", True)),
     )
     document.save(str(out_path))
 
-    emit({"phase": "rendered", "mode": mode, "path": str(out_path), **stats})
-    return {"path": str(out_path), "name": out_name, "mode": mode, **stats}
+    emit({"phase": "rendered", "mode": mode, "path": str(out_path),
+          "built_from_units": built, **stats})
+    return {"path": str(out_path), "name": out_name, "mode": mode,
+            "built_from_units": built, **stats}

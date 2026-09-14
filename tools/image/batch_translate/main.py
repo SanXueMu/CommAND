@@ -15,13 +15,13 @@ from pathlib import Path
 
 
 def _error(message: str):
-    from core.errors import ToolDomainError
+    from core.errors import ToolDomainError, ToolPauseError
 
     return ToolDomainError(message)
 
 
 from command_shared import image_translate  # noqa: E402
-from core.errors import ToolUnavailableError  # noqa: E402
+from core.errors import ToolPauseError, ToolUnavailableError  # noqa: E402
 
 
 def _resolve_key(ctx, key_name: str | None) -> dict:
@@ -31,7 +31,8 @@ def _resolve_key(ctx, key_name: str | None) -> dict:
     if key_name:
         entry = keys.get(key_name)
         if entry is None:
-            raise _error(f"密钥不存在: {key_name}")
+            raise ToolPauseError(f"密钥不存在: {key_name}",
+                             hint="请在「设置 → APIKey管理」新增该名称的密钥后点「继续」")
         return entry
     for entry in keys.values():
         if entry.get("is_default"):
@@ -114,6 +115,7 @@ def run(input: dict, ctx, emit) -> dict:
     with make_client(input.get("base_url") or key.get("base_url")) as client:
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
             futures = [pool.submit(one, client, i, p) for i, p in enumerate(paths)]
+            unavailable: str | None = None
             for future in futures:
                 entry = future.result()
                 results[entry["index"] - 1] = entry
@@ -124,10 +126,19 @@ def run(input: dict, ctx, emit) -> dict:
                 else:
                     emit({"phase": "page_failed", "done": done["n"], "total": len(paths),
                           "page": entry["index"], "error": entry["error"]})
+                    # 能力不可用（模型未开通/无权限）→ 立刻停：不必把其余几十页都试一遍
+                    # （线上：24 页 × 403，白等一圈才降级）
+                    if unavailable is None and image_translate.is_unavailable_error(entry["error"]):
+                        unavailable = str(entry["error"])
+                        for pending in futures:
+                            pending.cancel()
+                        break
 
     items = [r for r in results if r is not None]
     ok_items = [r for r in items if r["ok"]]
     elapsed = round(time.monotonic() - started, 1)
+    if unavailable is not None and not ok_items:
+        raise ToolUnavailableError(f"图片翻译不可用（已提前中止）：{unavailable[:200]}")
     if not ok_items:
         reasons = "；".join(f"第{r['index']}页 {r['error']}" for r in items[:3])
         message = f"全部 {len(items)} 页翻译失败：{reasons}"

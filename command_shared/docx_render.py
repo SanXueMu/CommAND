@@ -114,16 +114,56 @@ def _write_cell(cell: Any, text: str, status: str, mode: str, mark_review: bool,
     stats["inserted"] += 1
 
 
+def build_document_from_units(units: list[dict]) -> tuple[Any, dict[str, Any]]:
+    """源不是 docx（pdf/txt 文档翻译流）时：**按单元顺序新建文档** + 显式元素映射。
+
+    关键点：pdf/txt 的 unit_id 自成体系（`pdf.extract.pages` 用 `"1"`/`"1T0"`、
+    `txt.extract.text` 用文件名），**与 docx 的 `p{i}/t{i}`（body 序）不兼容**——
+    所以不能靠 `body_index_map` 反查，必须把「我建的元素」按 unit_id 直接登记 ✓
+    （2026-09-14 线上：文档翻译流产物为空 / IndexError 的根因）。
+    """
+    from docx import Document
+
+    document = Document()
+    element_map: dict[str, Any] = {}
+    for unit in units or []:
+        unit_id = unit.get("unit_id")
+        if unit.get("unit_type") == "table":
+            rows = [r for r in (unit.get("rows") or [])]
+            if not rows:
+                continue
+            width = max((len(r) for r in rows), default=0)
+            if not width:
+                continue
+            table = document.add_table(rows=len(rows), cols=width)
+            for r, row in enumerate(rows):
+                for c in range(width):
+                    value = row[c] if c < len(row) else ""
+                    table.rows[r].cells[c].text = "" if value is None else str(value)
+            if unit_id is not None:
+                element_map[str(unit_id)] = table
+        else:
+            paragraph = document.add_paragraph(unit.get("text") or "")
+            if unit_id is not None:
+                element_map[str(unit_id)] = paragraph
+    return document, element_map
+
+
 def render_document(document: Any, *, units: list[dict], ranges: list[dict] | None,
                     index_map: list[int] | None, date_maps: list[dict] | None,
                     translations: list[str] | None, statuses: list[str] | None,
                     col_classes: dict[str, list[dict]] | None = None,
-                    mode: str = "bilingual", mark_review: bool = True) -> dict[str, int]:
-    """按单元组回填译文（overlay 原位覆盖 / bilingual 段落对照），返回统计。"""
+                    mode: str = "bilingual", mark_review: bool = True,
+                    element_map: dict[str, Any] | None = None) -> dict[str, int]:
+    """按单元组回填译文（overlay 原位覆盖 / bilingual 段落对照），返回统计。
+
+    element_map 缺省按 docx body 序（`p{i}/t{i}`）反查；源是 pdf/txt 时由
+    `build_document_from_units` 传入显式映射（unit_id 体系不同）。
+    """
     if mode not in ("overlay", "bilingual"):
         raise ValueError(f"未知渲染模式: {mode}")
     range_by_unit = {r["unit_id"]: r for r in (ranges or [])}
-    element_map = body_index_map(document)
+    element_map = element_map or body_index_map(document)
     stats = {"units": 0, "replaced": 0, "inserted": 0, "review": 0, "skipped": 0, "chars_out": 0}
 
     for unit in units or []:

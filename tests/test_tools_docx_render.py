@@ -273,3 +273,59 @@ def test_manifest_declares_expected_io():
     assert manifest.tool.id == "docx.render.translated"
     assert manifest.io.output_types == ["file.docx"]
     assert manifest.io.input_schema["properties"]["mode"]["default"] == "bilingual"
+
+
+# ── 2026-09-14 线上：pdf/txt「文档翻译」链（源不是 docx）───────────────────────
+def test_render_builds_document_when_source_is_not_docx(tmp_path, monkeypatch):
+    """pdf/txt 链的 unit_id 自成体系（"1"/"1T0"/文件名），与 docx 的 p{i}/t{i} 不兼容。
+
+    修复前：`Document(pdf)` 直接抛错 / 或全部单元 skipped → 产物为空（线上 IndexError 根因）。
+    现在：按 units 新建骨架 + 显式元素映射，照常产出双语 docx。
+    """
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+    pdf = tmp_path / "合同.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")          # 非 docx：走「新建骨架」分支
+    units = [
+        {"unit_id": "1", "unit_type": "text", "text": "HELLO WORLD"},
+        {"unit_id": "2", "unit_type": "text", "text": "SECOND LINE"},
+        {"unit_id": "3T0", "unit_type": "table", "rows": [["Item", "Qty"], ["Cable", "10"]]},
+    ]
+    out = _run({
+        "file": str(pdf), "mode": "bilingual", "units": units,
+        "ranges": [{"unit_id": "1", "start": 0, "count": 1},
+                   {"unit_id": "2", "start": 1, "count": 1},
+                   {"unit_id": "3T0", "start": 2, "count": 2}],
+        "index_map": [0, 1, 2, 3], "date_maps": None,
+        "translations": ["你好世界", "第二行", "项目", "数量"], "statuses": ["ok"] * 4,
+    })
+    assert out["built_from_units"] is True
+    assert out["inserted"] >= 3 and out["skipped"] == 0
+
+    import zipfile
+    from html import unescape
+    with zipfile.ZipFile(out["path"]) as z:
+        xml = unescape(z.read("word/document.xml").decode("utf-8", "ignore"))
+    assert "你好世界" in xml and "第二行" in xml          # 译文进了产物
+    assert "HELLO WORLD" in xml and "SECOND LINE" in xml  # 原文保留（双语对照）
+    assert "项目" in xml                                   # 表格单元格也回填
+
+
+def test_render_txt_single_unit_uses_explicit_map(tmp_path, monkeypatch):
+    """txt 链：unit_id 是文件名（与 p{i} 完全不同）——靠显式映射才能回填。"""
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+    txt = tmp_path / "note.txt"
+    txt.write_text("PLAIN TEXT\n", encoding="utf-8")
+    out = _run({
+        "file": str(txt), "mode": "bilingual",
+        "units": [{"unit_id": "note.txt", "unit_type": "text", "text": "PLAIN TEXT"}],
+        "ranges": [{"unit_id": "note.txt", "start": 0, "count": 1}],
+        "index_map": [0], "date_maps": None,
+        "translations": ["纯文本"], "statuses": ["ok"],
+    })
+    assert out["built_from_units"] is True and out["skipped"] == 0
+
+    import zipfile
+    from html import unescape
+    with zipfile.ZipFile(out["path"]) as z:
+        xml = unescape(z.read("word/document.xml").decode("utf-8", "ignore"))
+    assert "纯文本" in xml and "PLAIN TEXT" in xml

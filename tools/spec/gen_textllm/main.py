@@ -10,7 +10,7 @@ from pathlib import Path
 
 from command_shared import chat as chat_mod
 from command_shared.spec_gen import SPEC_BUILDER_SYSTEM, build_spec_user, parse_spec_json
-from core.errors import ToolDomainError
+from core.errors import ToolDomainError, ToolPauseError
 
 DEFAULT_MODEL = "qwen-plus"
 
@@ -22,7 +22,8 @@ def _resolve_key(ctx, key_name: str | None) -> dict:
     if key_name:
         entry = keys.get(key_name)
         if entry is None:
-            raise ToolDomainError(f"密钥不存在: {key_name}")
+            raise ToolPauseError(f"密钥不存在: {key_name}",
+                                 hint="请在「设置 → APIKey管理」新增该名称的密钥后点「继续」")
         return entry
     for entry in keys.values():
         if entry.get("is_default"):
