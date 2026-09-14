@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file", "units", "translations"],
+  "properties": {
+    "file": {"title": "源 Word 文档", "type": "string", "description": "docx.extract.units 的 file（原始 docx，只读）"},
+    "units": {"title": "单元组", "type": "array", "items": {"type": "object"}},
+    "ranges": {"title": "单元区间", "type": ["array", "null"], "items": {"type": "object"}},
+    "index_map": {"title": "去重映射", "type": ["array", "null"], "items": {"type": "integer"}},
+    "date_maps": {"title": "日期回插表", "type": ["array", "null"], "items": {"type": "object"}},
+    "translations": {"title": "译文", "type": "array", "items": {"type": "string"}},
+    "statuses": {"title": "质检状态", "type": ["array", "null"], "items": {"type": "string"}},
+    "col_classes": {"title": "表格列分类", "type": ["object", "null"]},
+    "mode": {
+      "title": "输出模式",
+      "type": ["string", "null"],
+      "enum": ["overlay", "bilingual", null],
+      "default": "bilingual",
+      "description": "overlay 原位覆盖（单语）/ bilingual 段落对照（双语），默认双语对照"
+    },
+    "mark_review": {
+      "title": "标记待复核",
+      "type": ["boolean", "null"],
+      "default": true,
+      "description": "质检未过的单元在对照模式下加 ⚠️ 前缀"
+    },
+    "output_name": {"title": "输出文件名", "type": ["string", "null"]}
+  }
+}

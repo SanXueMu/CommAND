@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["path", "name", "mode", "units", "replaced", "inserted", "review", "skipped"],
+  "properties": {
+    "path": {"type": "string"},
+    "name": {"type": "string"},
+    "mode": {"enum": ["overlay", "bilingual"]},
+    "units": {"type": "integer", "description": "成功回填的单元数"},
+    "replaced": {"type": "integer", "description": "overlay：被替换的段落/单元格数"},
+    "inserted": {"type": "integer", "description": "bilingual：插入的译文段数（含单元格内）"},
+    "review": {"type": "integer", "description": "质检未过的单元数（译文仍写回）"},
+    "skipped": {"type": "integer", "description": "无译文/无区间而原样保留的单元数"},
+    "chars_out": {"type": "integer", "description": "写回的译文字符数"}
+  }
+}

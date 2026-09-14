@@ -1,0 +1,21 @@
+[tool]
+id = "docx.render.translated"
+name = "docx 译文回填"
+version = "1.0.0"
+tags = ["渲染", "文档", "翻译"]
+description = "单元组 × 译文 → 原位覆盖单语 docx / 段落对照双语 docx（保留样式、标题级别、图片、表格结构）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.docx", "docx.units"]
+output_types = ["file.docx"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 600
+concurrency = 2
+max_attempts = 1
