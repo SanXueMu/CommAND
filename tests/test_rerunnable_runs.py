@@ -72,3 +72,21 @@ def test_error_message_is_reported():
     svc = _svc([_run("r1", "/u/A.pdf", "failed", "2026-09-14T12:00:00",
                      err={"kind": "unavailable", "message": "模型未开通"})])
     assert svc.rerunnable_runs(batch_id="b1")["files"][0]["error"] == "模型未开通"
+
+
+def test_done_files_marks_succeeded_even_when_latest_is_paused():
+    """done_files = 已有成功译文的文件（**与最新状态无关**）。
+
+    线上 PNG：降级到 skip 后最新一条是 paused，若前端用「待重跑清单」反推就会误判成
+    「已有成功译文」→ 失败的原流「重跑」被置灰，用户无法重试（2026-09-14）。
+    """
+    svc = _svc([
+        _run("r1", "/u/A.xlsx", "succeeded", "2026-09-14T12:00:00"),
+        _run("r2", "/u/B.png", "paused", "2026-09-14T13:00:00"),   # 从未成功，最新暂停
+        _run("r3", "/u/B.png", "failed", "2026-09-14T12:00:00"),
+        _run("r4", "/u/C.pdf", "failed", "2026-09-14T13:00:00"),   # 从未成功，待重跑
+    ])
+    out = svc.rerunnable_runs(batch_id="b1")
+    assert out["done_files"] == ["/u/A.xlsx"]
+    assert "/u/B.png" not in out["done_files"]      # 从未成功 → 不该被当成已完成
+    assert out["run_ids"] == ["r4"]                 # 最新 paused 的 B 不进待重跑清单（走「继续」）

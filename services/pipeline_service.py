@@ -676,7 +676,7 @@ class PipelineService:
         - 已成功过的文件即便后来某次重跑失败，也不需要再跑（交付物已在），否则计数会被
           历史失败的尝试虚高（2026-09-14 用户实测：界面 42，真实待处理 10）。
         - paused 不在内（那是「继续」的语义）。
-        返回 {count, run_ids, files:[{file,name,run_id,status,error}]}。
+        返回 {count, run_ids, files:[{file,name,run_id,status,error}], done_files:[已有成功译文的文件]}。
         """
         runs = self._pipeline_repo.list_runs(batch_id=batch_id, limit=limit)
         if flow_ids:
@@ -687,8 +687,10 @@ class PipelineService:
             key = str((run.get("input") or {}).get("file") or run["id"])
             grouped.setdefault(key, []).append(run)
         files: list[dict[str, Any]] = []
+        done: list[str] = []
         for key, history in grouped.items():
             if any(r.get("status") == "succeeded" for r in history):
+                done.append(key)   # 已有成功译文：前端据此把「重跑」置灰（与是否还有失败尝试无关）
                 continue
             latest = history[0]
             if str(latest.get("status")) not in self.RERUNNABLE_STATUSES:
@@ -697,7 +699,8 @@ class PipelineService:
                 "file": key, "name": Path(key).name, "run_id": latest["id"],
                 "status": latest.get("status"), "error": (latest.get("error") or {}).get("message"),
             })
-        return {"count": len(files), "run_ids": [f["run_id"] for f in files], "files": files}
+        return {"count": len(files), "run_ids": [f["run_id"] for f in files], "files": files,
+                "done_files": done}
 
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
         """steps 快照：每步最新任务 + 定义工具名（工作区/任务中心的考证视图）。"""
