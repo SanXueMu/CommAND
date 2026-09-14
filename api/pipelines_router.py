@@ -101,9 +101,10 @@ def list_runs(pipeline_id: str | None = None, limit: int = 50, offset: int = 0) 
 
 
 @runs_router.delete("/{run_id}")
-def delete_run(run_id: str) -> dict:
+def delete_run(run_id: str, purge_files: bool = True) -> dict:
+    """删除任务。purge_files=true（默认）连带删除该任务全部产物目录（不可恢复）。"""
     try:
-        return deps.get_pipeline_service().delete_run(run_id)
+        return deps.get_pipeline_service().delete_run(run_id, purge_files=purge_files)
     except TaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except TaskConflictError as exc:

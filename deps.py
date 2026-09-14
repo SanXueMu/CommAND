@@ -106,4 +106,5 @@ def get_pipeline_service() -> PipelineService:
         tool_repo=get_tool_repo(),
         dispatch_service=get_dispatch_service(),
         run_event_repo=get_run_event_repo(),
+        data_dir=get_config().data_dir,
     )

@@ -91,12 +91,32 @@ class PipelineRepo:
         return int(row[0]) if row else 0
 
     def delete_run(self, run_id: str) -> None:
-        """删除 run：先解绑其任务（保留任务历史），再删 run（子 run 一并删）。"""
+        """删除 run（含子 run 整棵树、审计事件），解绑整棵子树的 tasks（保留任务历史）。
+
+        run_events.run_id 在 006 里是无级联外键（NO ACTION），不先清事件会
+        ForeignKeyViolation → 500（011 迁移已改 CASCADE，此处仍显式清理以防旧库未迁移）；
+        pipeline_runs.parent_run_id 同为无级联 self-FK，故按深度降序先子后父删除。
+        """
         with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                """
+                WITH RECURSIVE tree(id, depth) AS (
+                    SELECT id, 0 FROM pipeline_runs WHERE id = %s
+                    UNION ALL
+                    SELECT p.id, t.depth + 1
+                    FROM pipeline_runs p JOIN tree t ON p.parent_run_id = t.id
+                )
+                SELECT id FROM tree ORDER BY depth DESC
+                """,
+                (run_id,),
+            ).fetchall()
+            ids = [row[0] for row in rows]
             with conn.transaction():
-                conn.execute("UPDATE tasks SET pipeline_run = NULL WHERE pipeline_run = %s", (run_id,))
-                conn.execute("DELETE FROM pipeline_runs WHERE parent_run_id = %s", (run_id,))
-                conn.execute("DELETE FROM pipeline_runs WHERE id = %s", (run_id,))
+                conn.execute("DELETE FROM run_events WHERE run_id = ANY(%s)", (ids,))
+                conn.execute("UPDATE tasks SET pipeline_run = NULL WHERE pipeline_run = ANY(%s)",
+                             (ids,))
+                for rid in ids:
+                    conn.execute("DELETE FROM pipeline_runs WHERE id = %s", (rid,))
 
     def delete_definition(self, pipeline_id: str) -> None:
         with self._db.pool.connection() as conn:

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import time
+from pathlib import Path
 from typing import Any
 
 from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError, ToolUserError
@@ -18,6 +21,8 @@ PIPELINE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 FAILURE_STATUSES = {"failed", "failed_review", "cancelled", "interrupted"}
 RUN_TERMINAL = {"succeeded", "failed", "failed_review", "cancelled", "interrupted"}
+# 删除运行中的 run 时：中止后等待活跃任务收口的秒数（超时仍删，pending 回报）
+DELETE_ABORT_WAIT_S = 10.0
 
 
 class PipelineService:
@@ -35,6 +40,7 @@ class PipelineService:
         tool_repo: ToolRepo,
         dispatch_service: DispatchService,
         run_event_repo: RunEventRepo | None = None,
+        data_dir: Path | None = None,
     ) -> None:
         self._db = db
         self._pipeline_repo = pipeline_repo
@@ -42,6 +48,7 @@ class PipelineService:
         self._tool_repo = tool_repo
         self._dispatch = dispatch_service
         self._run_events = run_event_repo
+        self._data_dir = Path(data_dir) if data_dir is not None else None
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -561,11 +568,70 @@ class PipelineService:
             })
         return summary
 
-    def delete_run(self, run_id: str) -> dict[str, Any]:
+    def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:
+        """删除任务（含审计事件）；`purge_files` 连带删除其全部产物目录（结果与临时结果随任务绑定）。
+
+        运行中/暂停 → 先自动中止（cancelled 立即落库）并等待活跃任务收口（≤DELETE_ABORT_WAIT_S），
+        超时仍继续删除，pending 列表回报给调用方（避免与 worker 竞态）。
+        """
         run = self._pipeline_repo.get_run(run_id)
         if run is None:
             raise TaskNotFoundError(f"管线运行不存在: {run_id}")
+        aborted = False
+        pending: list[str] = []
         if run["status"] in ("running", "paused"):
-            raise TaskConflictError(f"运行中不可删除（请先取消）: {run_id}")
+            self.abort_run(run_id)
+            aborted = True
+            deadline = time.monotonic() + DELETE_ABORT_WAIT_S
+            while time.monotonic() < deadline:
+                pending = self._pipeline_repo.active_task_handles(run_id)
+                if not pending:
+                    break
+                time.sleep(0.5)
+        handles = [t["handle"] for rid in self._run_tree_ids(run_id)
+                   for t in self._task_repo.list_by_pipeline_run(rid)]
+        purged = self._purge_artifacts(handles) if purge_files else {
+            "files_removed": 0, "bytes_freed": 0, "dirs_removed": 0}
         self._pipeline_repo.delete_run(run_id)
-        return {"id": run_id, "status": "deleted"}
+        return {"id": run_id, "status": "deleted", "aborted": aborted,
+                "pending_tasks": pending, "purge_files": purge_files, **purged}
+
+    def _run_tree_ids(self, run_id: str) -> list[str]:
+        """run 及其全部子 run（workflow 的 pipeline 步产物也随父任务绑定）。"""
+        ids = [run_id]
+        seen = {run_id}
+        queue = [run_id]
+        while queue:
+            current = queue.pop()
+            for sub in self._pipeline_repo.get_subruns(current).values():
+                if sub["id"] not in seen:
+                    seen.add(sub["id"])
+                    ids.append(sub["id"])
+                    queue.append(sub["id"])
+        return ids
+
+    def _purge_artifacts(self, handles: list[str]) -> dict[str, int]:
+        """删除任务产物目录 `data/outputs/<handle>/`（最终产物与中间临时产物一并清）。"""
+        empty = {"files_removed": 0, "bytes_freed": 0, "dirs_removed": 0}
+        if self._data_dir is None or not handles:
+            return empty
+        root = (self._data_dir / "outputs")
+        if not root.is_dir():
+            return empty
+        root = root.resolve()
+        files_removed = bytes_freed = dirs_removed = 0
+        for handle in handles:
+            target = (root / str(handle)).resolve()
+            if root not in target.parents or not target.is_dir():  # 防越界与符号链接逃逸
+                continue
+            for path in target.rglob("*"):
+                if path.is_file():
+                    try:
+                        bytes_freed += path.stat().st_size
+                    except OSError:
+                        pass
+                    files_removed += 1
+            shutil.rmtree(target, ignore_errors=True)
+            dirs_removed += 1
+        return {"files_removed": files_removed, "bytes_freed": bytes_freed,
+                "dirs_removed": dirs_removed}
