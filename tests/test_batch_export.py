@@ -134,3 +134,45 @@ def test_batch_upload_marks_skip_and_writes_manifest(batch):
     assert manifest["root"] == "批"
     assert [f["rel"] for f in manifest["files"]] == ["A.pdf", "B.pptx"]
     assert manifest["files"][1]["skip"] is True
+
+
+def test_package_batch_prefers_successful_run_over_older_failed(batch):
+    """同一文件多条 run（失败降级 / 再运行）：导出必须取**成功**的那条产物，
+    不能被更早的 failed run 盖成 missing（list_runs 是 created_at DESC，旧实现会取最旧）。"""
+    c, tmp_path, service = batch
+    _manifest(tmp_path, "b3", [_entry(tmp_path, "批次", "合同.pdf", b"PDF")])
+    path = str(tmp_path / "uploads/批次/合同.pdf")
+    # 最新在前：成功 run 在前，更早的 failed run 在后（模拟降级场景）
+    service.runs["b3"] = [
+        {"id": "r_fb", "status": "succeeded", "created_at": "2026-09-14T10:05:00",
+         "input": {"file": path}, "fallback_of": "r_old"},
+        {"id": "r_old", "status": "failed", "created_at": "2026-09-14T10:00:00",
+         "input": {"file": path}},
+    ]
+    service.artifacts = {"r_fb": [_artifact(tmp_path, "h9", "合同_中文.pdf", b"OUT-FB")]}
+
+    resp = c.post("/api/files/package_batch", json={"batch_id": "b3"})
+    assert resp.status_code == 201
+    body = resp.json()
+    assert [t["rel"] for t in body["translated"]] == ["合同.pdf"]
+    assert body["missing"] == []
+    with zipfile.ZipFile(body["path"]) as z:
+        assert z.read("投标资料_中文/合同_中文.pdf") == b"OUT-FB"
+
+
+def test_package_batch_prefers_newest_when_same_status(batch):
+    """同状态（都成功）取最新那条（再运行场景：以最后一次结果为准）。"""
+    c, tmp_path, service = batch
+    _manifest(tmp_path, "b4", [_entry(tmp_path, "批次", "x.pdf", b"PDF")])
+    path = str(tmp_path / "uploads/批次/x.pdf")
+    service.runs["b4"] = [
+        {"id": "r_new", "status": "succeeded", "created_at": "2026-09-14T11:00:00",
+         "input": {"file": path}},
+        {"id": "r_old", "status": "succeeded", "created_at": "2026-09-14T09:00:00",
+         "input": {"file": path}},
+    ]
+    service.artifacts = {"r_new": [_artifact(tmp_path, "hn", "x_中文.pdf", b"NEW")],
+                         "r_old": [_artifact(tmp_path, "ho", "x_中文.pdf", b"OLD")]}
+    resp = c.post("/api/files/package_batch", json={"batch_id": "b4"})
+    with zipfile.ZipFile(resp.json()["path"]) as z:
+        assert z.read("投标资料_中文/x_中文.pdf") == b"NEW"

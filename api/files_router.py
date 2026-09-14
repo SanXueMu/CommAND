@@ -60,7 +60,7 @@ _MAX_PACKAGE_RUNS = 200
 def _label(raw: object) -> str:
     """压缩包名：清洗危险字符、折叠连续点、去掉首尾点下划线（中文/字母数字/._- 保留）。"""
     cleaned = re.sub(r"\.{2,}", ".", _UNSAFE.sub("_", str(raw or ""))).strip("_. ")
-    return (cleaned or "翻译成果")[:40]
+    return (cleaned or "翻译成果")[:80]
 
 
 def _data_dir() -> Path:
@@ -115,6 +115,13 @@ def _entry(path: Path, base: Path, skip_exts: set[str] | None = None,
     return item
 
 
+def _run_preference(run: dict) -> tuple[int, str]:
+    """批次导出挑 run 的优先级：成功(2) > 暂停/跳过(1) > 其它(0)，同级取最新（created_at 字符串可比）。"""
+    status = str(run.get("status") or "")
+    rank = 2 if status == "succeeded" else (1 if status in ("paused", "skipped") else 0)
+    return (rank, str(run.get("created_at") or ""))
+
+
 def _skipped_view(saved: list[dict]) -> list[dict]:
     """已跳过条目（空文件/PPT 等）：统一 [{name, reason}] 形状，供前端逐条展示。"""
     return [{"name": f["rel"], "reason": f.get("skip_reason") or _SKIP_REASON}
@@ -148,8 +155,13 @@ def _write_batch_manifest(batch_id: str, root: str, batch_dir: Path,
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# 目录/包名长度上限：Linux 单段 255 字节，取 100 兼顾中文（3 字节/字）与可读性；
+# 过短会把「合同全流程采购档案」这类真实目录名截成 ..._fo（2026-09-14 反馈）
+_NAME_MAX = 100
+
+
 def _new_batch_dir(label: str) -> Path:
-    safe = (_UNSAFE.sub("_", label).strip("_") or "batch")[:60]
+    safe = (_UNSAFE.sub("_", label).strip("_") or "batch")[:_NAME_MAX]
     target = Path(deps.get_config().data_dir) / "uploads" / date.today().isoformat() / f"{uuid.uuid4().hex[:8]}_{safe}"
     target.mkdir(parents=True, exist_ok=True)
     return target
@@ -478,10 +490,18 @@ def package_batch(body: PackageBatchBody) -> dict:
     if scope not in ("final", "all"):
         raise HTTPException(status_code=422, detail="scope 只支持 final / all")
     suffix = _UNSAFE.sub("_", body.suffix or "")[:16]
-    root = (_UNSAFE.sub("_", str(manifest.get("root") or "batch"))[:40] or "batch")
+    root = (_UNSAFE.sub("_", str(manifest.get("root") or "batch"))[:_NAME_MAX] or "batch")
     service = deps.get_pipeline_service()
     runs = service.list_runs(batch_id=body.batch_id, limit=_MAX_PACKAGE_RUNS)["runs"]
-    by_file = {str((r.get("input") or {}).get("file") or ""): r for r in runs}
+    # 同一文件可能有多条 run（再运行 / 失败降级）：**优先取成功的那条**，其次最新。
+    # 注意 list_runs 是 created_at DESC（最新在前），若直接字典推导会留下**最旧**的一条，
+    # 降级/再运行场景会把译文盖成失败任务（2026-09-14 修）。
+    by_file: dict[str, dict] = {}
+    for run in runs:
+        key = str((run.get("input") or {}).get("file") or "")
+        current = by_file.get(key)
+        if current is None or _run_preference(run) > _run_preference(current):
+            by_file[key] = run
     zip_path = _data_dir() / "exports" / f"{datetime.now():%Y%m%d-%H%M%S}_{_label(body.name or root)}.zip"
     zip_path.parent.mkdir(parents=True, exist_ok=True)
 
