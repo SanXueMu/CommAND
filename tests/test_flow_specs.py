@@ -12,6 +12,7 @@ register_translee_flows.py 的 FLOWS 是纯数据：步骤引用的**工具 id**
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -134,3 +135,80 @@ def test_translate_view_default_by_flow_stays_visible() -> None:
             assert flow_id in visible, f"{param['name']} 的 default_by_flow 流 {flow_id} 不在 when_flow 内"
             if param.get("type") == "select":
                 assert value in {o["value"] for o in param.get("options", [])}
+
+
+# ── 流模板入参键守卫（2026-09-14 线上事故根因）──────────────────────────────
+# 事故：PNG 全挂（模板要 input.domain_hint，声明发的是 image_domain_hint）、
+# PDF 全挂（前端按「扩展名默认流」取参数，实际跑的是探测后的图片流，漏发 image_model）。
+# 两处漂移的共性 = 「模板引用的键」与「前端能发出的键」不一致 → 引擎严格解析直接入队失败。
+# 下面两条守卫把这类漂移钉死在提交前。
+
+# 前端固定发送、不由声明参数渲染的核心键
+_CORE_INPUT_KEYS = {"file", "key_name", "source_lang", "target_lang", "terms", "reason"}
+_INPUT_REF_RE = re.compile(r"\{\{\s*input\.([A-Za-z_]\w*)")
+
+
+def _template_input_keys(value, acc: set[str]) -> set[str]:
+    """递归收集模板里引用的 input 键（{{ input.X }}，含嵌套 dict/list）。"""
+    if isinstance(value, str):
+        acc |= set(_INPUT_REF_RE.findall(value))
+    elif isinstance(value, dict):
+        for item in value.values():
+            _template_input_keys(item, acc)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _template_input_keys(item, acc)
+    return acc
+
+
+def _visible_param_names(flow_id: str) -> set[str]:
+    names: set[str] = set()
+    for param in TRANSLATE_VIEW["props"]["params"]:
+        if flow_id in param.get("when_flow", []):
+            names.add(param["name"])
+    return names
+
+
+def test_flow_templates_reference_keys_declared_in_flow_schema(register) -> None:
+    """① 模板引用的每个 input 键都必须在该流 INPUT_SCHEMAS.properties 里声明。"""
+    for flow_id, spec in register.FLOWS.items():
+        schema_props = set((register.INPUT_SCHEMAS.get(flow_id) or {}).get("properties") or {})
+        for index, step in enumerate(spec["steps"]):
+            for key in sorted(_template_input_keys(step["input"], set())):
+                assert key in schema_props, (
+                    f"{flow_id} 第 {index} 步模板引用 {{{{ input.{key} }}}}，"
+                    f"但该流 input_schema 未声明（前端表单不会有这个字段）")
+
+
+def test_flow_templates_reference_keys_frontend_can_send(register) -> None:
+    """② 模板引用的键必须是「前端在该流下能发出」的：声明参数（when_flow 命中）或核心键。
+
+    否则前端根本不发这个键 → 引擎严格解析 → 入队失败（线上事故类型）。
+    """
+    for flow_id, spec in register.FLOWS.items():
+        allowed = _visible_param_names(flow_id) | _CORE_INPUT_KEYS
+        for index, step in enumerate(spec["steps"]):
+            unreachable = sorted(_template_input_keys(step["input"], set()) - allowed)
+            assert not unreachable, (
+                f"{flow_id} 第 {index} 步模板引用了工作台声明里对该流不可见的键 {unreachable}"
+                f"（前端不会发送 → 入队必失败）；请把该键加入 store/site_views/translate.py 的 params"
+                f"（when_flow 含该流），或从模板里去掉")
+
+
+
+def test_on_failure_fallback_flow_is_registered(register) -> None:
+    """失败降级声明（015）的 fallback_flow 必须是本仓库已注册的流，且不能指向自身。"""
+    for flow_id, spec in register.FLOWS.items():
+        fallback = (spec.get("on_failure") or {}).get("fallback_flow")
+        if not fallback:
+            continue
+        assert fallback in register.FLOWS, f"{flow_id} 的 fallback_flow 未注册: {fallback}"
+        assert fallback != flow_id, f"{flow_id} 不能把自己声明为降级流（会无限降级）"
+
+
+def test_image_pdf_flow_falls_back_to_layout_flow(register) -> None:
+    """图片版 PDF 流（依赖 qwen-mt-image）必须声明降级到版式流——即用户口径的「原方案」。"""
+    spec = register.FLOWS["flow.translate.pdf.image"]
+    assert spec["on_failure"] == {"fallback_flow": "flow.translate.pdf.layout"}
+    # 版式流自身不得再声明降级（避免链式降级）
+    assert not register.FLOWS["flow.translate.pdf.layout"].get("on_failure")

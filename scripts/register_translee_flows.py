@@ -75,7 +75,8 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "source_lang": {"type": "string", "title": "源语言", "description": "留空自动识别；源或目标至少一方须为中文/英文"},
             "terms": {"type": "string", "format": "textarea", "title": "术语表",
                       "description": "每行：原文 => 译文（作为 terminologies 做术语干预）"},
-            "domain_hint": {"type": "string", "title": "领域提示", "description": "如 finance / legal"},
+            "image_domain_hint": {"type": "string", "title": "业务领域",
+                                  "description": "如 审计财务 / legal；留空则用模版声明的领域"},
             "image_segment": {"type": "boolean", "title": "仅翻译主体", "description": "商品图等只翻主体区域"},
         },
     },
@@ -254,6 +255,9 @@ FLOWS: dict[str, dict] = {
     },
     "flow.translate.pdf.image": {
         "name": "图片版 PDF 翻译",
+        # 失败降级（015/016）：qwen-mt-image 未开通/无权限/不存在时，自动改用版式翻译流
+        # （pdf.extract.blocks 自带 ocrmypdf 补文字层 → 文本翻译 → 双语/原位 PDF），即「原方案」
+        "on_failure": {"fallback_flow": "flow.translate.pdf.layout"},
         "doc_md": ("图片版 PDF 翻译全自动流（扫描件专用）：每页转图片 → 逐页图片翻译（qwen-mt-image，"
                    "并发 2 + RPM 60 限速，术语/业务域可干预）→ 译文页图按页序合成译文 PDF（保留原版式）。"
                    "产出为图片版 PDF（无文字层，不可选中搜索）；如需可搜索文字版，请先用 ocrmypdf 补文字层再走版式流。"),
@@ -296,8 +300,7 @@ FLOWS: dict[str, dict] = {
                 "target_lang": "{{ input.target_lang }}",
                 "source_lang": "{{ input.source_lang }}",
                 "terms": "{{ input.terms }}",
-                "domain_hint": "{{ input.domain_hint }}",
-                "image_segment": "{{ input.image_segment }}"}},
+                "domain_hint": "{{ input.image_domain_hint }}"}},
         ],
     },
     "flow.translate.pdf.layout": {
@@ -367,7 +370,8 @@ def main() -> None:
     for pid, spec in FLOWS.items():
         body = {"id": pid, "name": spec["name"], "steps": spec["steps"],
                 "doc_md": spec.get("doc_md"),
-                "input_schema": INPUT_SCHEMAS.get(pid)}
+                "input_schema": INPUT_SCHEMAS.get(pid),
+                "on_failure": spec.get("on_failure")}
         api("/api/pipelines", method="POST", body=body)
         print(f"[注册] {pid}（{spec['name']}，input_schema ✓）")
 
