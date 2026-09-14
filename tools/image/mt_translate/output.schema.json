@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["path", "name", "model", "image_count"],
+  "properties": {
+    "path": {"type": "string", "description": "译文图路径（outputs/<handle>/ 下）"},
+    "name": {"type": "string"},
+    "source_file": {"type": "string", "description": "原图路径（只读）"},
+    "model": {"type": "string", "description": "实际使用的模型"},
+    "fallback_used": {"type": "boolean", "description": "是否降级到备用模型"},
+    "task_id": {"type": "string"},
+    "image_count": {"type": "integer", "description": "计费图片数（0.004 元/张）"},
+    "source_lang": {"type": ["string", "null"]},
+    "target_lang": {"type": ["string", "null"]},
+    "elapsed_s": {"type": "number"},
+    "waited_s": {"type": "number", "description": "因限速等待的秒数"}
+  }
+}

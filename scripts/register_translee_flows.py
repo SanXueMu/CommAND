@@ -6,6 +6,7 @@
 三级概念布局：
   工具（tools/ 目录 scan 注册）——translee 十件 + 共享基建
   普通流（FLOWS）——flow.translate.xlsx / pdf / txt / docx / pdf.layout（线性六步，每步 SSE 可观测）
+                   / image（单步图片翻译）
   工作流——暂无（翻译多样性在输入文件，无需模板/嵌套）
 
 已废弃（v1 验证期产物，脚本自动 DELETE）：dev.double.reverse / text.double_reverse /
@@ -35,6 +36,21 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
             "terms": {"type": "string", "format": "textarea", "title": "术语表",
                       "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
+        },
+    },
+    "flow.translate.image": {
+        "type": "object",
+        "required": ["file", "key_name", "target_lang"],
+        "properties": {
+            "file": {"type": "string", "format": "file", "title": "图片文件", "description": "png/jpg/jpeg/webp/tif/tiff/bmp"},
+            "key_name": {"type": "string", "title": "密钥名称", "description": "DashScope 密钥名"},
+            "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
+            "image_model": {"type": "string", "title": "图片翻译模型", "description": "留空用 qwen-mt-image-2.0（0.004 元/张，约 1 分钟/张）"},
+            "source_lang": {"type": "string", "title": "源语言", "description": "留空自动识别；源或目标至少一方须为中文/英文"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（作为 terminologies 做术语干预）"},
+            "domain_hint": {"type": "string", "title": "领域提示", "description": "如 finance / legal"},
+            "image_segment": {"type": "boolean", "title": "仅翻译主体", "description": "商品图等只翻主体区域"},
         },
     },
     "flow.translate.pdf": {
@@ -208,6 +224,23 @@ FLOWS: dict[str, dict] = {
                 "translations": "{{ step[3].output.translations }}",
                 "statuses": "{{ step[4].output.statuses }}",
                 "mode": "{{ input.mode }}"}},
+        ],
+    },
+    "flow.translate.image": {
+        "name": "图片翻译",
+        "doc_md": ("图片翻译全自动流：本地图片 → DashScope 临时上传 → 异步图片翻译（qwen-mt-image-2.0）"
+                   "→ 下载译文图（保留排版）。术语干预对接术语表；主模型不可用自动降级备用模型。"
+                   "注意 qwen-mt-image-2.0 RPM=1，约 1 分钟/张。"),
+        "steps": [
+            {"tool": "image.mt.translate", "input": {
+                "file": "{{ input.file }}",
+                "model": "{{ input.image_model }}",
+                "key_name": "{{ input.key_name }}",
+                "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
+                "domain_hint": "{{ input.domain_hint }}",
+                "image_segment": "{{ input.image_segment }}"}},
         ],
     },
     "flow.translate.pdf.layout": {

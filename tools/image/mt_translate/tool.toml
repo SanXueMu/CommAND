@@ -1,0 +1,22 @@
+[tool]
+id = "image.mt.translate"
+name = "图片翻译"
+version = "1.0.0"
+tags = ["翻译", "图片", "多模态"]
+description = "图片 → 图片翻译（qwen-mt-image-2.0，0.004 元/张）：保留排版，术语干预，失败自动降级备用模型"
+doc = "README.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.image"]
+output_types = ["image.translated"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 1800
+concurrency = 1
+max_attempts = 2
