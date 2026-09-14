@@ -52,6 +52,13 @@ OCR_VIEW: dict = {
         "templatesPath": "/ocr/templates",
         "recordsPath": "/ocr/records",
         "dbsPath": "/ocr/records/dbs",
+        # 批量入口声明（存在才显示「单文件 / 批量」切换）：一次上传多文件/目录/压缩包，
+        # 逐文件各起一条识别任务（各自留记录与产物）
+        "batch": {
+            "extensions": [".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"],
+            "maxFiles": 200,
+            "maxTotalMB": 500,
+        },
         "builtinViews": _builtin_views() + _user_views(),
     },
 }
