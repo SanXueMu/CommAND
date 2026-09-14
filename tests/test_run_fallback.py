@@ -62,12 +62,16 @@ def stack(tmp_path):
     scheduler = Scheduler(db=db, runner=Runner(), task_repo=task_repo, tool_repo=tool_repo,
                           event_repo=EventRepo(db), config=load_config(".env"),
                           on_task_done=service.advance)
-    # 降级目标先注册（主流的 on_failure 指向它）
+    # 降级目标先注册（主流的 on_failure 指向它）。
+    # 它额外引用 `{{ input.model }}` —— 主流 input 里**没有**这个键（图片流用 image_model），
+    # 用来验证「降级继承 input」不因缺键而失败（I1）。
     service.register(SECONDARY, "降级目标流（文本翻译等价物）", [
-        {"tool": UNAVAILABLE_ID, "input": {"file": "{{ input.file }}"}},
+        {"tool": UNAVAILABLE_ID,
+         "input": {"file": "{{ input.file }}", "marker": "NEVER", "model": "{{ input.model }}"}},
     ])
+    # 主流：marker 固定 UNAVAILABLE → 必抛 ToolUnavailableError（不重试）
     service.register(PRIMARY, "图片流（依赖不可用模型）", [
-        {"tool": UNAVAILABLE_ID, "input": {"file": "{{ input.file }}"}},
+        {"tool": UNAVAILABLE_ID, "input": {"file": "{{ input.file }}", "marker": "UNAVAILABLE"}},
     ], on_failure={"fallback_flow": SECONDARY})
     yield {"svc": service, "repo": pipeline_repo, "audit": run_event_repo, "tasks": task_repo,
            "pump": lambda: scheduler.run_once("w-fb"), "tmp": tmp_path}
@@ -100,31 +104,34 @@ def test_unavailable_error_triggers_fallback_run(stack):
     assert primary["error"]["fallback_flow"] == SECONDARY
     assert "自动改用" in primary["error"]["message"]
 
-    # 降级 run：同 batch_id、fallback_of 指向原 run、用的是降级流
+    # 降级 run：同 batch_id、fallback_of 指向原 run、用的是降级流，且**跑通**
+    # （它的模板引用 input.model —— 主流 input 里没有该键，靠 I1 的「缺键视为 null」）
     fallback = [r for r in stack["repo"].list_runs(batch_id="b_fbtest", limit=10)
                 if r["fallback_of"] == primary_id]
     assert len(fallback) == 1, fallback
     fb = fallback[0]
     assert fb["pipeline_id"] == SECONDARY
     assert fb["batch_id"] == "b_fbtest"
+    _pump_until_done(stack)
+    assert stack["repo"].get_run(fb["id"])["status"] == "succeeded", stack["repo"].get_run(fb["id"])
 
     kinds = [e["kind"] for e in stack["audit"].list(primary_id, limit=50)]
     assert "run_fallback" in kinds
     assert "run_fallback" in [e["kind"] for e in stack["audit"].list(fb["id"], limit=50)]
 
 
-def test_fallback_run_does_not_fall_back_again(stack):
-    """降级流自身失败也不再降级（fallback_of 非空 → 终止），避免链式降级。"""
-    src = stack["tmp"] / "still_unavailable.txt"
-    src.write_text("UNAVAILABLE\nx\n", encoding="utf-8")
-
-    created = stack["svc"].run(PRIMARY, {"file": str(src)})
-    _pump_until_done(stack)
-    fallback = [r for r in stack["repo"].list_runs(limit=20)
-                if r["fallback_of"] == created["run_id"]]
-    assert len(fallback) == 1
-    fb_id = fallback[0]["id"]
-    _pump_until_done(stack)
-    # 降级 run 自己失败后，不得再产生第三条 run
-    deeper = [r for r in stack["repo"].list_runs(limit=20) if r["fallback_of"] == fb_id]
-    assert deeper == []
+def test_fallback_flow_guard_is_pure_logic(stack):
+    """降级判定：只对「顶层 + 未降级过 + kind=unavailable」的失败 run 生效（不建 DB）。"""
+    svc = stack["svc"]
+    err = {"kind": "unavailable", "message": "模型未开通"}
+    top = {"pipeline_id": PRIMARY, "parent_run_id": None, "fallback_of": None}
+    assert svc._fallback_flow_for(top, "failed", err) == SECONDARY
+    # 已降级过 → 不再降级（无链式）
+    assert svc._fallback_flow_for({**top, "fallback_of": "p_x"}, "failed", err) is None
+    # 子 run → 由父 run 承担降级
+    assert svc._fallback_flow_for({**top, "parent_run_id": "p_p"}, "failed", err) is None
+    # 非「能力不可用」错误 → 不降级
+    assert svc._fallback_flow_for(top, "failed", {"kind": "user", "message": "入队失败"}) is None
+    assert svc._fallback_flow_for(top, "failed", None) is None
+    # 非失败终态 → 不降级
+    assert svc._fallback_flow_for(top, "succeeded", err) is None

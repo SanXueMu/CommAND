@@ -553,21 +553,45 @@ class PipelineService:
     # 可批量重跑的状态：真失败态（paused 走「继续」/resume，不在此列）
     RERUNNABLE_STATUSES = ("failed", "failed_review", "cancelled", "interrupted")
 
+    @staticmethod
+    def _dedupe_by_file(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """同一文件只留**最新**一条（入参按 created_at 倒序）：防止「越重跑越多」。
+
+        每次失败的重跑都会新产生一条 failed run，若不去重，下一次点「重跑失败项」会把
+        历史失败与新失败一起重跑，数量指数增长（2026-09-14 用户反馈）。
+        """
+        seen: dict[str, dict[str, Any]] = {}
+        for run in runs:
+            key = str((run.get("input") or {}).get("file") or run.get("id"))
+            seen.setdefault(key, run)
+        return list(seen.values())
+
     def rerun_runs(self, run_ids: list[str]) -> dict[str, Any]:
         """批量重跑（批次失败项一键重跑）：逐条复用 rerun_run（原 run 留档、新 run 继承批次）。
 
-        单条失败不拖垮整批：入队异常记进 skipped，其余照常重跑。
+        **同一文件只重跑最新一条**（其余记 skipped），单条失败不拖垮整批。
         """
         rerun: list[dict[str, Any]] = []
         skipped: list[dict[str, str]] = []
+        fetched: dict[str, dict[str, Any]] = {}
         for run_id in run_ids:
             run = self._pipeline_repo.get_run(run_id)
+            if run is not None:
+                fetched[run_id] = run
+        ordered = sorted(fetched.values(), key=lambda r: str(r.get("created_at") or ""),
+                         reverse=True)
+        keep = {r["id"] for r in self._dedupe_by_file(ordered)}
+        for run_id in run_ids:
+            run = fetched.get(run_id)
             if run is None:
                 skipped.append({"run_id": run_id, "reason": "任务不存在"})
                 continue
             if str(run.get("status")) not in self.RERUNNABLE_STATUSES:
                 skipped.append({"run_id": run_id,
                                 "reason": f"状态不可重跑（{run.get('status')}）"})
+                continue
+            if run_id not in keep:
+                skipped.append({"run_id": run_id, "reason": "同一文件已有更新的失败任务，已跳过"})
                 continue
             try:
                 created = self.rerun_run(run_id)
@@ -577,9 +601,10 @@ class PipelineService:
         return {"count": len(rerun), "rerun": rerun, "skipped": skipped}
 
     def failed_runs_of_batch(self, batch_id: str, limit: int = 500) -> list[str]:
-        """批次内可重跑的 run id（失败态；paused 走继续）。"""
+        """批次内可重跑的 run id：失败态（paused 走继续）且**同一文件只取最新一条**。"""
         runs = self._pipeline_repo.list_runs(batch_id=batch_id, limit=limit)
-        return [r["id"] for r in runs if str(r.get("status")) in self.RERUNNABLE_STATUSES]
+        failed = [r for r in runs if str(r.get("status")) in self.RERUNNABLE_STATUSES]
+        return [r["id"] for r in self._dedupe_by_file(failed)]
 
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
         """steps 快照：每步最新任务 + 定义工具名（工作区/任务中心的考证视图）。"""

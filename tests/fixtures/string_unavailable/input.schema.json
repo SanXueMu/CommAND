@@ -1,8 +1,25 @@
 {
   "type": "object",
-  "required": ["file"],
+  "required": [
+    "file"
+  ],
   "properties": {
-    "file": {"type": "string", "title": "文本文件", "description": "内容首行为 PAUSE 时退出码 4（演示任务级暂停）"},
-    "marker": {"type": "string", "title": "暂停标记", "description": "默认 PAUSE"}
+    "file": {
+      "type": "string",
+      "title": "文本文件",
+      "description": "内容首行为 PAUSE 时退出码 4（演示任务级暂停）"
+    },
+    "marker": {
+      "type": "string",
+      "title": "暂停标记",
+      "description": "默认 PAUSE"
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "title": "模型（可空，演示降级继承 input）"
+    }
   }
 }

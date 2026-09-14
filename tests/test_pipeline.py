@@ -50,7 +50,10 @@ def test_nested_containers_resolve_recursively():
 
 
 def test_missing_reference_is_user_error():
-    with pytest.raises(ToolUserError):
-        resolve_input({"a": "{{ input.not_there }}"}, {}, None, {})
+    """`prev` / `step[n].output` 缺引用仍是用户错误（流内接线错误）；
+    `input.X` 缺键改为「视为未填 = null」（历史 run 重跑 / 降级继承 input，见 I1）。"""
     with pytest.raises(ToolUserError):
         resolve_input({"a": "{{ prev.gone }}"}, {"gone": 1}, {}, {})
+    with pytest.raises(ToolUserError):
+        resolve_input({"a": "{{ step[0].output.gone }}"}, {}, None, {0: {}})
+    assert resolve_input({"a": "{{ input.not_there }}"}, {}, None, {}) == {"a": None}

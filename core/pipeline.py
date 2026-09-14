@@ -17,7 +17,15 @@ _REF = re.compile(
 _EMBEDDED = re.compile(r"\{\{\s*(input|prev|step\[\d+\]\.output)(?:\.[A-Za-z0-9_\u4e00-\u9fff-]+)*\s*\}\}")
 
 
-def _lookup(root: Any, segments: list[str], ref: str) -> Any:
+_MISSING = object()
+
+
+def _lookup(root: Any, segments: list[str], ref: str, *, missing: Any = _MISSING) -> Any:
+    """按路径取值；missing 非 _MISSING 时，取不到就返回它（否则抛错）。
+
+    `input.X` 允许缺失（= 用户没填，值视为 null）——历史 run 的 input 不可能回改，
+    重跑回放时必须容忍缺键；`prev` / `step[n].output` 保持严格（那是流内接线错误）。
+    """
     node = root
     for segment in segments:
         if isinstance(node, dict) and segment in node:
@@ -25,6 +33,8 @@ def _lookup(root: Any, segments: list[str], ref: str) -> Any:
         elif isinstance(node, list) and segment.isdigit() and int(segment) < len(node):
             node = node[int(segment)]
         else:
+            if missing is not _MISSING:
+                return missing
             raise ToolUserError(f"管线模板引用不存在: {ref}")
     return node
 
@@ -108,11 +118,13 @@ def evaluate_when(when: dict[str, Any], pipeline_input: dict[str, Any],
     return True
 
 
-def _resolve_ref(match: re.Match, pipeline_input, prev_output, history, original: str) -> Any:
+def _resolve_ref(match: re.Match, pipeline_input, prev_output, history, original: str,
+                 *, embedded: bool = False) -> Any:
     source, step_idx, path = match.group(1), match.group(2), match.group(3)
     segments = [s for s in path.split(".") if s]
     if source == "input":
-        return _lookup(pipeline_input, segments, original)
+        # 用户没填的键：整串引用 → null；字符串内嵌 → 空串（避免拼出 "None"）
+        return _lookup(pipeline_input, segments, original, missing="" if embedded else None)
     if source == "prev":
         return _lookup(prev_output, segments, original)
     return _lookup(history.get(int(step_idx), {}), segments, original)
@@ -122,4 +134,4 @@ def _resolve_ref_ref_only(match: re.Match, pipeline_input, prev_output, history)
     full = _REF.match(match.group(0))
     if full is None:
         raise ToolUserError(f"管线模板不合法: {match.group(0)}")
-    return _resolve_ref(full, pipeline_input, prev_output, history, match.group(0))
+    return _resolve_ref(full, pipeline_input, prev_output, history, match.group(0), embedded=True)
