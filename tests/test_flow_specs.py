@@ -105,10 +105,13 @@ def test_translate_view_docx_route_and_mode_default(register) -> None:
     assert values == {"overlay", "bilingual"}
 
 
-def test_translate_view_unsupported_doc_hint() -> None:
-    rules = TRANSLATE_VIEW["props"]["unsupported"]
-    doc = next(r for r in rules if ".doc" in r["ext"])
-    assert "另存为 .docx" in doc["message"]
+def test_translate_view_legacy_doc_pauses_instead_of_rejecting() -> None:
+    """旧版 .doc 改成可提交：路由到 Word 流，由工具抛 ToolPauseError 暂停子任务等人工另存为 .docx。"""
+    props = TRANSLATE_VIEW["props"]
+    doc = next(r for r in props["routes"] if ".doc" in [e.lower() for e in r["ext"]])
+    assert doc["flow"] == "flow.translate.docx"
+    assert "暂停" in doc["label"]
+    assert ".doc" not in {e.lower() for r in props.get("unsupported", []) for e in r["ext"]}
 
 
 def test_translate_view_batch_extensions_are_routable() -> None:

@@ -18,6 +18,7 @@ import httpx
 from core.errors import (
     TaskCancelled,
     ToolDomainError,
+    ToolPauseError,
     ToolSystemError,
     ToolUserError,
 )
@@ -114,6 +115,8 @@ class Runner:
             raise ToolUserError(detail or "用户错误")
         if return_code == 3:
             raise ToolDomainError(detail or "领域错误")
+        if return_code == 4:
+            raise ToolPauseError(detail or "需要人工介入后才能继续")
         raise ToolSystemError(detail or f"系统错误（exit={return_code}）")
 
     @staticmethod
@@ -133,4 +136,6 @@ class Runner:
             raise ToolUserError(response.text[:500])
         if response.status_code == 503:
             raise ToolDomainError(response.text[:500])
+        if response.status_code == 409:
+            raise ToolPauseError(response.text[:500])
         raise ToolSystemError(f"http {response.status_code}: {response.text[:500]}")

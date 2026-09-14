@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "segments": {"type": "array", "items": {"type": "string"}},
+    "lines": {"type": "integer"}
+  }
+}

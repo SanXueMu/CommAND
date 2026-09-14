@@ -148,11 +148,21 @@ def test_tool_run_wiring(tmp_path):
     assert events and events[-1]["phase"] == "extracted"
 
 
-def test_tool_rejects_doc_missing_and_empty(tmp_path):
-    from core.errors import ToolDomainError
+def test_tool_pauses_on_legacy_doc_and_rejects_missing(tmp_path):
+    """旧版 .doc（OLE2 魔数）→ ToolPauseError（任务暂停等人工另存为 .docx），不是普通失败。"""
+    from core.errors import ToolPauseError, ToolDomainError
 
-    with pytest.raises(ToolDomainError, match="不支持旧版 .doc"):
-        _tool().run({"file": str(tmp_path / "old.doc")}, types.SimpleNamespace(handle="h"), lambda e: None)
+    old = tmp_path / "old.doc"
+    old.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64)
+    with pytest.raises(ToolPauseError, match="旧版 .doc"):
+        _tool().run({"file": str(old)}, types.SimpleNamespace(handle="h"), lambda e: None)
+
+    # 魔数优先于后缀：误命名为 .docx 的二进制 .doc 同样暂停
+    fake = tmp_path / "actually_old.docx"
+    fake.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64)
+    with pytest.raises(ToolPauseError, match="旧版 .doc"):
+        _tool().run({"file": str(fake)}, types.SimpleNamespace(handle="h"), lambda e: None)
+
     with pytest.raises(ToolDomainError, match="文件不存在"):
         _tool().run({"file": str(tmp_path / "nope.docx")}, types.SimpleNamespace(handle="h"), lambda e: None)
 

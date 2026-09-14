@@ -212,6 +212,13 @@ class PipelineService:
             return
         if run["status"] != "running":
             return
+        if task["status"] == "paused":
+            # 任务级暂停（工具抛 ToolPauseError）：run 停在该步、**不**级联收口；
+            # resume 时该步以留档 input 重新派发（见 resume_run 的 cancelled/failed 分支）。
+            self._audit(run_id, task["handle"], "step_paused",
+                        detail={"step_index": task["step_index"], "error": task.get("error")})
+            self._pipeline_repo.cas_run_status(run_id, ("running",), "paused")
+            return
         if task["status"] in FAILURE_STATUSES:
             self._audit(run_id, task["handle"], "step_failed",
                         detail={"step_index": task["step_index"], "status": task["status"]})

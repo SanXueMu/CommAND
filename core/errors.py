@@ -13,12 +13,24 @@ class ToolDomainError(Exception):
     """领域错误：运行中可恢复（限流、单条质检不过），按 max_attempts 重试。"""
 
 
+class ToolPauseError(Exception):
+    """需要人工介入才能继续（旧版 .doc 需另存、扫描件需先补文字层、冒烟拦截等）。
+
+    区别于 failed：任务落 `paused`、run 停在该步，**不消耗重试次数**；人工处理（或直接
+    修正输入后点「继续」）由 resume 从该步续跑。子进程工具退出码 4 亦映射到此。
+    """
+
+    def __init__(self, message: str, *, hint: str | None = None) -> None:
+        super().__init__(message)
+        self.hint = hint
+
+
 class TaskCancelled(Exception):
     """协作取消：工具在检查点主动抛出或 subprocess 被 SIGTERM 后转译。"""
 
 
-EXIT_CODE = {ToolUserError: 1, ToolSystemError: 2, ToolDomainError: 3}
-HTTP_STATUS = {ToolUserError: 422, ToolSystemError: 500, ToolDomainError: 503}
+EXIT_CODE = {ToolUserError: 1, ToolSystemError: 2, ToolDomainError: 3, ToolPauseError: 4}
+HTTP_STATUS = {ToolUserError: 422, ToolSystemError: 500, ToolDomainError: 503, ToolPauseError: 409}
 
 
 class ToolNotFoundError(Exception):

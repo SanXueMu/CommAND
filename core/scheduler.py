@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from config import Config
-from core.errors import TaskCancelled, ToolDomainError, ToolUserError
+from core.errors import TaskCancelled, ToolDomainError, ToolPauseError, ToolUserError
 from core.protocol import ToolManifest
 from core.runner import RunContext, Runner
 from store.db import Db
@@ -114,6 +114,12 @@ class Scheduler:
             self._task_repo.finish(handle, "succeeded", output=result)
         except TaskCancelled:
             self._task_repo.finish(handle, "cancelled")
+        except ToolPauseError as exc:
+            # 需人工介入：不重试、不算失败，落 paused 等 resume 续跑
+            error: dict[str, object] = {"kind": "pause", "message": str(exc)}
+            if getattr(exc, "hint", None):
+                error["hint"] = exc.hint
+            self._task_repo.finish(handle, "paused", error=error)
         except ToolDomainError as exc:
             if task["attempt"] < task["max_attempts"]:
                 self._task_repo.requeue(handle)

@@ -16,7 +16,8 @@ TRANSLATE_VIEW: dict = {
         # 同后缀多条 = 用户可选处理方式（如 pdf 可版式翻译、双语 docx 或图片翻译）；
         # for: 供工作台按「系统探测」自动选流——text=有文字层, scanned=扫描件
         "routes": [
-            {"ext": [".xlsx", ".xls"], "flow": "flow.translate.xlsx", "label": "表格翻译（双语 xlsx）"},
+            {"ext": [".xlsx", ".xls"], "flow": "flow.translate.xlsx",
+             "label": "表格翻译（每个原工作表后附「_翻译结果」工作表）"},
             {"ext": [".pdf"], "flow": "flow.translate.pdf.layout", "for": "text",
              "label": "版式翻译（原位覆盖 / 双语对照 PDF）"},
             {"ext": [".pdf"], "flow": "flow.translate.pdf", "label": "文字版 PDF → 双语 docx"},
@@ -24,13 +25,15 @@ TRANSLATE_VIEW: dict = {
              "label": "图片版 PDF（扫描件 · 图片翻译，保留版式）"},
             {"ext": [".txt", ".md"], "flow": "flow.translate.txt", "label": "文本翻译（双语 docx）"},
             {"ext": [".docx"], "flow": "flow.translate.docx", "label": "Word 翻译（段落对照 / 原位覆盖 docx）"},
+            # 旧版 .doc：可提交，子任务会**暂停**（不失败）等人工另存为 .docx 后续跑，源文件随批次导出
+            {"ext": [".doc"], "flow": "flow.translate.docx",
+             "label": "Word 翻译（旧版 .doc：任务将暂停，另存为 .docx 后继续）"},
             {"ext": [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"], "flow": "flow.translate.image",
              "label": "图片翻译（qwen-mt-image，保留排版）"},
         ],
-        # 不支持的后缀 → 组件给出明确提示（声明驱动，不写死在前端）
-        "unsupported": [
-            {"ext": [".doc"], "message": "旧版 .doc 不支持：请在 Word 中「另存为 .docx」后重新上传"},
-        ],
+        # 不支持的后缀 → 组件给出明确提示（声明驱动，不写死在前端）；
+        # .doc 已改为可提交（子任务暂停等另存为 .docx），故不在此列。
+        "unsupported": [],
         # 通用附加参数（声明驱动；when_flow 指定仅该流显示）
         "params": [
             # 模型：可选可手写（CommWEB combo），默认取各流在 CommAND 中的成熟集成模型。
@@ -73,7 +76,7 @@ TRANSLATE_VIEW: dict = {
         "dictPath": "/translate/dict",
         # 批量入口声明（存在才显示「单文件 / 批量」切换）；extensions 须与 routes 的后缀一致
         "batch": {
-            "extensions": [".pdf", ".docx", ".xlsx", ".xls", ".txt", ".md",
+            "extensions": [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt", ".md",
                            ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"],
             "maxFiles": 200,
             "maxTotalMB": 500,

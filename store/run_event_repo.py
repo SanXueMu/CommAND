@@ -8,7 +8,7 @@ from store.db import Db
 
 AUDIT_KINDS = {
     "created", "step_queued", "step_started",
-    "step_completed", "step_failed", "step_cancelled", "step_skipped",
+    "step_completed", "step_failed", "step_cancelled", "step_skipped", "step_paused",
     "pause_requested", "paused_at_boundary",
     "resume_requested", "resumed",
     "abort_requested", "run_aborted", "step_abort",
