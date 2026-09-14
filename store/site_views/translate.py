@@ -17,14 +17,21 @@ TRANSLATE_VIEW: dict = {
             {"ext": [".pdf"], "flow": "flow.translate.pdf.layout", "label": "版式翻译（原位覆盖 / 双语对照 PDF）"},
             {"ext": [".pdf"], "flow": "flow.translate.pdf", "label": "文档翻译（双语 docx）"},
             {"ext": [".txt", ".md"], "flow": "flow.translate.txt", "label": "文本翻译（双语 docx）"},
+            {"ext": [".docx"], "flow": "flow.translate.docx", "label": "Word 翻译（段落对照 / 原位覆盖 docx）"},
+        ],
+        # 不支持的后缀 → 组件给出明确提示（声明驱动，不写死在前端）
+        "unsupported": [
+            {"ext": [".doc"], "message": "旧版 .doc 不支持：请在 Word 中「另存为 .docx」后重新上传"},
         ],
         # 通用附加参数（声明驱动；when_flow 指定仅该流显示）
         "params": [
             {"name": "mode", "label": "输出模式", "type": "select", "default": "overlay",
-             "when_flow": ["flow.translate.pdf.layout"],
+             "when_flow": ["flow.translate.pdf.layout", "flow.translate.docx"],
+             # 同一参数在不同流下默认不同：PDF 版式默认原位覆盖，Word 默认双语对照
+             "default_by_flow": {"flow.translate.docx": "bilingual"},
              "options": [
                  {"value": "overlay", "label": "原位覆盖（单语译文）"},
-                 {"value": "bilingual", "label": "左右分栏（双语对照）"},
+                 {"value": "bilingual", "label": "双语对照"},
              ]},
         ],
         "templatesPath": "/translate/templates",
@@ -37,10 +44,11 @@ TRANSLATE_VIEW: dict = {
             {"value": "Korean", "label": "韩文"},
         ],
         "description": (
-            "Translee 全自动翻译：上传 xlsx 表格 / pdf 文档（含扫描/图片版，自动 OCR 补文字层）/ txt 文本 →"
-            "提取可译单元 → 批量翻译 → 保真质检 → 回填；pdf 可选版式翻译（原位覆盖单语 / 左右分栏双语对照 PDF）"
-            "或双语 docx；支持翻译模版（语言对/术语表/模型）与已译字典浏览。"
+            "Translee 全自动翻译：上传 xlsx 表格 / pdf 文档（含扫描/图片版，自动 OCR 补文字层）/ txt 文本 /"
+            " docx 文档（正文与表格，支持段落对照双语或原位覆盖）→ 提取可译单元 → 批量翻译 → 保真质检 → 回填；"
+            "pdf 可选版式翻译（原位覆盖单语 / 左右分栏双语对照 PDF）或双语 docx；"
+            "支持翻译模版（语言对/术语表/模型）与已译字典浏览。"
         ),
-        "empty_hint": "暂无翻译流——先运行 scripts/register_translee_flows.py 注册四条流。",
+        "empty_hint": "暂无翻译流——先运行 scripts/register_translee_flows.py 注册翻译流。",
     },
 }

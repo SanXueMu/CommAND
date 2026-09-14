@@ -5,7 +5,7 @@
 
 三级概念布局：
   工具（tools/ 目录 scan 注册）——translee 十件 + 共享基建
-  普通流（FLOWS）——flow.translate.xlsx / pdf / txt（线性六步，每步 SSE 可观测）
+  普通流（FLOWS）——flow.translate.xlsx / pdf / txt / docx / pdf.layout（线性六步，每步 SSE 可观测）
   工作流——暂无（翻译多样性在输入文件，无需模板/嵌套）
 
 已废弃（v1 验证期产物，脚本自动 DELETE）：dev.double.reverse / text.double_reverse /
@@ -61,6 +61,23 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
             "terms": {"type": "string", "format": "textarea", "title": "术语表",
                       "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
+        },
+    },
+    "flow.translate.docx": {
+        "type": "object",
+        "required": ["file", "key_name", "target_lang"],
+        "properties": {
+            "file": {"type": "string", "format": "file", "title": "Word 文档",
+                     "description": "docx 文档，正文段落与表格整段翻译（旧版 .doc 请先另存为 .docx）"},
+            "key_name": {"type": "string", "title": "密钥名称", "description": "设置页已录入的 LLM 密钥名"},
+            "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
+            "model": {"type": "string", "title": "翻译模型", "description": "留空用密钥默认模型"},
+            "source_lang": {"type": "string", "title": "源语言", "description": "如：英文 / 中文；留空自动判定"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
+            "mode": {"type": "string", "title": "输出模式", "enum": ["bilingual", "overlay"],
+                     "default": "bilingual",
+                     "description": "bilingual=原文段落 + 译文段落（双语对照）；overlay=原位覆盖单语译文（保留原版式）"},
         },
     },
     "flow.translate.pdf.layout": {
@@ -161,6 +178,36 @@ FLOWS: dict[str, dict] = {
                 "translations": "{{ step[3].output.translations }}",
                 "statuses": "{{ step[4].output.statuses }}",
                 "file": "{{ input.file }}"}},
+        ],
+    },
+    "flow.translate.docx": {
+        "name": "Word 翻译",
+        "doc_md": ("docx 翻译全自动流：正文流提取（段落/表格保序，跳过空段/数字/域代码）→分类→归一去重"
+                   "→翻译→质检→译文回填（段落对照双语 / 原位覆盖单语，保留样式与图片）。"),
+        "steps": [
+            {"tool": "docx.extract.units", "input": {"file": "{{ input.file }}"}},
+            {"tool": "table.classify.columns", "input": {"units": "{{ prev.units }}"}},
+            {"tool": "text.dedup.values", "input": {"segments": "{{ prev.segments }}"}},
+            {"tool": "text.llm.translate", "input": {
+                "segments": "{{ prev.unique }}",
+                "key_name": "{{ input.key_name }}",
+                "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
+                "model": "{{ input.model }}"}},
+            {"tool": "text.verify.fidelity", "input": {
+                "sources": "{{ step[2].output.unique }}",
+                "translations": "{{ prev.translations }}"}},
+            {"tool": "docx.render.translated", "input": {
+                "file": "{{ input.file }}",
+                "units": "{{ step[0].output.units }}",
+                "ranges": "{{ step[1].output.ranges }}",
+                "col_classes": "{{ step[1].output.col_classes }}",
+                "index_map": "{{ step[2].output.index_map }}",
+                "date_maps": "{{ step[2].output.date_maps }}",
+                "translations": "{{ step[3].output.translations }}",
+                "statuses": "{{ step[4].output.statuses }}",
+                "mode": "{{ input.mode }}"}},
         ],
     },
     "flow.translate.pdf.layout": {
