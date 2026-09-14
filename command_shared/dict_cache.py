@@ -9,8 +9,16 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
+
+# 批量并发写同一 SQLite 时的等待/重试参数（2026-09-14 线上「database is locked」修复）：
+# ① timeout=30：连接级锁等待；② WAL：读写不互斥；③ busy_timeout：SQLite 自身重试；
+# ④ 外层再包一层退避重试，兜住 WAL checkpoint 等瞬时锁。
+_DB_TIMEOUT_S = 30.0
+_BUSY_TIMEOUT_MS = 30_000
+_WRITE_RETRIES = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS translations (
@@ -31,9 +39,28 @@ def default_db_path() -> Path:
 
 
 def open_dict(db_path: str | Path | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path or default_db_path())
+    conn = sqlite3.connect(db_path or default_db_path(), timeout=_DB_TIMEOUT_S)
+    # WAL：多读单写并发下不互斥（批量任务 + 引擎多线程会同时写字典）
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error:  # noqa: BLE001 —— 只读挂载等场景退化为默认日志模式
+        pass
+    conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
     conn.executescript(_SCHEMA)
     return conn
+
+
+def with_lock_retry(fn, *args, **kwargs):
+    """在写锁竞争时退避重试（SQLite 的 database is locked 是瞬时状态，不该让整个任务失败）。"""
+    delay = 0.2
+    for attempt in range(_WRITE_RETRIES + 1):
+        try:
+            return fn(*args, **kwargs)
+        except sqlite3.OperationalError as error:
+            if "locked" not in str(error).lower() or attempt >= _WRITE_RETRIES:
+                raise
+            time.sleep(delay)
+            delay *= 2
 
 
 def text_key(norm_text: str) -> str:
@@ -64,14 +91,17 @@ def save(
     model: str = "",
     status: str = "ok",
 ) -> None:
-    conn.execute(
-        "INSERT INTO translations (key, source, translated, model, status, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET translated=excluded.translated, "
-        "model=excluded.model, status=excluded.status",
-        (key, source, translated, model, status, datetime.now().isoformat(timespec="seconds")),
-    )
-    conn.commit()
+    def _write() -> None:
+        conn.execute(
+            "INSERT INTO translations (key, source, translated, model, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET translated=excluded.translated, "
+            "model=excluded.model, status=excluded.status",
+            (key, source, translated, model, status, datetime.now().isoformat(timespec="seconds")),
+        )
+        conn.commit()
+
+    with_lock_retry(_write)
 
 
 def stats(conn: sqlite3.Connection) -> dict:

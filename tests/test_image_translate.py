@@ -102,7 +102,7 @@ def test_glossary_accepts_list_and_text():
 
 # ---------------------------------------------------------------- 全流程
 
-def _handler(state: dict, *, fail_models: set[str] | None = None, task_status="SUCCEEDED"):
+def _handler(state: dict, *, fail_models: set[str] | None = None, task_status="SUCCEEDED"):  # noqa: ANN001
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if "/api/v1/uploads" in url:
@@ -221,3 +221,22 @@ def test_tool_run_without_keys_reports_domain_error(tmp_path, monkeypatch):
     tool = import_module("tools.image.mt_translate.main")
     with pytest.raises(ToolDomainError, match="APIKey管理"):
         tool.run({"file": str(_img(tmp_path))}, ctx, ctx.emit)
+
+
+def test_tool_defaults_fallback_model_when_key_absent(tmp_path, monkeypatch):
+    """入参不带 fallback_model（flow 模板没传）时，必须回落到默认备用模型——
+    否则显式 None 会吃掉默认值，主模型不可用时就没有「走远方案」（2026-09-14 复盘）。"""
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path / "data"))
+    state: dict = {}
+    ctx = _FakeCtx()
+    monkeypatch.setattr(it, "make_client",
+                        lambda base_url=None, timeout=it.TIMEOUT_S: _client(_handler(state, fail_models={it.DEFAULT_IMAGE_MODEL})))
+
+    from importlib import import_module
+    tool = import_module("tools.image.mt_translate.main")
+    out = tool.run({"file": str(_img(tmp_path)), "target_lang": "Chinese"}, ctx, ctx.emit)
+
+    submitted = [b["model"] for b in state.get("submitted", [])]
+    assert submitted == [it.DEFAULT_IMAGE_MODEL, it.DEFAULT_IMAGE_FALLBACK_MODEL], submitted
+    assert out["model"] == it.DEFAULT_IMAGE_FALLBACK_MODEL
+    assert out["fallback_used"] is True

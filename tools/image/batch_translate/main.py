@@ -20,6 +20,10 @@ def _error(message: str):
     return ToolDomainError(message)
 
 
+from command_shared import image_translate  # noqa: E402
+from core.errors import ToolUnavailableError  # noqa: E402
+
+
 def _resolve_key(ctx, key_name: str | None) -> dict:
     keys = getattr(ctx, "keys", None) or {}
     if not keys:
@@ -126,7 +130,11 @@ def run(input: dict, ctx, emit) -> dict:
     elapsed = round(time.monotonic() - started, 1)
     if not ok_items:
         reasons = "；".join(f"第{r['index']}页 {r['error']}" for r in items[:3])
-        raise _error(f"全部 {len(items)} 页翻译失败：{reasons}")
+        message = f"全部 {len(items)} 页翻译失败：{reasons}"
+        # 全是「模型不可用」类原因 → 交给 run 级 on_failure 降级（如图片流→版式流）
+        if image_translate.is_unavailable_error(" ".join(str(r.get("error") or "") for r in items)):
+            raise ToolUnavailableError(message)
+        raise _error(message)
 
     emit({"phase": "batch_done", "ok": len(ok_items), "failed": len(items) - len(ok_items), "elapsed_s": elapsed})
     return {

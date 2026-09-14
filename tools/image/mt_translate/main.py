@@ -33,6 +33,10 @@ def _ToolError(message: str):
     return ToolDomainError(message)
 
 
+from command_shared import image_translate  # noqa: E402 —— 与工具入口同层导入（inproc）
+from core.errors import ToolUnavailableError  # noqa: E402
+
+
 def run(input: dict, ctx, emit) -> dict:
     from command_shared.image_translate import (
         DEFAULT_IMAGE_FALLBACK_MODEL,
@@ -88,6 +92,9 @@ def run(input: dict, ctx, emit) -> dict:
                 output_name=input.get("output_name"), on_event=on_event, cancelled=cancelled,
             )
     except ImageTranslateError as error:
+        # 模型未开通/无权限：重试无意义 → 抛「能力不可用」，由 run 级 on_failure 决定降级
+        if image_translate.is_unavailable_error(error):
+            raise ToolUnavailableError(str(error)) from error
         raise _ToolError(str(error))
 
     elapsed = round(time.monotonic() - started, 1)

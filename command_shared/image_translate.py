@@ -249,6 +249,22 @@ def download(client: httpx.Client, url: str, dest: Path) -> Path:
     return dest
 
 
+# 「能力不可用」判据：模型未开通 / 无权限 / 模型名不存在——重试无意义，应触发 run 级降级
+_UNAVAILABLE_HINTS = (
+    "model not found", "model does not exist", "invalid model", "model not available",
+    "no permission", "not authorized", "access denied", "forbidden", "unauthorized",
+    "未开通", "无权限", "没有权限", "模型不存在",
+)
+
+
+def is_unavailable_error(error: BaseException | str | None) -> bool:
+    """判断失败原因是否属「模型不可用」（用于决定是否走 on_failure 降级）。"""
+    if error is None:
+        return False
+    text = str(error).lower()
+    return any(hint in text for hint in _UNAVAILABLE_HINTS)
+
+
 def translate_image(client: httpx.Client, api_key: str, path: Path, out_dir: Path, *,
                     model: str = DEFAULT_IMAGE_MODEL,
                     fallback_model: str | None = DEFAULT_IMAGE_FALLBACK_MODEL,
