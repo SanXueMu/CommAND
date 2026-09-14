@@ -100,6 +100,21 @@ def list_runs(pipeline_id: str | None = None, limit: int = 50, offset: int = 0) 
         pipeline_id=pipeline_id, limit=limit, offset=offset)
 
 
+class UsageQuery(BaseModel):
+    """产物占用查询：给 run_ids 就逐个算，否则按 pipeline_id/limit 列最近任务。"""
+
+    run_ids: list[str] | None = None
+    pipeline_id: str | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+@runs_router.post("/usage")
+def runs_usage(body: UsageQuery) -> dict:
+    """任务产物占用报告（**只读**，不删任何东西）：任务列表展示占用 / 删除前预演将释放多少空间。"""
+    return deps.get_pipeline_service().usage_report(
+        run_ids=body.run_ids, pipeline_id=body.pipeline_id, limit=body.limit)
+
+
 @runs_router.delete("/{run_id}")
 def delete_run(run_id: str, purge_files: bool = True) -> dict:
     """删除任务。purge_files=true（默认）连带删除该任务全部产物目录（不可恢复）。"""

@@ -104,3 +104,38 @@ def test_collect_artifacts_empty_when_no_successful_step(svc):
     handle = task_repo.enqueue("tests.string.reverse", {"file": "b.docx"}, pipeline_run=rid, step_index=0)
     task_repo.finish(handle, "failed", error={"kind": "x", "message": "boom"})
     assert service.collect_run_artifacts(rid, "final") == []
+
+
+def test_run_artifact_usage_counts_files_and_bytes(svc):
+    """占用统计：按任务汇总产物（含子目录），只读、不删；未知 run 进 missing。"""
+    service, repo, task_repo, tmp_path = svc
+    rid = repo.create_run(PID, {"file": "a.docx"})
+    handle = task_repo.enqueue("tests.string.reverse", {"file": "a.docx"}, pipeline_run=rid, step_index=0)
+    _write(tmp_path, f"{handle}/译文.docx", b"12345")
+    _write(tmp_path, f"{handle}/sub/中间.pdf", b"123")
+    task_repo.finish(handle, "succeeded", output={
+        "path": str(tmp_path / "outputs" / handle / "译文.docx"), "name": "译文.docx"})
+    keep = tmp_path / "outputs" / handle / "译文.docx"  # 统计后文件仍在（只读）
+
+    assert service.run_artifact_usage(rid) == {"files": 2, "bytes": 8, "dirs": 1}
+
+    report = service.usage_report(run_ids=[rid, "p_不存在"])
+    assert report["runs"][0]["run_id"] == rid and report["runs"][0]["pipeline_id"] == PID
+    assert report["runs"][0]["status"]
+    assert report["total"] == {"files": 2, "bytes": 8, "dirs": 1}
+    assert report["missing"] == ["p_不存在"]
+    assert keep.exists(), "占用统计不得删除任何产物"
+
+
+def test_usage_report_by_pipeline_lists_recent_runs(svc):
+    """不给 run_ids 时按 pipeline/limit 列最近任务（任务列表占用展示）。"""
+    service, repo, task_repo, tmp_path = svc
+    rid = repo.create_run(PID, {"file": "c.docx"})
+    handle = task_repo.enqueue("tests.string.reverse", {"file": "c.docx"}, pipeline_run=rid, step_index=0)
+    _write(tmp_path, f"{handle}/out.docx", b"12")
+    task_repo.finish(handle, "succeeded", output={
+        "path": str(tmp_path / "outputs" / handle / "out.docx"), "name": "out.docx"})
+    report = service.usage_report(pipeline_id=PID, limit=10)
+    assert [r["run_id"] for r in report["runs"]] == [rid]
+    assert report["runs"][0]["pipeline_id"] == PID
+    assert report["total"]["bytes"] == 2 and report["missing"] == []

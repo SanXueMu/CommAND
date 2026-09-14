@@ -655,6 +655,50 @@ class PipelineService:
                               "path": str(resolved), "size": resolved.stat().st_size})
         return found
 
+    def run_artifact_usage(self, run_id: str) -> dict[str, int]:
+        """单个 run（含子 run）的产物占用：`{files, bytes, dirs}`（只读，不删任何东西）。"""
+        empty = {"files": 0, "bytes": 0, "dirs": 0}
+        if self._data_dir is None:
+            return empty
+        root = (self._data_dir / "outputs").resolve()
+        files = bytes_found = dirs = 0
+        for rid in self._run_tree_ids(run_id):
+            for task in self._task_repo.list_by_pipeline_run(rid):
+                target = (root / str(task["handle"])).resolve()
+                if root not in target.parents or not target.is_dir():
+                    continue
+                dirs += 1
+                for path in target.rglob("*"):
+                    if path.is_file():
+                        files += 1
+                        try:
+                            bytes_found += path.stat().st_size
+                        except OSError:
+                            pass
+        return {"files": files, "bytes": bytes_found, "dirs": dirs}
+
+    def usage_report(self, run_ids: list[str] | None = None, pipeline_id: str | None = None,
+                     limit: int = 50) -> dict[str, Any]:
+        """产物占用报告（任务列表展示占用 / 清理前预演）：逐 run 明细 + 合计。"""
+        if run_ids:
+            targets = list(dict.fromkeys(str(r) for r in run_ids))
+        else:
+            targets = [r["id"] for r in self.list_runs(pipeline_id=pipeline_id, limit=limit)["runs"]]
+        rows: list[dict[str, Any]] = []
+        missing: list[str] = []
+        total = {"files": 0, "bytes": 0, "dirs": 0}
+        for run_id in targets:
+            run = self._pipeline_repo.get_run(run_id)
+            if run is None:
+                missing.append(run_id)
+                continue
+            usage = self.run_artifact_usage(run_id)
+            rows.append({"run_id": run_id, "pipeline_id": run["pipeline_id"], "status": run["status"],
+                         "created_at": str(run.get("created_at") or ""), **usage})
+            for key in total:
+                total[key] += usage[key]
+        return {"runs": rows, "total": total, "missing": missing}
+
     def _purge_artifacts(self, handles: list[str]) -> dict[str, int]:
         """删除任务产物目录 `data/outputs/<handle>/`（最终产物与中间临时产物一并清）。"""
         empty = {"files_removed": 0, "bytes_freed": 0, "dirs_removed": 0}
