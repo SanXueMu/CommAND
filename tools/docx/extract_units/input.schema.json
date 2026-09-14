@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file"],
+  "properties": {
+    "file": {"title": "Word 文件路径", "type": "string", "description": ".docx 文件路径（旧版 .doc 请先另存为 .docx）"},
+    "include_tables": {
+      "title": "包含表格",
+      "type": "boolean",
+      "default": true,
+      "description": "提取表格单元（逐格文本，首行视为表头）"
+    },
+    "skip_numbers": {
+      "title": "跳过纯数字段",
+      "type": "boolean",
+      "default": true,
+      "description": "跳过纯数字/日期的段落（省 token）"
+    }
+  }
+}

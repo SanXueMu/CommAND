@@ -1,0 +1,21 @@
+[tool]
+id = "docx.extract.units"
+name = "docx 单元提取"
+version = "1.0.0"
+tags = ["提取", "文档", "word"]
+description = "Word 文档 → 段落/表格单元组（正文流顺序；跳过空段/纯数字段/域代码），接既有翻译链回填"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.docx"]
+output_types = ["docx.units"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 300
+concurrency = 2
+max_attempts = 2

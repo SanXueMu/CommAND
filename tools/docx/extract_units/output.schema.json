@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file", "file_hash", "kind", "units", "stats"],
+  "properties": {
+    "file": {"type": "string", "description": "原始 docx 路径"},
+    "file_hash": {"type": "string"},
+    "kind": {"const": "docx_units"},
+    "units": {
+      "type": "array",
+      "description": "正文流单元组（段落与表格按 body 顺序交错）",
+      "items": {
+        "type": "object",
+        "required": ["unit_id", "unit_type"],
+        "properties": {
+          "unit_id": {"type": "string", "description": "p<body序号> / t<body序号>"},
+          "unit_type": {"enum": ["table", "text"]},
+          "text": {"type": "string"},
+          "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+          "meta": {"type": "object"}
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["paragraphs", "tables", "units"],
+      "properties": {
+        "paragraphs": {"type": "integer", "description": "body 中的段落总数"},
+        "tables": {"type": "integer", "description": "body 中的表格总数"},
+        "units": {"type": "integer", "description": "产出的可译单元数"},
+        "skipped_empty": {"type": "integer"},
+        "skipped_number": {"type": "integer"},
+        "skipped_field": {"type": "integer", "description": "域代码/目录段（跳过，避免破坏 Word 域）"},
+        "text_chars": {"type": "integer", "description": "待译字符数（估算）"}
+      }
+    }
+  }
+}
