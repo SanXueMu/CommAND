@@ -66,6 +66,36 @@ class PipelineRepo:
             ).fetchone()
         return int(row[0]) if row else 0
 
+    def best_runs_by_batch(self, batch_id: str) -> list[dict[str, Any]]:
+        """批次内**每个文件的最优 run**（成功优先 > 暂停/跳过 > 其它，同级取最新）。
+
+        用 `DISTINCT ON (input->>'file')` 一条 SQL 完成，**不受 limit 窗口限制**。
+        为什么必须这样：批次 run 数会远大于任何分页上限（线上 341 条），而 `list_runs`
+        只取最新 N 条 → 更早的**成功 run 被挤出窗口**，导出只能放回源文件（用户看到
+        「导出全是没翻译的」2026-09-14）。
+        """
+        sql = """
+            SELECT DISTINCT ON (COALESCE(input->>'file', id))
+                   id, pipeline_id, input, status, error, progress, created_at, finished_at,
+                   batch_id, fallback_of
+            FROM pipeline_runs
+            WHERE batch_id = %s
+            ORDER BY COALESCE(input->>'file', id),
+                     CASE status WHEN 'succeeded' THEN 0
+                                 WHEN 'paused' THEN 1
+                                 WHEN 'skipped' THEN 1
+                                 ELSE 2 END,
+                     created_at DESC
+        """
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(sql, (batch_id,)).fetchall()
+        return [
+            {"id": r[0], "pipeline_id": r[1], "input": r[2], "status": r[3], "error": r[4],
+             "progress": r[5], "created_at": r[6], "finished_at": r[7], "batch_id": r[8],
+             "fallback_of": r[9]}
+            for r in rows
+        ]
+
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
                   offset: int = 0, batch_id: str | None = None) -> list[dict[str, Any]]:
         """运行列表（job 粒度，按创建时间倒序）——translee 任务列表体验。"""
@@ -180,6 +210,13 @@ class PipelineRepo:
             "parent_run_id": row[8], "parent_step_index": row[9],
             "batch_id": row[10], "fallback_of": row[11],
         }
+
+    def update_run_input(self, run_id: str, input: dict[str, Any]) -> bool:
+        """就地更新 run 的 input（替换原件 / 修正密钥名等参数后继续）——仅非运行中调用。"""
+        with self._db.pool.connection() as conn:
+            cursor = conn.execute("UPDATE pipeline_runs SET input = %s WHERE id = %s",
+                                  (Json(input), run_id))
+        return cursor.rowcount > 0
 
     def cas_run_status(self, run_id: str, from_statuses: tuple[str, ...], to_status: str) -> bool:
         """原子状态迁移（乐观 CAS）：from_statuses 内才迁移，返回是否成功。"""

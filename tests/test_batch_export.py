@@ -13,16 +13,19 @@ from config import Config
 
 
 class _StubService:
-    """提供 list_runs(batch_id=...) 与 collect_run_artifacts。"""
+    """提供 best_runs_of_batch（**每文件最优 run，由服务端 SQL 决定**）与 collect_run_artifacts。
+
+    注意：挑 run 的优先级（成功 > 暂停 > 其它，同级最新）现在在 `PipelineRepo.best_runs_by_batch`
+    的 DISTINCT ON 里；这里只负责把「服务端会给的那条」交给路由（真 SQL 的测试见
+    tests/test_best_runs_by_batch.py）。
+    """
 
     def __init__(self):
         self.runs: dict[str, list] = {}
         self.artifacts: dict[str, list] = {}
 
-    def list_runs(self, limit: int = 50, pipeline_id: str | None = None,
-                  batch_id: str | None = None, **_: object) -> dict:
-        runs = list(self.runs.get(batch_id or "", []))
-        return {"runs": runs, "total": len(runs)}
+    def best_runs_of_batch(self, batch_id: str) -> list:
+        return list(self.runs.get(batch_id, []))
 
     def collect_run_artifacts(self, run_id: str, scope: str = "final") -> list:
         return list(self.artifacts.get(run_id, []))

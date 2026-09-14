@@ -606,6 +606,10 @@ class PipelineService:
         failed = [r for r in runs if str(r.get("status")) in self.RERUNNABLE_STATUSES]
         return [r["id"] for r in self._dedupe_by_file(failed)]
 
+    def best_runs_of_batch(self, batch_id: str) -> list[dict[str, Any]]:
+        """批次内每个文件的最优 run（成功优先/同级最新）——**不受分页窗口限制**，批次导出用。"""
+        return self._pipeline_repo.best_runs_by_batch(batch_id)
+
     def rerunnable_runs(self, batch_id: str | None = None, flow_ids: list[str] | None = None,
                         limit: int = 1000) -> dict[str, Any]:
         """可重跑清单（**全批次口径**，不受任务清单「只加载最新 N 条」限制）。

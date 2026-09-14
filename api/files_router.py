@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 import deps
 from command_shared.image_translate import QUEUE_MAX as IMAGE_QUEUE_MAX
+from services import batch_manifest
 from core.errors import TaskNotFoundError
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -155,9 +156,7 @@ def _skipped_view(saved: list[dict]) -> list[dict]:
 
 
 def _manifest_dir() -> Path:
-    target = Path(deps.get_config().data_dir) / "batches"
-    target.mkdir(parents=True, exist_ok=True)
-    return target
+    return batch_manifest.manifest_dir(deps.get_config().data_dir)
 
 
 def _write_batch_manifest(batch_id: str, root: str, batch_dir: Path,
@@ -166,19 +165,8 @@ def _write_batch_manifest(batch_id: str, root: str, batch_dir: Path,
 
     顺带清理 30 天前的旧清单（防止无限增长）。
     """
-    target_dir = _manifest_dir()
-    cutoff = time.time() - 30 * 86400
-    for old in target_dir.glob("*.json"):
-        try:
-            if old.stat().st_mtime < cutoff:
-                old.unlink()
-        except OSError:  # noqa: PERF203
-            pass
-    payload = {"batch_id": batch_id, "root": root, "dir": str(batch_dir),
-               "created_at": date.today().isoformat(), "skip_exts": sorted(skip_exts or ()),
-               "files": saved}
-    (target_dir / f"{batch_id}.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    batch_manifest.write(deps.get_config().data_dir, batch_id, root, batch_dir,
+                         saved, skip_exts)
 
 
 # 单段名长度上限（**字节**）：Linux 单段 255 字节，取 200 留余量；
@@ -520,16 +508,13 @@ def package_batch(body: PackageBatchBody) -> dict:
     suffix = _UNSAFE.sub("_", body.suffix or "")[:16]
     root = _truncate_name(str(manifest.get("root") or "batch"), _NAME_MAX) or "batch"
     service = deps.get_pipeline_service()
-    runs = service.list_runs(batch_id=body.batch_id, limit=_MAX_PACKAGE_RUNS)["runs"]
-    # 同一文件可能有多条 run（再运行 / 失败降级）：**优先取成功的那条**，其次最新。
-    # 注意 list_runs 是 created_at DESC（最新在前），若直接字典推导会留下**最旧**的一条，
-    # 降级/再运行场景会把译文盖成失败任务（2026-09-14 修）。
+    # **每个文件直接取最优 run**（成功 > 暂停/跳过 > 其它，同级最新）——一条 DISTINCT ON SQL，
+    # 不受 list_runs 的 limit 窗口限制（线上：341 条 run 而窗口只有 200 → 78 个已成功的文件
+    # 被当成「未翻译」只能放源文件，用户看到「导出全是没翻译的」2026-09-14 修）。
     by_file: dict[str, dict] = {}
-    for run in runs:
+    for run in service.best_runs_of_batch(body.batch_id):
         key = str((run.get("input") or {}).get("file") or "")
-        current = by_file.get(key)
-        if current is None or _run_preference(run) > _run_preference(current):
-            by_file[key] = run
+        by_file.setdefault(key, run)
     zip_path = _data_dir() / "exports" / f"{datetime.now():%Y%m%d-%H%M%S}_{_label(body.name or root)}.zip"
     zip_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -599,13 +584,10 @@ def package_batch(body: PackageBatchBody) -> dict:
 
 
 def _load_batch_manifest(batch_id: str) -> dict:
-    path = _manifest_dir() / f"{_UNSAFE.sub('', batch_id or '')}.json"
-    if not path.is_file():
+    manifest = batch_manifest.load(deps.get_config().data_dir, _UNSAFE.sub("", batch_id or ""))
+    if manifest is None:
         raise HTTPException(status_code=404, detail=f"批次不存在或清单已过期: {batch_id}")
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise HTTPException(status_code=422, detail=f"批次清单损坏: {error}") from error
+    return manifest
 
 
 def _new_batch_id() -> str:
