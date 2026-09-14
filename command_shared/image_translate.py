@@ -33,8 +33,11 @@ POLL_BUDGET_S = 900.0
 RATE_LIMIT_RETRIES = 3
 RATE_LIMIT_BASE_SLEEP = 5.0
 
-# RPM=1 的模型：提交间隔至少 60s（其余不限制）
-_RPM1_MODELS = {"qwen-mt-image-2.0"}
+# 限速与并发（来源：通义千问平台 qwen-mt-image-2.0 模型页：RPM 60 / 并发 2 / 异步队列上限 500）
+DEFAULT_RPM = 60            # 每分钟请求数（提交间隔 = 60/rpm 秒）
+DEFAULT_CONCURRENCY = 2     # 同时在飞的任务数
+QUEUE_MAX = 500             # 云端异步队列上限（单任务页数硬上限）
+SUBMIT_WAVE = 100           # 分波提交：每波任务数（避免把云端队列一次打满）
 _LANG_CODES = {
     "chinese": "zh", "zh": "zh", "zh-cn": "zh", "中文": "zh",
     "english": "en", "en": "en", "英文": "en",
@@ -86,11 +89,15 @@ def check_lang_pair(source_lang: str | None, target_lang: str | None) -> None:
             f"图片翻译要求源或目标至少一方为中文/英文（当前 {src} → {tgt}）")
 
 
-def throttle(model: str, min_interval_s: float | None = None) -> float:
-    """跨线程限速：返回实际等待秒数（RPM=1 的模型默认 60s 间隔）。"""
+def throttle(model: str, min_interval_s: float | None = None, rpm: int | None = None) -> float:
+    """跨线程限速：返回实际等待秒数。
+
+    间隔优先取 min_interval_s；否则按 rpm 推导（60/rpm 秒，rpm<=0 表示不限速）。
+    """
     interval = min_interval_s
     if interval is None:
-        interval = 60.0 if model in _RPM1_MODELS else 0.0
+        effective_rpm = DEFAULT_RPM if rpm is None else rpm
+        interval = 60.0 / effective_rpm if effective_rpm and effective_rpm > 0 else 0.0
     if interval <= 0:
         return 0.0
     with _rate_lock:
@@ -248,7 +255,7 @@ def translate_image(client: httpx.Client, api_key: str, path: Path, out_dir: Pat
                     source_lang: str | None = None, target_lang: str | None = None,
                     terms=None, domain_hint: str | None = None, sensitives=None,
                     image_segment: bool = False, output_name: str | None = None,
-                    min_interval_s: float | None = None,
+                    min_interval_s: float | None = None, rpm: int | None = None,
                     on_event=None, cancelled=None) -> dict:
     """单图翻译主流程；主模型失败自动降级备用模型。"""
     if not path.is_file():
@@ -259,7 +266,7 @@ def translate_image(client: httpx.Client, api_key: str, path: Path, out_dir: Pat
     last_error: Exception | None = None
     for index, current in enumerate(attempts):
         try:
-            waited = throttle(current, min_interval_s)
+            waited = throttle(current, min_interval_s, rpm)
             if on_event is not None:
                 on_event({"phase": "submit", "model": current, "file": path.name,
                           "waited_s": round(waited, 1), "attempt": index + 1})

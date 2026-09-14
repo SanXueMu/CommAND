@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
 import deps
+from command_shared.image_translate import QUEUE_MAX as IMAGE_QUEUE_MAX
 from core.errors import TaskNotFoundError
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -25,6 +26,30 @@ _MAX_ARCHIVE_BYTES = 500 * 1024 * 1024
 _MAX_ARCHIVE_ENTRIES = 1000
 _MAX_ARCHIVE_TOTAL = 2 * 1024 * 1024 * 1024
 _MAX_LIST_FILES = 5000
+
+# 图片翻译可直吃的图片后缀（与站点声明 batch.extensions 对齐）
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
+
+
+def _pdf_page_count(path: Path) -> int | None:
+    """PDF 页数（探测失败返回 None，不阻断主流程）。"""
+    try:
+        import fitz  # pymupdf
+
+        with fitz.open(path) as doc:
+            return doc.page_count
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _pdf_has_text_layer(path: Path) -> bool | None:
+    """是否有可提取文字层（False=扫描件，走图片翻译）；探测失败返回 None。"""
+    try:
+        from command_shared.ocr_render import is_text_pdf
+
+        return bool(is_text_pdf(path))
+    except Exception:  # noqa: BLE001
+        return None
 _MAX_PACKAGE_RUNS = 200
 
 
@@ -351,6 +376,34 @@ def download(path: str) -> FileResponse:
     if not target.is_file():
         raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
     return FileResponse(target, filename=target.name)
+
+
+@router.get("/probe")
+def probe_file(path: str) -> dict:
+    """只读轻量探测：扩展名 / PDF 页数 / 有无文字层 → 工作台据此自动选流。
+
+    - kind：pdf | image | document | other
+    - has_text_layer：仅 pdf 有值；False = 扫描件（图片版，走图片翻译）
+    - image_max_pages：图片翻译单任务页数上限（超出需拆分，工作台据此提示）
+    """
+    target = _ensure_within(path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    ext = target.suffix.lower()
+    result: dict = {
+        "path": str(target), "name": target.name, "ext": ext, "kind": "other",
+        "pages": None, "has_text_layer": None, "size": target.stat().st_size,
+        "image_max_pages": IMAGE_QUEUE_MAX,
+    }
+    if ext in IMAGE_SUFFIXES:
+        result["kind"] = "image"
+    elif ext == ".pdf":
+        result["kind"] = "pdf"
+        result["pages"] = _pdf_page_count(target)
+        result["has_text_layer"] = _pdf_has_text_layer(target)
+    elif ext:
+        result["kind"] = "document"
+    return result
 
 
 @router.get("/page")

@@ -11,12 +11,14 @@ from command_shared import image_translate as it
 from command_shared.glossary import as_terminologies, parse_terms
 
 BASE = "https://dashscope.aliyuncs.com"
+# 导入时的原始常量（autouse fixture 会把 DEFAULT_RPM 临时置 0，这里守恒断言用原始值）
+SOURCE_LIMITS = (it.DEFAULT_RPM, it.DEFAULT_CONCURRENCY, it.QUEUE_MAX)
 
 
 @pytest.fixture(autouse=True)
 def _fast_throttle(monkeypatch):
     """测试不真等 60s：把 RPM=1 模型表清空（限速逻辑由专门用例显式验证）。"""
-    monkeypatch.setattr(it, "_RPM1_MODELS", frozenset())
+    monkeypatch.setattr(it, "DEFAULT_RPM", 0)
     it._last_submit.clear()
 
 
@@ -70,6 +72,25 @@ def test_throttle_respects_min_interval(monkeypatch):
     it.throttle("qwen-mt-image-2.0", min_interval_s=30)
     assert it.throttle("qwen-mt-image-2.0", min_interval_s=30) > 0  # 第二次触发等待
     assert calls["sleep"] > 0
+
+
+def test_throttle_derives_interval_from_rpm(monkeypatch):
+    """RPM 推导间隔：60 rpm → 1s；120 rpm → 0.5s；0/负数 → 不限速。"""
+    it._last_submit.clear()
+    slept: list[float] = []
+    monkeypatch.setattr(it.time, "sleep", lambda s: slept.append(s))
+    assert it.throttle("m", rpm=0) == 0.0 and not slept
+    it.throttle("m", rpm=60)          # 首次不等待
+    waited = it.throttle("m", rpm=60)  # 第二次：间隔 1s（实测已过 0.0s+）
+    assert 0.0 < waited <= 1.0
+    it._last_submit.clear()
+    it.throttle("m2", rpm=120)
+    assert 0.0 < it.throttle("m2", rpm=120) <= 0.5
+
+
+def test_default_rpm_matches_platform_limit():
+    """默认限速对齐通义千问平台 qwen-mt-image-2.0：RPM 60 / 并发 2 / 队列 500。"""
+    assert SOURCE_LIMITS == (60, 2, 500)
 
 
 def test_glossary_accepts_list_and_text():

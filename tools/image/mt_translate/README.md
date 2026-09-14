@@ -7,7 +7,7 @@
 | 参数 | 说明 |
 |---|---|
 | `file` | 图片路径（png/jpg/jpeg/webp/tif/tiff/bmp） |
-| `model` | 默认 `qwen-mt-image-2.0`（**0.004 元/张**，RPM=1） |
+| `model` | 默认 `qwen-mt-image-2.0`（**0.004 元/张**，RPM 60 / 并发 2） |
 | `fallback_model` | 默认 `qwen-mt-image`：主模型不可用/任务失败**自动降级**（同端点，仅模型名不同） |
 | `source_lang` / `target_lang` | 留空源语言自动识别；**源或目标至少一方须为中文/英文** |
 | `terms` | 术语干预：`[[原文,译文]]` 或每行「原文 => 译文」→ `terminologies[{src,tgt}]` |
