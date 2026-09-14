@@ -23,6 +23,8 @@ FAILURE_STATUSES = {"failed", "failed_review", "cancelled", "interrupted"}
 RUN_TERMINAL = {"succeeded", "failed", "failed_review", "cancelled", "interrupted"}
 # 删除运行中的 run 时：中止后等待活跃任务收口的秒数（超时仍删，pending 回报）
 DELETE_ABORT_WAIT_S = 10.0
+# 可打包下载的产物后缀（文档类；排除 .json/.db 等中间态文件）
+ARTIFACT_SUFFIXES = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".md", ".csv", ".zip"}
 
 
 class PipelineService:
@@ -609,6 +611,49 @@ class PipelineService:
                     ids.append(sub["id"])
                     queue.append(sub["id"])
         return ids
+
+    def collect_run_artifacts(self, run_id: str, scope: str = "final") -> list[dict[str, Any]]:
+        """收集某 run 的产物文件（供批量打包下载）。
+
+        scope=final 只取**最后一步**的产物（用户要的成果）；all 取每一步（含中间临时产物）。
+        判定方式：该步 output 里指向 data_dir 内**真实存在**的文件路径（`path`/`layered_file`/
+        `render_file` … 任意键），排除 `*_name` 这类纯名称键。
+        """
+        if self._pipeline_repo.get_run(run_id) is None:
+            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
+        outputs = self._pipeline_repo.outputs_by_step(run_id)
+        if scope == "final" and outputs:
+            outputs = {max(outputs): outputs[max(outputs)]}
+        root = self._data_dir.resolve() if self._data_dir is not None else None
+        found: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for step in sorted(outputs):
+            out = outputs[step]
+            if not isinstance(out, dict):
+                continue
+            for key, value in out.items():
+                if not isinstance(value, str) or not value or key.endswith("_name") or key == "name":
+                    continue
+                if Path(value).suffix.lower() not in ARTIFACT_SUFFIXES:
+                    continue
+                try:
+                    candidate = Path(value)
+                    if not candidate.is_absolute() or not candidate.is_file():
+                        continue
+                    resolved = candidate.resolve()
+                except OSError:
+                    continue
+                if root is not None and root not in resolved.parents:
+                    continue
+                if str(resolved) in seen:
+                    continue
+                seen.add(str(resolved))
+                # 显示名：`xxx_file` 配 `xxx_name`（如 layered_file/layered_name），否则回落 output.name
+                base = key[:-5] if key.endswith("_file") else key
+                name = out.get(f"{base}_name") or out.get("name") or resolved.name
+                found.append({"step": step, "key": key, "name": str(name),
+                              "path": str(resolved), "size": resolved.stat().st_size})
+        return found
 
     def _purge_artifacts(self, handles: list[str]) -> dict[str, int]:
         """删除任务产物目录 `data/outputs/<handle>/`（最终产物与中间临时产物一并清）。"""

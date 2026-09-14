@@ -4,13 +4,14 @@ import re
 import shutil
 import uuid
 import zipfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
 import deps
+from core.errors import TaskNotFoundError
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -24,6 +25,13 @@ _MAX_ARCHIVE_BYTES = 500 * 1024 * 1024
 _MAX_ARCHIVE_ENTRIES = 1000
 _MAX_ARCHIVE_TOTAL = 2 * 1024 * 1024 * 1024
 _MAX_LIST_FILES = 5000
+_MAX_PACKAGE_RUNS = 200
+
+
+def _label(raw: object) -> str:
+    """压缩包名：清洗危险字符、折叠连续点、去掉首尾点下划线（中文/字母数字/._- 保留）。"""
+    cleaned = re.sub(r"\.{2,}", ".", _UNSAFE.sub("_", str(raw or ""))).strip("_. ")
+    return (cleaned or "翻译成果")[:40]
 
 
 def _data_dir() -> Path:
@@ -260,6 +268,77 @@ async def upload_archive(file: UploadFile, extensions: str | None = None) -> dic
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "files": saved, "skipped": skipped}
 
+
+
+@router.post("/package", status_code=201)
+def package_run_artifacts(body: dict) -> dict:
+    """把多个任务的产物打包成一个 zip（服务端收集 → data/exports/<时间>_<名>.zip）。
+
+    body: {run_ids: [...], scope: "final"|"all", name?: "压缩包名"}
+    scope=final（默认）只含各 run 最后一步的成果；all 含每一步产物（含中间临时产物）。
+    """
+    raw_ids = body.get("run_ids") or []
+    if not isinstance(raw_ids, list):
+        raise HTTPException(status_code=422, detail="run_ids 须为数组")
+    run_ids = [str(r).strip() for r in raw_ids if str(r).strip()]
+    if not run_ids:
+        raise HTTPException(status_code=422, detail="run_ids 不能为空")
+    if len(run_ids) > _MAX_PACKAGE_RUNS:
+        raise HTTPException(status_code=413, detail=f"单次最多打包 {_MAX_PACKAGE_RUNS} 个任务（当前 {len(run_ids)}）")
+    scope = str(body.get("scope") or "final").lower()
+    if scope not in ("final", "all"):
+        raise HTTPException(status_code=422, detail="scope 只支持 final / all")
+
+    service = deps.get_pipeline_service()
+    zip_path = _data_dir() / "exports" / f"{datetime.now():%Y%m%d-%H%M%S}_{_label(body.get('name'))}.zip"
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+    entries: list[dict] = []
+    skipped: list[dict] = []
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for run_id in run_ids:
+            try:
+                artifacts = service.collect_run_artifacts(run_id, scope)
+            except TaskNotFoundError:
+                skipped.append({"run_id": run_id, "reason": "任务不存在"})
+                continue
+            except Exception as error:  # noqa: BLE001 —— 单个任务失败不拖垮整包
+                skipped.append({"run_id": run_id, "reason": f"{type(error).__name__}: {error}"})
+                continue
+            if not artifacts:
+                skipped.append({"run_id": run_id, "reason": "没有可打包的产物"})
+                continue
+            folder = (_UNSAFE.sub("_", run_id)[:24] or "run")
+            used: set[str] = set()
+            for artifact in artifacts:
+                arc = f"{folder}/{artifact['name']}"
+                if arc in used:  # 同 run 内同名产物加序号，避免相互覆盖
+                    stem, dot, suffix = artifact["name"].rpartition(".")
+                    arc = (f"{folder}/{stem}-{len(used)}{dot}{suffix}" if dot
+                           else f"{folder}/{artifact['name']}-{len(used)}")
+                used.add(arc)
+                try:
+                    zf.write(artifact["path"], arcname=arc)
+                except OSError as error:
+                    skipped.append({"run_id": run_id, "reason": f"读取失败 {artifact['name']}: {error}"})
+                    continue
+                entries.append({"run_id": run_id, "name": artifact["name"], "arcname": arc,
+                                "step": artifact.get("step"), "size": artifact.get("size", 0)})
+
+    if not entries:
+        zip_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=f"所选任务没有可打包的产物（{skipped}）")
+
+    return {
+        "path": str(zip_path),
+        "name": zip_path.name,
+        "scope": scope,
+        "count": len(entries),
+        "runs": len({e["run_id"] for e in entries}),
+        "size": zip_path.stat().st_size,
+        "entries": entries,
+        "skipped": skipped,
+    }
 
 
 @router.get("/download")
