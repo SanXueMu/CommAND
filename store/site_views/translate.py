@@ -11,6 +11,12 @@ TRANSLATE_VIEW: dict = {
     "props": {
         # 页眉渲染：归入「工作区」下拉（替换原先的独立 Tab）
         "nav": {"kind": "child", "group": "work", "label": "翻译工作台"},
+        # PDF 处理口径（批量）：声明候选 + 说明，前端不写死；text 口径下扫描件会暂停等补文字层
+        "pdfModes": [
+            {"value": "auto", "label": "自动探测", "hint": "按 PDF 有无文字层自动选流：文字版走版式翻译，扫描件走图片翻译（保留版式，产物无文字层）"},
+            {"value": "text", "label": "全部文字版", "hint": "一律走文字版链路（不使用 qwen-mt-image）；扫描件会暂停，提示先补文字层（如 ocrmypdf）"},
+            {"value": "image", "label": "全部图片版", "hint": "一律走图片翻译（qwen-mt-image，0.004 元/张）；产物为图片版 PDF，无文字层"},
+        ],
         "flow_prefix": "flow.translate.",
         # 文件后缀 → 翻译流（组件按扩展名路由，不在前端写死流 ID）；
         # 同后缀多条 = 用户可选处理方式（如 pdf 可版式翻译、双语 docx 或图片翻译）；

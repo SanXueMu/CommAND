@@ -241,7 +241,7 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
     except Exception:
         shutil.rmtree(batch_dir, ignore_errors=True)
         raise
-    batch_id = uuid.uuid4().hex[:12]
+    batch_id = _new_batch_id()
     _write_batch_manifest(batch_id, root or batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": root or batch_dir.name.split("_", 1)[-1],
@@ -336,7 +336,7 @@ async def upload_archive(file: UploadFile, extensions: str | None = None,
     if not saved:
         shutil.rmtree(batch_dir, ignore_errors=True)
         raise HTTPException(status_code=422, detail=f"压缩包内没有可用的文件（跳过 {len(skipped)} 条）")
-    batch_id = uuid.uuid4().hex[:12]
+    batch_id = _new_batch_id()
     _write_batch_manifest(batch_id, batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": batch_dir.name.split("_", 1)[-1],

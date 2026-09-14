@@ -46,6 +46,8 @@ OCR_VIEW: dict = {
         "description": "一站式识别工作台：选择识别模版，上传图片或 PDF，识别后查看结果并导出。",
         "recognizeFlow": "flow.ocr.smart",
         "exportFlow": "flow.ocrdb.view",
+        # 本工作台的任务清单过滤（通用 RunListPanel 用：只列 OCR 相关流）
+        "flows": ["flow.ocr.smart", "flow.ocr.searchable", "flow.ocrdb.view"],
         # 模版管理：不再内嵌抽屉，改为按声明 id 调起弹窗面板（templates.manager）
         "manageView": "templates",
         # 可搜索 PDF：扫描/图片版补隐形文字层（OCRmyPDF+Tesseract），版式不变、可选中检索

@@ -86,6 +86,32 @@ def test_batch_upload_keeps_relative_paths(client):
     assert (base / "子目录" / "b.docx").read_bytes() == b"PK"
 
 
+def test_batch_writes_manifest_and_marks_skipped(client):
+    """上传即固化批次清单（导出按它还原目录结构）；skip 类型打标但不丢文件。"""
+    import json
+
+    c, tmp_path = client
+    resp = c.post("/api/files/batch?skip=.ppt,.pptx", files=[
+        ("files", ("投标资料/A/合同.pdf", b"%PDF-1", "application/pdf")),
+        ("files", ("投标资料/C/演讲.pptx", b"PK", "application/octet-stream")),
+    ])
+    assert resp.status_code == 201
+    body = resp.json()
+    batch_id = body["batch_id"]
+    assert batch_id.startswith("b_")
+    manifest = tmp_path / "batches" / f"{batch_id}.json"
+    assert manifest.is_file(), "批次清单必须落盘（导出结构的地基）"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert data["root"] == "投标资料" and len(data["files"]) == 2
+    by_rel = {e["rel"]: e for e in data["files"]}
+    assert set(by_rel) == {"A/合同.pdf", "C/演讲.pptx"}
+    assert not by_rel["A/合同.pdf"].get("skip")
+    assert by_rel["C/演讲.pptx"]["skip"] is True and by_rel["C/演讲.pptx"]["skip_reason"]
+    assert body["skipped"] == ["C/演讲.pptx"]
+    # 文件本身照样落盘（导出要放原文件）
+    assert Path(by_rel["C/演讲.pptx"]["path"]).is_file()
+
+
 def test_batch_rejects_bad_input_and_rolls_back(client):
     c, tmp_path = client
     resp = c.post("/api/files/batch",
