@@ -78,3 +78,38 @@ def test_concurrent_writes_from_two_connections_do_not_lock(db_path):
     conn = dict_cache.open_dict(db_path)
     assert conn.execute("SELECT count(*) FROM translations").fetchone()[0] == 120
     conn.close()
+
+
+def test_many_parallel_tasks_open_write_read_without_lock(db_path):
+    """线上形态：批量 8 条任务并行（各自建连 + 建表 + 读写交替）——不得出现 database is locked。
+
+    `open_dict` 里的 `executescript(_SCHEMA)` 也要拿写锁，多条任务同时建连时最易撞锁；
+    进程内 `_DB_LOCK` 把这些访问串行化（跨进程才交给 busy_timeout / 退避重试）。
+    """
+    errors: list[Exception] = []
+    barrier = threading.Barrier(8)
+
+    def worker(tag: str) -> None:
+        try:
+            barrier.wait(timeout=10)  # 同时冲进来，最大化锁竞争
+            conn = dict_cache.open_dict(db_path)
+            try:
+                for i in range(30):
+                    key = dict_cache.text_key(f"{tag}-{i}")
+                    dict_cache.save(conn, key, f"{tag}-{i}", f"{tag}译{i}", "qwen-mt-flash")
+                    dict_cache.lookup(conn, [key, dict_cache.text_key(f"{tag}-{i + 1}")])
+            finally:
+                conn.close()
+        except Exception as error:  # noqa: BLE001
+            errors.append(error)
+
+    threads = [threading.Thread(target=worker, args=(f"w{n}",)) for n in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == [], errors
+
+    conn = dict_cache.open_dict(db_path)
+    assert conn.execute("SELECT count(*) FROM translations").fetchone()[0] == 240
+    conn.close()

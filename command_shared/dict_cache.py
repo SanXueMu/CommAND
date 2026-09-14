@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,11 @@ from pathlib import Path
 _DB_TIMEOUT_S = 30.0
 _BUSY_TIMEOUT_MS = 30_000
 _WRITE_RETRIES = 3
+
+# 进程内互斥：所有任务都跑在同一个进程的线程里（scheduler worker），
+# 每任务各开一条连接 → 单靠 SQLite 的 busy 等待会互相排队甚至瞬时失败；
+# 这里先把进程内访问串行化，跨进程才交给 busy_timeout/重试。
+_DB_LOCK = threading.RLock()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS translations (
@@ -39,14 +45,18 @@ def default_db_path() -> Path:
 
 
 def open_dict(db_path: str | Path | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path or default_db_path(), timeout=_DB_TIMEOUT_S)
-    # WAL：多读单写并发下不互斥（批量任务 + 引擎多线程会同时写字典）
-    try:
-        conn.execute("PRAGMA journal_mode=WAL")
-    except sqlite3.Error:  # noqa: BLE001 —— 只读挂载等场景退化为默认日志模式
-        pass
-    conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
-    conn.executescript(_SCHEMA)
+    # check_same_thread=False：同一连接可能被引擎的 checkpoint 回调跨线程使用；
+    # 安全性由 _DB_LOCK 串行化保证。
+    with _DB_LOCK:
+        conn = sqlite3.connect(db_path or default_db_path(), timeout=_DB_TIMEOUT_S,
+                               check_same_thread=False)
+        # WAL：多读单写并发下不互斥（批量任务 + 引擎多线程会同时写字典）
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.Error:  # noqa: BLE001 —— 只读挂载等场景退化为默认日志模式
+            pass
+        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        conn.executescript(_SCHEMA)
     return conn
 
 
@@ -70,16 +80,17 @@ def text_key(norm_text: str) -> str:
 def lookup(conn: sqlite3.Connection, keys: list[str]) -> dict[str, dict]:
     """批量查缓存 → {key: {source, translated, model, status}}。"""
     result: dict[str, dict] = {}
-    for i in range(0, len(keys), 500):
-        chunk = keys[i : i + 500]
-        placeholders = ",".join("?" * len(chunk))
-        rows = conn.execute(
-            f"SELECT key, source, translated, model, status FROM translations "
-            f"WHERE key IN ({placeholders})",
-            chunk,
-        ).fetchall()
-        for key, source, translated, model, status in rows:
-            result[key] = {"source": source, "translated": translated, "model": model, "status": status}
+    with _DB_LOCK:
+        for i in range(0, len(keys), 500):
+            chunk = keys[i : i + 500]
+            placeholders = ",".join("?" * len(chunk))
+            rows = conn.execute(
+                f"SELECT key, source, translated, model, status FROM translations "
+                f"WHERE key IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for key, source, translated, model, status in rows:
+                result[key] = {"source": source, "translated": translated, "model": model, "status": status}
     return result
 
 
@@ -101,7 +112,8 @@ def save(
         )
         conn.commit()
 
-    with_lock_retry(_write)
+    with _DB_LOCK:
+        with_lock_retry(_write)
 
 
 def stats(conn: sqlite3.Connection) -> dict:
