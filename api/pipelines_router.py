@@ -2,10 +2,13 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 import deps
+from services import batch_manifest  # noqa: F401  (替换原件时同步批次清单)
 from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError, ToolUserError
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -23,6 +26,12 @@ class PipelineCreate(BaseModel):
 class PipelineRunCreate(BaseModel):
     input: dict[str, Any] = Field(default_factory=dict)
     batch_id: str | None = None
+
+
+class RunInputPatch(BaseModel):
+    """就地修正任务参数（不含 file：换文件走 replace-file）。"""
+
+    input: dict[str, Any] = Field(default_factory=dict)
 
 
 class RerunBatchBody(BaseModel):
@@ -137,6 +146,72 @@ def delete_run(run_id: str, purge_files: bool = True) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except TaskConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@runs_router.post("/{run_id}/replace-file", status_code=201)
+async def replace_run_file(run_id: str, file: UploadFile) -> dict:
+    """替换任务原件（旧版 .doc 另存为 .docx 后上传；或换一份正确的原件）。
+
+    - 新文件落在**原文件同目录**（保持批次内相对位置），并**同步更新批次清单**（导出按清单还原）
+    - 更新该 run 的 `input.file`，写审计事件 `file_replaced`
+    - 仅允许非运行中的 run；替换后点「继续」（paused）或「重跑」即可
+    """
+    from api import files_router
+    from services import batch_manifest
+
+    service = deps.get_pipeline_service()
+    run = deps.get_pipeline_repo().get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"任务不存在: {run_id}")
+    if str(run.get("status")) in ("running", "queued"):
+        raise HTTPException(status_code=409, detail="任务运行中，请先取消再替换原件")
+    old_path = str((run.get("input") or {}).get("file") or "")
+    if not old_path:
+        raise HTTPException(status_code=422, detail="该任务没有原件路径，无法替换")
+    try:
+        rel = files_router._strict_rel(file.filename or "unnamed")  # noqa: SLF001
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    target = Path(old_path).parent / rel.name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    size = 0
+    with target.open("wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            out.write(chunk)
+            size += len(chunk)
+    if size == 0:
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail="上传的是空文件")
+
+    new_input = dict(run.get("input") or {})
+    new_input["file"] = str(target)
+    deps.get_pipeline_repo().update_run_input(run_id, new_input)
+    updated = batch_manifest.replace_file(
+        deps.get_config().data_dir, str(run.get("batch_id") or ""), old_path,
+        {"path": str(target), "name": target.name, "rel": target.name, "size": size})
+    deps.get_run_event_repo().append(run_id, None, "file_replaced",
+                                     detail={"old": old_path, "new": str(target),
+                                             "manifest_updated": updated})
+    return {"run_id": run_id, "file": str(target), "replaced": old_path,
+            "size": size, "manifest_updated": updated}
+
+
+@runs_router.patch("/{run_id}/input")
+def patch_run_input(run_id: str, body: RunInputPatch) -> dict:
+    """就地修正任务参数（密钥名/模型/术语等）后「继续」或「重跑」；file 请用 replace-file。"""
+    if "file" in body.input:
+        raise HTTPException(status_code=422, detail="换文件请用「替换原件」")
+    repo = deps.get_pipeline_repo()
+    run = repo.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"任务不存在: {run_id}")
+    if str(run.get("status")) in ("running", "queued"):
+        raise HTTPException(status_code=409, detail="任务运行中，请先取消再修改参数")
+    merged = {**(run.get("input") or {}), **body.input}
+    repo.update_run_input(run_id, merged)
+    deps.get_run_event_repo().append(run_id, None, "input_updated",
+                                     detail={"keys": sorted(body.input)})
+    return {"run_id": run_id, "input": merged}
 
 
 @runs_router.get("/rerunnable")

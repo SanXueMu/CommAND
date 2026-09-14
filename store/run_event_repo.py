@@ -16,6 +16,7 @@ AUDIT_KINDS = {
     "override_applied",
     "subrun_created", "subrun_finished",
     "run_fallback",  # 016：能力不可用 → 自动降级到 on_failure.fallback_flow（原/新 run 各一条）
+    "file_replaced", "input_updated",  # 017：替换任务原件 / 就地修正任务参数
 }
 
 
