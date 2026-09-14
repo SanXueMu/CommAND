@@ -21,6 +21,8 @@ router = APIRouter(prefix="/files", tags=["files"])
 
 _MAX_BYTES = 200 * 1024 * 1024
 _UNSAFE = re.compile(r"[^\w.\-\u4e00-\u9fff]+")
+# 文件名禁用字符：控制字符（含 NUL）；路径分隔符在分段时已处理
+_FORBIDDEN = re.compile(r"[\x00-\x1f]")
 _BATCH_ID_RE = re.compile(r"b_[0-9a-f]{6,32}")
 
 # 批量上传（多文件/目录）与压缩包解压的上限
@@ -76,10 +78,34 @@ def _ensure_within(path: str | Path) -> Path:
     return target
 
 
+def _truncate_name(name: str, limit: int) -> str:
+    """按**字节**截断单段名（保后缀），用于超长名兜底。"""
+    if len(name.encode("utf-8")) <= limit:
+        return name
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        return name.encode("utf-8")[:limit].decode("utf-8", "ignore")
+    keep = max(limit - len(ext.encode("utf-8")) - 1, 1)
+    head = stem.encode("utf-8")[:keep].decode("utf-8", "ignore")
+    return f"{head}.{ext}"
+
+
+def _safe_segment(raw: str) -> str:
+    """单段清洗：**保留原始名字**（空格/括号/点/中文原样），只挡控制字符与超长。
+
+    结构保真是硬要求（用户口径：导出目录结构与原结构完全相同，只有批次根目录加 `_中文`），
+    因此**绝不**做「把空格/括号换成下划线」这类破坏性清洗（2026-09-14 修复）。
+    """
+    name = _FORBIDDEN.sub("_", raw)
+    if name in (".", ".."):
+        raise ValueError(f"非法路径段: {raw!r}")
+    return _truncate_name(name, _NAME_MAX)
+
+
 def _safe_rel(name: str) -> Path:
-    """相对路径逐段清洗（去空段、替换危险字符、限长）。"""
-    parts = [p for raw in re.split(r"[\\/]+", name or "")
-             if (p := (_UNSAFE.sub("_", raw).strip("_. "))[:120])]
+    """相对路径逐段清洗：只去空段 + 挡控制字符/超长，**保留原名**。"""
+    parts = [seg for raw in re.split(r"[\\/]+", name or "")
+             if (seg := _safe_segment(raw).strip())]
     if not parts:
         raise HTTPException(status_code=422, detail=f"非法文件名: {name!r}")
     return Path(*parts)
@@ -155,13 +181,15 @@ def _write_batch_manifest(batch_id: str, root: str, batch_dir: Path,
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-# 目录/包名长度上限：Linux 单段 255 字节，取 100 兼顾中文（3 字节/字）与可读性；
-# 过短会把「合同全流程采购档案」这类真实目录名截成 ..._fo（2026-09-14 反馈）
-_NAME_MAX = 100
+# 单段名长度上限（**字节**）：Linux 单段 255 字节，取 200 留余量；
+# 只对超长名兜底截断，正常名字（含空格/括号/中文）一律原样保留
+_NAME_MAX = 200
 
 
 def _new_batch_dir(label: str) -> Path:
-    safe = (_UNSAFE.sub("_", label).strip("_") or "batch")[:_NAME_MAX]
+    # 批次根目录名同样**保留原名**（空格/括号/中文原样），只挡控制字符与分隔符
+    safe = _FORBIDDEN.sub("_", (label or "").replace("/", "_").replace("\\", "_")).strip()
+    safe = _truncate_name(safe, _NAME_MAX) or "batch"
     target = Path(deps.get_config().data_dir) / "uploads" / date.today().isoformat() / f"{uuid.uuid4().hex[:8]}_{safe}"
     target.mkdir(parents=True, exist_ok=True)
     return target
@@ -490,7 +518,7 @@ def package_batch(body: PackageBatchBody) -> dict:
     if scope not in ("final", "all"):
         raise HTTPException(status_code=422, detail="scope 只支持 final / all")
     suffix = _UNSAFE.sub("_", body.suffix or "")[:16]
-    root = (_UNSAFE.sub("_", str(manifest.get("root") or "batch"))[:_NAME_MAX] or "batch")
+    root = _truncate_name(str(manifest.get("root") or "batch"), _NAME_MAX) or "batch"
     service = deps.get_pipeline_service()
     runs = service.list_runs(batch_id=body.batch_id, limit=_MAX_PACKAGE_RUNS)["runs"]
     # 同一文件可能有多条 run（再运行 / 失败降级）：**优先取成功的那条**，其次最新。

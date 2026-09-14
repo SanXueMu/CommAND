@@ -606,6 +606,37 @@ class PipelineService:
         failed = [r for r in runs if str(r.get("status")) in self.RERUNNABLE_STATUSES]
         return [r["id"] for r in self._dedupe_by_file(failed)]
 
+    def rerunnable_runs(self, batch_id: str | None = None, flow_ids: list[str] | None = None,
+                        limit: int = 1000) -> dict[str, Any]:
+        """可重跑清单（**全批次口径**，不受任务清单「只加载最新 N 条」限制）。
+
+        判据 = 「**从未成功过**」且「最新一次是失败态」的文件：
+        - 已成功过的文件即便后来某次重跑失败，也不需要再跑（交付物已在），否则计数会被
+          历史失败的尝试虚高（2026-09-14 用户实测：界面 42，真实待处理 10）。
+        - paused 不在内（那是「继续」的语义）。
+        返回 {count, run_ids, files:[{file,name,run_id,status,error}]}。
+        """
+        runs = self._pipeline_repo.list_runs(batch_id=batch_id, limit=limit)
+        if flow_ids:
+            wanted = set(flow_ids)
+            runs = [r for r in runs if r.get("pipeline_id") in wanted]
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for run in runs:  # created_at DESC（最新在前）
+            key = str((run.get("input") or {}).get("file") or run["id"])
+            grouped.setdefault(key, []).append(run)
+        files: list[dict[str, Any]] = []
+        for key, history in grouped.items():
+            if any(r.get("status") == "succeeded" for r in history):
+                continue
+            latest = history[0]
+            if str(latest.get("status")) not in self.RERUNNABLE_STATUSES:
+                continue
+            files.append({
+                "file": key, "name": Path(key).name, "run_id": latest["id"],
+                "status": latest.get("status"), "error": (latest.get("error") or {}).get("message"),
+            })
+        return {"count": len(files), "run_ids": [f["run_id"] for f in files], "files": files}
+
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
         """steps 快照：每步最新任务 + 定义工具名（工作区/任务中心的考证视图）。"""
         run = self._pipeline_repo.get_run(run_id)

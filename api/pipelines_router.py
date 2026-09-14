@@ -139,6 +139,19 @@ def delete_run(run_id: str, purge_files: bool = True) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@runs_router.get("/rerunnable")
+def rerunnable_runs(batch_id: str | None = None, flow_ids: str | None = None,
+                    limit: int = 1000) -> dict:
+    """可重跑清单（全批次口径）：**从未成功过**且最新一次失败的文件。
+
+    任务清单只加载最新 N 条 run，界面上的「失败项」计数会被历史失败的尝试虚高；
+    这里按整个批次聚合，给出真实待处理清单（含对应 run_id 供一键重跑）。
+    """
+    flows = [f.strip() for f in (flow_ids or "").split(",") if f.strip()]
+    return deps.get_pipeline_service().rerunnable_runs(
+        batch_id=batch_id, flow_ids=flows or None, limit=limit)
+
+
 @runs_router.get("/{run_id}")
 def get_pipeline_run(run_id: str) -> dict:
     service = deps.get_pipeline_service()
