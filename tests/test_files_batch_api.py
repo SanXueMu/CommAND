@@ -107,25 +107,19 @@ def test_batch_writes_manifest_and_marks_skipped(client):
     assert set(by_rel) == {"A/合同.pdf", "C/演讲.pptx"}
     assert not by_rel["A/合同.pdf"].get("skip")
     assert by_rel["C/演讲.pptx"]["skip"] is True and by_rel["C/演讲.pptx"]["skip_reason"]
-    assert body["skipped"] == ["C/演讲.pptx"]
+    assert [x["name"] for x in body["skipped"]] == ["C/演讲.pptx"]
+    assert body["skipped"][0]["reason"]
     # 文件本身照样落盘（导出要放原文件）
     assert Path(by_rel["C/演讲.pptx"]["path"]).is_file()
 
 
 def test_batch_rejects_bad_input_and_rolls_back(client):
+    """真正的越界（路径穿越/超量）仍整批失败并回滚；空文件/白名单外改为留档跳过。"""
     c, tmp_path = client
-    resp = c.post("/api/files/batch",
-                  files=[("files", ("ok.pdf", b"x", "application/pdf"))],
-                  params={"extensions": ".docx"})
-    assert resp.status_code == 422 and "不支持的类型" in resp.json()["detail"]
-    batches = list((tmp_path / "uploads").glob("*/*")) if (tmp_path / "uploads").exists() else []
-    assert batches == [], "越界即整批回滚，不留半批脏数据"
-
     evil = c.post("/api/files/batch", files=[("files", ("../逃逸.pdf", b"x", "application/pdf"))])
     assert evil.status_code == 422
-
-    empty = c.post("/api/files/batch", files=[("files", ("空.pdf", b"", "application/pdf"))])
-    assert empty.status_code == 422
+    batches = list((tmp_path / "uploads").glob("*/*")) if (tmp_path / "uploads").exists() else []
+    assert batches == [], "越界即整批回滚，不留半批脏数据"
 
     many = c.post("/api/files/batch", files=[
         ("files", (f"f{i}.pdf", b"x", "application/pdf")) for i in range(201)])
@@ -154,11 +148,16 @@ def test_archive_validations(client):
     assert c.post("/api/files/archive", files={"file": ("不是压缩包.txt", b"x", "text/plain")}).status_code == 422
     assert c.post("/api/files/archive", files={"file": ("坏包.zip", b"not-a-zip", "application/zip")}).status_code == 422
 
-    filtered = c.post("/api/files/archive",
-                      files={"file": ("包.zip", _zip({"a.txt": b"x"}).read(), "application/zip")},
-                      params={"extensions": ".docx"})
-    assert filtered.status_code == 422 and "没有可用的文件" in filtered.json()["detail"]
-    assert list((tmp_path / "uploads").glob("*/*")) == [], "无可解压文件时批次目录应清理"
+    # 白名单外改为留档跳过（导出要放源文件）；只有「没有任何可用条目」才 422
+    foreign = c.post("/api/files/archive",
+                     files={"file": ("包.zip", _zip({"a.txt": b"x"}).read(), "application/zip")},
+                     params={"extensions": ".docx"})
+    assert foreign.status_code == 201
+    fb = foreign.json()
+    assert fb["files"][0]["skip"] is True and fb["skipped"][0]["name"] == "a.txt"
+
+    only_junk = c.post("/api/files/archive", files={"file": ("空包.zip", _zip({}).read(), "application/zip")})
+    assert only_junk.status_code == 422 and "没有可用的文件" in only_junk.json()["detail"]
 
     huge = c.post("/api/files/archive",
                   files={"file": ("多.zip", _zip({f"f{i}.txt": b"x" for i in range(1001)}).read(), "application/zip")})
@@ -174,3 +173,24 @@ def test_batch_manifests_lookup(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["names"] == {bid: "投标资料"} and body["count"] == {bid: 1}
+
+
+def test_batch_empty_and_foreign_files_do_not_kill_batch(client):
+    """空文件 / 白名单外文件（PPT）不再 422 整批回滚：留档 + 打标跳过（导出能放回源文件）。"""
+    c, tmp_path = client
+    resp = c.post("/api/files/batch?extensions=.pdf,.txt", files=[
+        ("files", ("资料/A/正文.pdf", b"%PDF-1", "application/pdf")),
+        ("files", ("资料/B/占位.txt", b"", "text/plain")),        # 0 字节
+        ("files", ("资料/C/演讲.pptx", b"PK", "application/octet-stream")),  # 白名单外
+    ])
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    by_rel = {f["rel"]: f for f in body["files"]}
+    assert set(by_rel) == {"A/正文.pdf", "B/占位.txt", "C/演讲.pptx"}
+    assert not by_rel["A/正文.pdf"].get("skip")
+    assert by_rel["B/占位.txt"]["skip"] is True and by_rel["B/占位.txt"]["empty"] is True
+    assert by_rel["C/演讲.pptx"]["skip"] is True and "empty" not in by_rel["C/演讲.pptx"]
+    assert {x["name"] for x in body["skipped"]} == {"B/占位.txt", "C/演讲.pptx"}
+    # 留档：空文件与 PPT 都还在盘上（导出按原结构放回）
+    assert Path(by_rel["B/占位.txt"]["path"]).is_file()
+    assert Path(by_rel["C/演讲.pptx"]["path"]).is_file()

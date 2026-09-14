@@ -127,7 +127,7 @@ def test_batch_upload_marks_skip_and_writes_manifest(batch):
                   params={"skip": ".ppt,.pptx"})
     assert resp.status_code == 201
     body = resp.json()
-    assert body["batch_id"] and body["skipped"] == ["B.pptx"]
+    assert body["batch_id"] and [x["name"] for x in body["skipped"]] == ["B.pptx"]
     flags = {f["rel"]: f.get("skip") for f in body["files"]}
     assert flags == {"A.pdf": None, "B.pptx": True}
     manifest = json.loads((tmp_path / "batches" / f"{body['batch_id']}.json").read_text(encoding="utf-8"))

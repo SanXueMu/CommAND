@@ -86,7 +86,10 @@ TRANSLATE_VIEW: dict = {
         # 批量入口声明（存在才显示「单文件 / 批量」切换）；extensions 须与 routes 的后缀一致
         "batch": {
             "extensions": [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt", ".md",
-                           ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"],
+                           ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp",
+                           ".ppt", ".pptx"],
+            # 跳过类型：**仍上传留档**（导出按原结构放回源文件），但只建一条「暂停」记录、不做翻译
+            "skip": [".ppt", ".pptx"],
             "maxFiles": 200,
             "maxTotalMB": 500,
         },

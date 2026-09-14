@@ -115,6 +115,12 @@ def _entry(path: Path, base: Path, skip_exts: set[str] | None = None,
     return item
 
 
+def _skipped_view(saved: list[dict]) -> list[dict]:
+    """已跳过条目（空文件/PPT 等）：统一 [{name, reason}] 形状，供前端逐条展示。"""
+    return [{"name": f["rel"], "reason": f.get("skip_reason") or _SKIP_REASON}
+            for f in saved if f.get("skip")]
+
+
 def _manifest_dir() -> Path:
     target = Path(deps.get_config().data_dir) / "batches"
     target.mkdir(parents=True, exist_ok=True)
@@ -242,8 +248,6 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             if root and len(rel.parts) > 1 and rel.parts[0] == root:
                 rel = Path(*rel.parts[1:])
-            if not _ext_ok(rel.name, exts):
-                raise HTTPException(status_code=422, detail=f"不支持的类型: {rel.name}")
             target = batch_dir / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             size = 0
@@ -260,9 +264,17 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
                         raise HTTPException(
                             status_code=413,
                             detail=f"合计超过 {_MAX_BATCH_TOTAL // 1024 // 1024}MB 上限")
+            # 非致命问题**不阻断整批**：留档（导出按原结构放回源文件）+ 打标跳过，
+            # 前端只把它们列进「已跳过」，不会为它们建任务。
             if size == 0:
-                raise HTTPException(status_code=422, detail=f"空文件: {rel.name}")
-            saved.append(_entry(target, batch_dir, skip_exts))
+                entry = _entry(target, batch_dir, skip_exts)
+                entry.update({"skip": True, "empty": True, "skip_reason": "空文件（0 字节），已跳过"})
+            elif not _ext_ok(rel.name, exts):
+                entry = _entry(target, batch_dir, skip_exts)
+                entry.update({"skip": True, "skip_reason": "不在本次允许的类型内，已跳过"})
+            else:
+                entry = _entry(target, batch_dir, skip_exts)
+            saved.append(entry)
     except Exception:
         shutil.rmtree(batch_dir, ignore_errors=True)
         raise
@@ -270,7 +282,7 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
     _write_batch_manifest(batch_id, root or batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": root or batch_dir.name.split("_", 1)[-1],
-            "files": saved, "skipped": [f["rel"] for f in saved if f.get("skip")]}
+            "files": saved, "skipped": _skipped_view(saved)}
 
 
 def _is_zip_symlink(info: zipfile.ZipInfo) -> bool:
@@ -331,8 +343,8 @@ async def upload_archive(file: UploadFile, extensions: str | None = None,
                     skipped.append({"name": info.filename, "reason": str(exc)})
                     continue
                 if not _ext_ok(rel.name, exts):
-                    skipped.append({"name": info.filename, "reason": "扩展名不在允许范围"})
-                    continue
+                    # 白名单外（如 PPT）：照样解压留档（导出要放源文件），但打标跳过
+                    pass
                 target = batch_dir / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 written = 0
@@ -345,11 +357,13 @@ async def upload_archive(file: UploadFile, extensions: str | None = None,
                             raise HTTPException(
                                 status_code=413,
                                 detail=f"解压总量超上限 {_MAX_ARCHIVE_TOTAL // 1024 // 1024 // 1024}GB")
+                entry = _entry(target, batch_dir, skip_exts)
                 if written == 0:
-                    target.unlink(missing_ok=True)
-                    skipped.append({"name": info.filename, "reason": "空文件"})
-                    continue
-                saved.append(_entry(target, batch_dir, skip_exts))
+                    entry.update({"skip": True, "empty": True,
+                                  "skip_reason": "空文件（0 字节），已跳过"})
+                elif not _ext_ok(rel.name, exts):
+                    entry.update({"skip": True, "skip_reason": "不在本次允许的类型内，已跳过"})
+                saved.append(entry)
     except HTTPException:
         shutil.rmtree(batch_dir, ignore_errors=True)
         raise
@@ -365,7 +379,7 @@ async def upload_archive(file: UploadFile, extensions: str | None = None,
     _write_batch_manifest(batch_id, batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": batch_dir.name.split("_", 1)[-1],
-            "files": saved, "skipped": skipped}
+            "files": saved, "skipped": _skipped_view(saved) + skipped}
 
 
 
