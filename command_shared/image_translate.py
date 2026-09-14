@@ -257,6 +257,12 @@ _UNAVAILABLE_HINTS = (
 )
 
 
+UNAVAILABLE_HINT = (
+    "该密钥无图片翻译模型（qwen-mt-image）权限：请在百炼控制台为该 Key 放开模型限制，"
+    "或改用其它密钥；也可把图片转成 PDF 走「版式翻译」。"
+)
+
+
 def is_unavailable_error(error: BaseException | str | None) -> bool:
     """判断失败原因是否属「模型不可用」（用于决定是否走 on_failure 降级）。"""
     if error is None:

@@ -95,7 +95,7 @@ def run(input: dict, ctx, emit) -> dict:
     except ImageTranslateError as error:
         # 模型未开通/无权限：重试无意义 → 抛「能力不可用」，由 run 级 on_failure 决定降级
         if image_translate.is_unavailable_error(error):
-            raise ToolUnavailableError(str(error)) from error
+            raise ToolUnavailableError(f"{error}｜{image_translate.UNAVAILABLE_HINT}") from error
         raise _ToolError(str(error))
 
     elapsed = round(time.monotonic() - started, 1)

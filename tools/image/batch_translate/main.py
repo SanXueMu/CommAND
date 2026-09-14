@@ -138,13 +138,15 @@ def run(input: dict, ctx, emit) -> dict:
     ok_items = [r for r in items if r["ok"]]
     elapsed = round(time.monotonic() - started, 1)
     if unavailable is not None and not ok_items:
-        raise ToolUnavailableError(f"图片翻译不可用（已提前中止）：{unavailable[:200]}")
+        raise ToolUnavailableError(
+            f"图片翻译不可用（已提前中止）：{unavailable[:160]}｜"
+            f"{image_translate.UNAVAILABLE_HINT}")
     if not ok_items:
         reasons = "；".join(f"第{r['index']}页 {r['error']}" for r in items[:3])
         message = f"全部 {len(items)} 页翻译失败：{reasons}"
         # 全是「模型不可用」类原因 → 交给 run 级 on_failure 降级（如图片流→版式流）
         if image_translate.is_unavailable_error(" ".join(str(r.get("error") or "") for r in items)):
-            raise ToolUnavailableError(message)
+            raise ToolUnavailableError(f"{message[:160]}｜{image_translate.UNAVAILABLE_HINT}")
         raise _error(message)
 
     emit({"phase": "batch_done", "ok": len(ok_items), "failed": len(items) - len(ok_items), "elapsed_s": elapsed})

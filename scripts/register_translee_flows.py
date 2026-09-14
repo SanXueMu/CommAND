@@ -289,6 +289,9 @@ FLOWS: dict[str, dict] = {
     },
     "flow.translate.image": {
         "name": "图片翻译",
+        # 单图没有文字等价方案：模型不可用（403/未开通）时降级到 skip 流 → **暂停留档**
+        # （可见、可决策；源文件随批次导出），而不是留一条红色失败
+        "on_failure": {"fallback_flow": "flow.translate.skip"},
         "doc_md": ("图片翻译全自动流：本地图片 → DashScope 临时上传 → 异步图片翻译（qwen-mt-image-2.0）"
                    "→ 下载译文图（保留排版）。术语干预对接术语表；主模型不可用自动降级备用模型。"
                    "限速：RPM 60（约 1 秒/张）。"),
