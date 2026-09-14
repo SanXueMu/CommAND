@@ -21,6 +21,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 
 _MAX_BYTES = 200 * 1024 * 1024
 _UNSAFE = re.compile(r"[^\w.\-\u4e00-\u9fff]+")
+_BATCH_ID_RE = re.compile(r"b_[0-9a-f]{6,32}")
 
 # 批量上传（多文件/目录）与压缩包解压的上限
 _MAX_BATCH_FILES = 200
@@ -146,6 +147,30 @@ def _new_batch_dir(label: str) -> Path:
     target = Path(deps.get_config().data_dir) / "uploads" / date.today().isoformat() / f"{uuid.uuid4().hex[:8]}_{safe}"
     target.mkdir(parents=True, exist_ok=True)
     return target
+
+
+@router.get("/batches")
+def batch_manifests(ids: str) -> dict:
+    """批次清单摘要（只读）：批次列/导出要显示「根目录名」，刷新后仍要能查到。
+
+    返回 {names: {batch_id: 根目录名}, count: {batch_id: 条目数}}；未知 id 静默跳过。
+    """
+    names: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    for raw in (ids or "").split(","):
+        batch_id = raw.strip()
+        if not batch_id or not _BATCH_ID_RE.fullmatch(batch_id):
+            continue
+        path = _manifest_dir() / f"{batch_id}.json"
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        names[batch_id] = str(data.get("root") or "")
+        counts[batch_id] = len(data.get("files") or [])
+    return {"names": names, "count": counts}
 
 
 @router.get("/list")

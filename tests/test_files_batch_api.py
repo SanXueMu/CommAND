@@ -163,3 +163,14 @@ def test_archive_validations(client):
     huge = c.post("/api/files/archive",
                   files={"file": ("多.zip", _zip({f"f{i}.txt": b"x" for i in range(1001)}).read(), "application/zip")})
     assert huge.status_code == 413 and "条目超上限" in huge.json()["detail"]
+
+
+def test_batch_manifests_lookup(client):
+    """批次名查询：刷新后仍能显示根目录名（未知 id 静默跳过）。"""
+    c, tmp_path = client
+    up = c.post("/api/files/batch", files=[("files", ("投标资料/A/合同.pdf", b"%PDF", "application/pdf"))])
+    bid = up.json()["batch_id"]
+    resp = c.get(f"/api/files/batches?ids={bid},b_deadbeef,not-an-id")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["names"] == {bid: "投标资料"} and body["count"] == {bid: 1}
