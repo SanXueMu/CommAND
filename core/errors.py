@@ -25,12 +25,22 @@ class ToolPauseError(Exception):
         self.hint = hint
 
 
+class ToolUnavailableError(Exception):
+    """能力不可用（模型未开通 / 无权限 / 模型不存在）：**不重试**。
+
+    与 ToolDomainError（限流等可重试）区分开：这种失败重试多少次都一样，应当交由 run 级
+    `on_failure.fallback_flow` 降级到等价流（如「图片版 PDF 翻译」→「版式翻译」）。
+    """
+
+
 class TaskCancelled(Exception):
     """协作取消：工具在检查点主动抛出或 subprocess 被 SIGTERM 后转译。"""
 
 
-EXIT_CODE = {ToolUserError: 1, ToolSystemError: 2, ToolDomainError: 3, ToolPauseError: 4}
-HTTP_STATUS = {ToolUserError: 422, ToolSystemError: 500, ToolDomainError: 503, ToolPauseError: 409}
+EXIT_CODE = {ToolUserError: 1, ToolSystemError: 2, ToolDomainError: 3, ToolPauseError: 4,
+             ToolUnavailableError: 5}
+HTTP_STATUS = {ToolUserError: 422, ToolSystemError: 500, ToolDomainError: 503, ToolPauseError: 409,
+               ToolUnavailableError: 503}
 
 
 class ToolNotFoundError(Exception):

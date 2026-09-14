@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from config import Config
-from core.errors import TaskCancelled, ToolDomainError, ToolPauseError, ToolUserError
+from core.errors import (TaskCancelled, ToolDomainError, ToolPauseError, ToolUnavailableError,
+                         ToolUserError)
 from core.protocol import ToolManifest
 from core.runner import RunContext, Runner
 from store.db import Db
@@ -120,6 +121,11 @@ class Scheduler:
             if getattr(exc, "hint", None):
                 error["hint"] = exc.hint
             self._task_repo.finish(handle, "paused", error=error)
+        except ToolUnavailableError as exc:
+            # 能力不可用（模型未开通/无权限）：**不重试**，落 failed 并把 kind 记成 unavailable，
+            # 由 run 级 on_failure.fallback_flow 决定是否自动降级到等价流（如图片流→版式流）
+            self._task_repo.finish(handle, "failed", error={
+                "kind": "unavailable", "message": str(exc)})
         except ToolDomainError as exc:
             if task["attempt"] < task["max_attempts"]:
                 self._task_repo.requeue(handle)

@@ -16,32 +16,37 @@ class PipelineRepo:
 
     def upsert_definition(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                           doc_md: str | None = None, ptype: str = "flow",
-                          input_schema: dict[str, Any] | None = None) -> None:
-        """注册/更新流定义；type 不可变（变更由 service 层拒绝），input_schema 缺省保留旧值。"""
+                          input_schema: dict[str, Any] | None = None,
+                          on_failure: dict[str, Any] | None = None) -> None:
+        """注册/更新流定义；type 不可变（变更由 service 层拒绝），input_schema/on_failure 缺省保留旧值。"""
         with self._db.pool.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO pipelines (id, name, steps, doc_md, type, input_schema)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO pipelines (id, name, steps, doc_md, type, input_schema, on_failure)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name, steps = EXCLUDED.steps, doc_md = EXCLUDED.doc_md,
                     input_schema = COALESCE(EXCLUDED.input_schema, pipelines.input_schema),
+                    on_failure = COALESCE(EXCLUDED.on_failure, pipelines.on_failure),
                     created_at = now()
                 """,
                 (pipeline_id, name, Json(steps), doc_md, ptype,
-                 Json(input_schema) if input_schema is not None else None),
+                 Json(input_schema) if input_schema is not None else None,
+                 Json(on_failure) if on_failure is not None else None),
             )
 
     def get_definition(self, pipeline_id: str) -> dict[str, Any] | None:
         with self._db.pool.connection() as conn:
             row = conn.execute(
-                "SELECT id, name, steps, doc_md, created_at, type, input_schema FROM pipelines WHERE id = %s",
+                "SELECT id, name, steps, doc_md, created_at, type, input_schema, on_failure "
+                "FROM pipelines WHERE id = %s",
                 (pipeline_id,),
             ).fetchone()
         if row is None:
             return None
         return {"id": row[0], "name": row[1], "steps": row[2], "doc_md": row[3],
-                "created_at": row[4], "type": row[5] or "flow", "input_schema": row[6]}
+                "created_at": row[4], "type": row[5] or "flow", "input_schema": row[6],
+                "on_failure": row[7]}
 
     def list_definitions(self) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
@@ -64,8 +69,8 @@ class PipelineRepo:
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
                   offset: int = 0, batch_id: str | None = None) -> list[dict[str, Any]]:
         """运行列表（job 粒度，按创建时间倒序）——translee 任务列表体验。"""
-        sql = ("SELECT id, pipeline_id, input, status, error, progress, created_at, finished_at, batch_id "
-               "FROM pipeline_runs")
+        sql = ("SELECT id, pipeline_id, input, status, error, progress, created_at, finished_at, "
+               "batch_id, fallback_of FROM pipeline_runs")
         clauses: list[str] = []
         params: list[Any] = []
         if pipeline_id:
@@ -82,7 +87,8 @@ class PipelineRepo:
             rows = conn.execute(sql, params).fetchall()
         return [
             {"id": r[0], "pipeline_id": r[1], "input": r[2], "status": r[3], "error": r[4],
-             "progress": r[5], "created_at": r[6], "finished_at": r[7], "batch_id": r[8]}
+             "progress": r[5], "created_at": r[6], "finished_at": r[7], "batch_id": r[8],
+             "fallback_of": r[9]}
             for r in rows
         ]
 
@@ -136,16 +142,22 @@ class PipelineRepo:
     def create_run(self, pipeline_id: str, input: dict[str, Any],
                    parent_run_id: str | None = None,
                    parent_step_index: int | None = None,
-                   batch_id: str | None = None) -> str:
-        """创建 run；parent 两列非空即子 run（008 唯一索引保证同父步活跃子 run 唯一）。"""
+                   batch_id: str | None = None,
+                   fallback_of: str | None = None) -> str:
+        """创建 run；parent 两列非空即子 run（008 唯一索引保证同父步活跃子 run 唯一）。
+
+        fallback_of 非空表示这条 run 是「因原 run 能力不可用而自动降级」产生的（见 015 迁移）。
+        """
         run_id = "p_" + secrets.token_hex(8)
         with self._db.pool.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO pipeline_runs (id, pipeline_id, input, parent_run_id, parent_step_index, batch_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO pipeline_runs
+                    (id, pipeline_id, input, parent_run_id, parent_step_index, batch_id, fallback_of)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (run_id, pipeline_id, Json(input), parent_run_id, parent_step_index, batch_id),
+                (run_id, pipeline_id, Json(input), parent_run_id, parent_step_index, batch_id,
+                 fallback_of),
             )
         return run_id
 
@@ -154,7 +166,8 @@ class PipelineRepo:
             row = conn.execute(
                 """
                 SELECT r.id, r.pipeline_id, r.input, r.status, r.error, r.progress,
-                       r.created_at, r.finished_at, r.parent_run_id, r.parent_step_index
+                       r.created_at, r.finished_at, r.parent_run_id, r.parent_step_index,
+                       r.batch_id, r.fallback_of
                 FROM pipeline_runs r WHERE r.id = %s
                 """,
                 (run_id,),
@@ -165,6 +178,7 @@ class PipelineRepo:
             "id": row[0], "pipeline_id": row[1], "input": row[2], "status": row[3],
             "error": row[4], "progress": row[5], "created_at": row[6], "finished_at": row[7],
             "parent_run_id": row[8], "parent_step_index": row[9],
+            "batch_id": row[10], "fallback_of": row[11],
         }
 
     def cas_run_status(self, run_id: str, from_statuses: tuple[str, ...], to_status: str) -> bool:

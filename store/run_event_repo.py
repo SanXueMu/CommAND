@@ -15,6 +15,7 @@ AUDIT_KINDS = {
     "rerun_requested", "step_rerun", "flow_rerun",
     "override_applied",
     "subrun_created", "subrun_finished",
+    "run_fallback",  # 016：能力不可用 → 自动降级到 on_failure.fallback_flow（原/新 run 各一条）
 }
 
 

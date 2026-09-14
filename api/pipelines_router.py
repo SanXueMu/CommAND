@@ -17,6 +17,7 @@ class PipelineCreate(BaseModel):
     steps: list[dict[str, Any]] = Field(min_length=1)
     doc_md: str | None = None
     input_schema: dict[str, Any] | None = None  # 06：流级输入表单声明（FlowRunner 声明驱动）
+    on_failure: dict[str, Any] | None = None    # 015：失败降级声明 {"fallback_flow": "<流 id>"}
 
 
 class PipelineRunCreate(BaseModel):
@@ -28,7 +29,8 @@ class PipelineRunCreate(BaseModel):
 def create_pipeline(body: PipelineCreate) -> dict:
     try:
         return deps.get_pipeline_service().register(
-            body.id, body.name, body.steps, doc_md=body.doc_md, input_schema=body.input_schema)
+            body.id, body.name, body.steps, doc_md=body.doc_md,
+            input_schema=body.input_schema, on_failure=body.on_failure)
     except ToolUserError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ToolNotFoundError as exc:
@@ -64,7 +66,8 @@ def update_pipeline(pipeline_id: str, body: PipelineCreate) -> dict:
         raise HTTPException(status_code=422, detail="body.id 与路径 pipeline_id 不一致")
     try:
         return deps.get_pipeline_service().register(
-            body.id, body.name, body.steps, doc_md=body.doc_md, input_schema=body.input_schema)
+            body.id, body.name, body.steps, doc_md=body.doc_md,
+            input_schema=body.input_schema, on_failure=body.on_failure)
     except ToolUserError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ToolNotFoundError as exc:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import time
@@ -16,6 +17,8 @@ from store.pipeline_repo import PipelineRepo
 from store.run_event_repo import RunEventRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
+
+logger = logging.getLogger("command.pipeline")
 
 PIPELINE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
@@ -53,7 +56,8 @@ class PipelineService:
         self._data_dir = Path(data_dir) if data_dir is not None else None
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
-                 doc_md: str | None = None, input_schema: dict[str, Any] | None = None) -> dict[str, Any]:
+                 doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
+                 on_failure: dict[str, Any] | None = None) -> dict[str, Any]:
         if not PIPELINE_ID_PATTERN.match(pipeline_id):
             raise ToolUserError(f"管线 id 须为点分多段（小写）: {pipeline_id}")
         if not steps or not isinstance(steps, list):
@@ -86,10 +90,17 @@ class PipelineService:
         if existing is not None and existing.get("type") != ptype:
             raise ToolUserError(
                 f"流类型不可变更: {pipeline_id} 已是 {existing.get('type')}，新定义为 {ptype}")
+        # 只拦自降级（会无限循环）；「降级流是否存在」不做注册期校验——注册顺序可能让目标流
+        # 尚未注册（如 pdf.image 先于 pdf.layout），存在性由 tests/test_flow_specs.py 静态守卫，
+        # 运行期若目标流缺失只记日志、不影响原 run 的失败留档。
+        fallback_flow = (on_failure or {}).get("fallback_flow")
+        if fallback_flow and str(fallback_flow) == pipeline_id:
+            raise ToolUserError("on_failure.fallback_flow 不能是自身（会无限降级）")
         self._pipeline_repo.upsert_definition(pipeline_id, name, steps, doc_md=doc_md,
-                                              ptype=ptype, input_schema=input_schema)
+                                              ptype=ptype, input_schema=input_schema,
+                                              on_failure=on_failure)
         return {"id": pipeline_id, "name": name, "type": ptype, "steps": steps,
-                "status": "registered"}
+                "on_failure": on_failure, "status": "registered"}
 
     def list(self) -> list[dict[str, Any]]:
         return self._pipeline_repo.list_definitions()
@@ -110,9 +121,11 @@ class PipelineService:
         return definition
 
     def run(self, pipeline_id: str, input: dict[str, Any],
-            batch_id: str | None = None) -> dict[str, Any]:
+            batch_id: str | None = None,
+            fallback_of: str | None = None) -> dict[str, Any]:
         definition = self.get(pipeline_id)
-        run_id = self._pipeline_repo.create_run(pipeline_id, input, batch_id=batch_id)
+        run_id = self._pipeline_repo.create_run(pipeline_id, input, batch_id=batch_id,
+                                                fallback_of=fallback_of)
         self._audit(run_id, None, "created", detail={"pipeline_id": pipeline_id})
         first = definition["steps"][0]
         try:
@@ -174,11 +187,48 @@ class PipelineService:
         submitted = self._submit(sub_definition, sub_run_id, 0, sub_resolved)
         return {"subrun_id": sub_run_id, "handle": submitted["handle"]}
 
+    def _fallback_flow_for(self, run: dict[str, Any] | None, status: str,
+                           error: dict[str, Any] | None) -> str | None:
+        """失败降级判定：**能力不可用**（模型未开通/无权限）且该流声明了 on_failure.fallback_flow。
+
+        只对顶层 run 生效、且降级 run 自身不再降级（fallback_of 非空），避免链式/循环降级。
+        """
+        if run is None or status != "failed" or not error:
+            return None
+        if str(error.get("kind") or "") != "unavailable":
+            return None
+        if run.get("parent_run_id") or run.get("fallback_of"):
+            return None
+        definition = self._pipeline_repo.get_definition(str(run.get("pipeline_id"))) or {}
+        flow = (definition.get("on_failure") or {}).get("fallback_flow")
+        return flow if isinstance(flow, str) and flow else None
+
     def _finish_and_cascade(self, run_id: str, status: str,
                             error: dict[str, Any] | None = None) -> None:
         """07 级联收口：run 终态化；子 run 成功→合成任务喂父 advance（推进父下一步）；
-        子 run 失败→父同状态收口（部件失败=整流失败）。"""
+        子 run 失败→父同状态收口（部件失败=整流失败）。
+
+        另外承担「失败降级」：能力不可用且声明了 fallback_flow → 原 run 留 failed 并注明，
+        同时**新起一条降级 run**（同 input/batch_id，记 fallback_of），交付物由降级 run 产出。
+        """
+        run = self._pipeline_repo.get_run(run_id)
+        fallback_flow = self._fallback_flow_for(run, status, error)
+        if fallback_flow:
+            error = dict(error or {})
+            error["message"] = (f"{error.get('message', '')}"
+                               f"（能力不可用，已自动改用「{fallback_flow}」重跑）")
+            error["fallback_flow"] = fallback_flow
         self._pipeline_repo.finish_run(run_id, status, error=error)
+        if fallback_flow and run is not None:
+            try:
+                created = self.run(fallback_flow, dict(run.get("input") or {}),
+                                   batch_id=run.get("batch_id"), fallback_of=run_id)
+                self._audit(run_id, None, "run_fallback",
+                            detail={"to_run": created["run_id"], "fallback_flow": fallback_flow})
+                self._audit(created["run_id"], None, "run_fallback",
+                            detail={"from_run": run_id, "fallback_flow": fallback_flow})
+            except Exception:  # noqa: BLE001 —— 降级失败不掩盖原 run 的失败原因
+                logger.exception("失败降级启动失败 run=%s fallback=%s", run_id, fallback_flow)
         run = self._pipeline_repo.get_run(run_id)
         if run is None or run["parent_run_id"] is None:
             return

@@ -19,6 +19,7 @@ from core.errors import (
     TaskCancelled,
     ToolDomainError,
     ToolPauseError,
+    ToolUnavailableError,
     ToolSystemError,
     ToolUserError,
 )
@@ -117,6 +118,8 @@ class Runner:
             raise ToolDomainError(detail or "领域错误")
         if return_code == 4:
             raise ToolPauseError(detail or "需要人工介入后才能继续")
+        if return_code == 5:
+            raise ToolUnavailableError(detail or "能力不可用（模型未开通/无权限）")
         raise ToolSystemError(detail or f"系统错误（exit={return_code}）")
 
     @staticmethod

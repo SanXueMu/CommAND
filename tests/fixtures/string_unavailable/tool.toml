@@ -1,0 +1,21 @@
+[tool]
+id = "tests.string.unavailable"
+name = "能力不可用演示"
+version = "1.0.0"
+tags = ["文本", "开发"]
+description = "退出码 5 演示能力不可用（ToolUnavailableError → run 级失败降级）"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["text.raw[]"]
+output_types = ["text.ok[]"]
+
+[runtime]
+kind = "subprocess"
+entry = "python3 main.py"
+
+[resources]
+timeout_s = 60
+concurrency = 4
+max_attempts = 3
