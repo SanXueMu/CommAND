@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["images"],
+  "properties": {
+    "images": {
+      "title": "图片路径列表",
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "按页序的图片路径（通常来自 pdf.pages.to_images 的 paths）"
+    },
+    "model": {
+      "title": "图片翻译模型",
+      "type": ["string", "null"],
+      "default": "qwen-mt-image-2.0",
+      "description": "留空 = qwen-mt-image-2.0（0.004 元/张）"
+    },
+    "fallback_model": {
+      "title": "备用模型",
+      "type": ["string", "null"],
+      "default": "qwen-mt-image",
+      "description": "主模型不可用/任务失败时自动降级；留空则失败即报错"
+    },
+    "source_lang": {"title": "源语言", "type": ["string", "null"], "description": "留空自动识别"},
+    "target_lang": {"title": "目标语言", "type": ["string", "null"], "default": "Chinese"},
+    "terms": {
+      "title": "术语表",
+      "type": ["array", "string", "null"],
+      "description": "术语干预：[[原文,译文],...] 或每行「原文 => 译文」"
+    },
+    "domain_hint": {"title": "领域提示", "type": ["string", "null"], "description": "如「审计财务」/ finance，影响译法"},
+    "sensitives": {
+      "title": "敏感词",
+      "type": ["array", "null"],
+      "items": {"type": "string"}
+    },
+    "image_segment": {"title": "主体分割", "type": ["boolean", "null"], "default": false},
+    "concurrency": {
+      "title": "并发数",
+      "type": ["integer", "null"],
+      "default": 2,
+      "description": "同时在飞的任务数（平台限制并发 2）"
+    },
+    "rpm": {
+      "title": "每分钟请求数",
+      "type": ["integer", "null"],
+      "default": 60,
+      "description": "提交限速（平台 qwen-mt-image-2.0 为 60）；0 = 不限速"
+    },
+    "dir_name": {
+      "title": "产物目录名",
+      "type": ["string", "null"],
+      "default": "tmp_mt_images",
+      "description": "中间产物目录（末步 pdf.from.images 会清理）"
+    },
+    "key_name": {"title": "密钥名", "type": ["string", "null"], "description": "留空用默认密钥"},
+    "base_url": {"title": "原生 API 地址", "type": ["string", "null"], "description": "留空由密钥 base_url 自动推导"}
+  }
+}

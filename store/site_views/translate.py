@@ -13,11 +13,15 @@ TRANSLATE_VIEW: dict = {
         "nav": {"kind": "child", "group": "work", "label": "翻译工作台"},
         "flow_prefix": "flow.translate.",
         # 文件后缀 → 翻译流（组件按扩展名路由，不在前端写死流 ID）；
-        # 同后缀多条 = 用户可选处理方式（如 pdf 可版式翻译或双语 docx）
+        # 同后缀多条 = 用户可选处理方式（如 pdf 可版式翻译、双语 docx 或图片翻译）；
+        # for: 供工作台按「系统探测」自动选流——text=有文字层, scanned=扫描件
         "routes": [
             {"ext": [".xlsx", ".xls"], "flow": "flow.translate.xlsx", "label": "表格翻译（双语 xlsx）"},
-            {"ext": [".pdf"], "flow": "flow.translate.pdf.layout", "label": "版式翻译（原位覆盖 / 双语对照 PDF）"},
-            {"ext": [".pdf"], "flow": "flow.translate.pdf", "label": "文档翻译（双语 docx）"},
+            {"ext": [".pdf"], "flow": "flow.translate.pdf.layout", "for": "text",
+             "label": "版式翻译（原位覆盖 / 双语对照 PDF）"},
+            {"ext": [".pdf"], "flow": "flow.translate.pdf", "label": "文字版 PDF → 双语 docx"},
+            {"ext": [".pdf"], "flow": "flow.translate.pdf.image", "for": "scanned",
+             "label": "图片版 PDF（扫描件 · 图片翻译，保留版式）"},
             {"ext": [".txt", ".md"], "flow": "flow.translate.txt", "label": "文本翻译（双语 docx）"},
             {"ext": [".docx"], "flow": "flow.translate.docx", "label": "Word 翻译（段落对照 / 原位覆盖 docx）"},
             {"ext": [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"], "flow": "flow.translate.image",
@@ -40,14 +44,22 @@ TRANSLATE_VIEW: dict = {
                  {"value": "qwen3.7-plus", "label": "qwen3.7-plus（推理型，质量高但慢）"},
              ],
              "placeholder": "留空 = qwen-mt-flash；也可手写网关模型名"},
-            # 图片翻译模型：qwen-mt-image-2.0（0.004 元/张，RPM=1）；失败自动降级到备用模型
+            # 图片翻译模型：qwen-mt-image-2.0（0.004 元/张，RPM 60 / 并发 2）；失败自动降级到备用模型
             {"name": "image_model", "label": "图片翻译模型", "type": "combo", "default": "qwen-mt-image-2.0",
-             "when_flow": ["flow.translate.image"],
+             "when_flow": ["flow.translate.image", "flow.translate.pdf.image"],
              "options": [
-                 {"value": "qwen-mt-image-2.0", "label": "qwen-mt-image-2.0（0.004 元/张，RPM 1）"},
+                 {"value": "qwen-mt-image-2.0", "label": "qwen-mt-image-2.0（0.004 元/张，RPM 60）"},
                  {"value": "qwen-mt-image", "label": "qwen-mt-image（备用）"},
              ],
              "placeholder": "留空 = qwen-mt-image-2.0；失败自动用备用模型"},
+            # 业务领域（图片翻译的 domainHint）：模版可声明默认，工作台可手写覆盖
+            {"name": "image_domain_hint", "label": "业务领域", "type": "combo",
+             "when_flow": ["flow.translate.image", "flow.translate.pdf.image"],
+             "options": [
+                 {"value": "审计财务", "label": "审计财务"},
+                 {"value": "通用", "label": "通用（不限定领域）"},
+             ],
+             "placeholder": "如 审计财务；留空则用模版的领域声明"},
             {"name": "mode", "label": "输出模式", "type": "select", "default": "overlay",
              "when_flow": ["flow.translate.pdf.layout", "flow.translate.docx"],
              # 同一参数在不同流下默认不同：PDF 版式默认原位覆盖，Word 默认双语对照

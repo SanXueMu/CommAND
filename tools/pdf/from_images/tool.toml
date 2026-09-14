@@ -1,0 +1,22 @@
+[tool]
+id = "pdf.from.images"
+name = "图片合成 PDF"
+version = "1.0.0"
+tags = ["文档", "图片", "合成"]
+description = "译文页图按页序合成单 PDF（图片翻译链末步）；合成后清理中间产物目录"
+doc = "README.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["image.translated"]
+output_types = ["file.pdf"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 900
+concurrency = 2
+max_attempts = 2

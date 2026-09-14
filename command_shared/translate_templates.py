@@ -2,8 +2,9 @@
 
 模版结构（translee templates.json 对齐）：
   {id, name, desc, source_lang, target_lang, model, terms: [[src, tgt], ...],
-   enabled, created_at, updated_at}
+   domain_hint, enabled, created_at, updated_at}
 术语表内嵌于模版：翻译时由引擎作为 glossary_clause 注入，术语原文不走缓存。
+domain_hint = 业务领域提示（图片翻译 domainHint，如「审计财务」），留空表示不限领域。
 """
 from __future__ import annotations
 
@@ -70,6 +71,7 @@ class TranslateTemplateStore:
                     "id": item.get("id"), "name": item.get("name"), "desc": item.get("desc"),
                     "source_lang": item.get("source_lang"), "target_lang": item.get("target_lang"),
                     "model": item.get("model"), "terms_count": len(item.get("terms") or []),
+                    "domain_hint": item.get("domain_hint"),
                     "enabled": bool(item.get("enabled")), "updated_at": item.get("updated_at"),
                 })
             return items
@@ -102,9 +104,13 @@ class TranslateTemplateStore:
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock:
             existing = self._load(self._path(tid)) if self._path(tid).exists() else None
+            raw_hint = template.get("domain_hint", (existing or {}).get("domain_hint"))
+            if raw_hint is not None and not isinstance(raw_hint, str):
+                raise ToolDomainError("domain_hint 须为字符串或省略")
             merged = {
                 **(existing or {}), **template,
                 "id": tid, "terms": _norm_terms(template.get("terms", (existing or {}).get("terms"))),
+                "domain_hint": (raw_hint or "").strip() or None,
                 "enabled": bool(template.get("enabled", (existing or {}).get("enabled", True))),
                 "created_at": (existing or {}).get("created_at", now), "updated_at": now,
             }

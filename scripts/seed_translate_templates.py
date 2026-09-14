@@ -21,6 +21,7 @@ TEMPLATES: list[dict] = [
         "source_lang": "English",
         "target_lang": "Chinese",
         "model": "",
+        "domain_hint": None,
         "terms": [],
     },
     {
@@ -30,6 +31,7 @@ TEMPLATES: list[dict] = [
         "source_lang": "English",
         "target_lang": "Chinese",
         "model": "",
+        "domain_hint": "审计财务",
         "terms": [
             ["Audited Financial Statements", "审计后财务报表"],
             ["Statement of Financial Position", "财务状况表"],

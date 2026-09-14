@@ -53,6 +53,31 @@ def is_text_pdf(file_path, min_chars_per_page: int = 20) -> bool:
         return False
 
 
+def images_to_pdf(paths, dest_path) -> int:
+    """图片序列 → 单 PDF（每页按图片像素尺寸建页，保持原页比例）；返回页数。
+
+    用于图片翻译链末步：译文页图按页序合成译文 PDF。
+    """
+    items = [Path(p) for p in paths]
+    if not items:
+        raise ValueError("图片列表为空")
+    dest = Path(dest_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    doc = fitz.open()
+    try:
+        for path in items:
+            img = fitz.Pixmap(path)
+            if img.alpha:
+                img = fitz.Pixmap(img, 0)
+            page = doc.new_page(width=img.width, height=img.height)
+            page.insert_image(page.rect, pixmap=img)
+        doc.save(dest)
+        pages = doc.page_count
+    finally:
+        doc.close()
+    return pages
+
+
 def is_image_file(file_path) -> bool:
     return Path(file_path).suffix.lower() in {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 

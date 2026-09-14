@@ -38,6 +38,24 @@ INPUT_SCHEMAS: dict[str, dict] = {
                       "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
         },
     },
+    "flow.translate.pdf.image": {
+        "type": "object",
+        "required": ["file", "key_name", "target_lang"],
+        "properties": {
+            "file": {"type": "string", "format": "file", "title": "扫描件 PDF",
+                     "description": "无文字层的图片版 PDF：逐页图片翻译后合成译文 PDF（产出无文字层）"},
+            "key_name": {"type": "string", "title": "密钥名称", "description": "DashScope 密钥名"},
+            "target_lang": {"type": "string", "title": "目标语言", "description": "如：中文 / English"},
+            "image_model": {"type": "string", "title": "图片翻译模型",
+                            "description": "留空用 qwen-mt-image-2.0（0.004 元/张，RPM 60，并发 2）"},
+            "source_lang": {"type": "string", "title": "源语言",
+                            "description": "留空自动识别；源或目标至少一方须为中文/英文"},
+            "terms": {"type": "string", "format": "textarea", "title": "术语表",
+                      "description": "每行：原文 => 译文（作为 terminologies 做术语干预）"},
+            "image_domain_hint": {"type": "string", "title": "业务领域",
+                                  "description": "如 审计财务；留空则用模版声明的领域"},
+        },
+    },
     "flow.translate.image": {
         "type": "object",
         "required": ["file", "key_name", "target_lang"],
@@ -226,11 +244,32 @@ FLOWS: dict[str, dict] = {
                 "mode": "{{ input.mode }}"}},
         ],
     },
+    "flow.translate.pdf.image": {
+        "name": "图片版 PDF 翻译",
+        "doc_md": ("图片版 PDF 翻译全自动流（扫描件专用）：每页转图片 → 逐页图片翻译（qwen-mt-image，"
+                   "并发 2 + RPM 60 限速，术语/业务域可干预）→ 译文页图按页序合成译文 PDF（保留原版式）。"
+                   "产出为图片版 PDF（无文字层，不可选中搜索）；如需可搜索文字版，请先用 ocrmypdf 补文字层再走版式流。"),
+        "steps": [
+            {"tool": "pdf.pages.to_images", "input": {"file": "{{ input.file }}"}},
+            {"tool": "image.batch.translate", "input": {
+                "images": "{{ prev.paths }}",
+                "key_name": "{{ input.key_name }}",
+                "target_lang": "{{ input.target_lang }}",
+                "source_lang": "{{ input.source_lang }}",
+                "terms": "{{ input.terms }}",
+                "domain_hint": "{{ input.image_domain_hint }}",
+                "model": "{{ input.image_model }}"}},
+            {"tool": "pdf.from.images", "input": {
+                "images": "{{ prev.paths }}",
+                "source_file": "{{ input.file }}",
+                "cleanup_dirs": ["{{ step[0].output.dir }}", "{{ step[1].output.output_dir }}"]}},
+        ],
+    },
     "flow.translate.image": {
         "name": "图片翻译",
         "doc_md": ("图片翻译全自动流：本地图片 → DashScope 临时上传 → 异步图片翻译（qwen-mt-image-2.0）"
                    "→ 下载译文图（保留排版）。术语干预对接术语表；主模型不可用自动降级备用模型。"
-                   "注意 qwen-mt-image-2.0 RPM=1，约 1 分钟/张。"),
+                   "限速：RPM 60（约 1 秒/张）。"),
         "steps": [
             {"tool": "image.mt.translate", "input": {
                 "file": "{{ input.file }}",

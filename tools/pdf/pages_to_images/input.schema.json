@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file"],
+  "properties": {
+    "file": {"title": "PDF 文件路径", "type": "string"},
+    "scale": {
+      "title": "渲染倍率",
+      "type": ["number", "null"],
+      "default": 2.0,
+      "description": "2.0 ≈ 144dpi；越大越清晰、上传越大"
+    },
+    "max_side": {
+      "title": "长边上限(px)",
+      "type": ["integer", "null"],
+      "default": 2200,
+      "description": "超过则整体降倍率（大幅面图纸自动缩小）"
+    },
+    "format": {
+      "title": "图片格式",
+      "type": ["string", "null"],
+      "enum": ["jpeg", "png", null],
+      "default": "jpeg",
+      "description": "jpeg 体积小（默认）；png 无损但更大"
+    },
+    "pages": {
+      "title": "指定页(可选)",
+      "type": ["array", "null"],
+      "items": {"type": "integer"},
+      "description": "1 起的页码数组；留空 = 全部页"
+    },
+    "dir_name": {
+      "title": "产物目录名",
+      "type": ["string", "null"],
+      "default": "tmp_pages",
+      "description": "中间产物目录（末步 pdf.from.images 会清理）"
+    },
+    "min_chars_per_page": {
+      "title": "文字层判定阈值",
+      "type": ["integer", "null"],
+      "default": 20,
+      "description": "每页可提取字符数低于此值即视为无文字层"
+    }
+  }
+}

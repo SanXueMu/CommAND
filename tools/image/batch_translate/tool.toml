@@ -1,0 +1,22 @@
+[tool]
+id = "image.batch.translate"
+name = "图片翻译（批量）"
+version = "1.0.0"
+tags = ["翻译", "图片", "批量"]
+description = "图片序列 → 译文图片序列：并发 2 + RPM 限速（qwen-mt-image-2.0），逐页进度，单页失败不中断整批"
+doc = "README.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["image.page", "file.image"]
+output_types = ["image.translated", "doc.pages"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 3600
+concurrency = 1
+max_attempts = 1

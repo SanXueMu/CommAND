@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "path": {"type": "string", "description": "译文 PDF 路径"},
+    "name": {"type": "string"},
+    "pages": {"type": "integer"},
+    "size": {"type": "integer"},
+    "source_file": {"type": ["string", "null"]},
+    "cleanup": {
+      "type": "object",
+      "properties": {
+        "removed": {"type": "array", "items": {"type": "string"}},
+        "files_removed": {"type": "integer"},
+        "bytes_freed": {"type": "integer"},
+        "skipped": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["images"],
+  "properties": {
+    "images": {
+      "title": "译文页图路径",
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "按页序的译文图片（通常来自 image.batch.translate 的 paths）"
+    },
+    "source_file": {
+      "title": "源文件路径",
+      "type": ["string", "null"],
+      "description": "仅用于产物命名（<源文件名>_图片译文.pdf）"
+    },
+    "output_name": {"title": "产物文件名", "type": ["string", "null"]},
+    "dir_name": {"title": "产物目录名", "type": ["string", "null"], "default": "outputs"},
+    "cleanup_dirs": {
+      "title": "合成后清理的目录",
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "description": "中间产物目录（页图/译文图），合成成功后删除；只允许 data 目录内路径"
+    }
+  }
+}

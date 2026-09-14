@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "file": {"type": "string", "description": "源 PDF 路径"},
+    "page_count": {"type": "integer", "description": "源 PDF 总页数"},
+    "rendered": {"type": "integer", "description": "本次渲染的页数"},
+    "has_text_layer": {
+      "type": "boolean",
+      "description": "是否每页都有足量可提取文本（false = 扫描件，适合图片翻译）"
+    },
+    "format": {"type": "string"},
+    "scale": {"type": "number"},
+    "effective_scale": {"type": "number", "description": "受长边上限调整后的实际倍率"},
+    "dir": {"type": "string", "description": "页图目录（中间产物，供末步清理）"},
+    "paths": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "页图路径（按页序），供图片翻译批量工具消费"
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "page": {"type": "integer"},
+          "path": {"type": "string"},
+          "name": {"type": "string"},
+          "size": {"type": "integer"},
+          "width": {"type": "integer"},
+          "height": {"type": "integer"}
+        }
+      }
+    }
+  }
+}

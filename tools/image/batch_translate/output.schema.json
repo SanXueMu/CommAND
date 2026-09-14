@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "count": {"type": "integer", "description": "请求翻译的图片数"},
+    "ok_count": {"type": "integer", "description": "成功数"},
+    "failed": {"type": "integer", "description": "失败数"},
+    "output_dir": {"type": "string", "description": "译文图目录（中间产物，供末步清理）"},
+    "elapsed_s": {"type": "number"},
+    "usage": {
+      "type": "object",
+      "properties": {"image_count": {"type": "integer", "description": "计费张数（0.004 元/张）"}}
+    },
+    "paths": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "成功的译文图路径（按页序，跳过失败页）"
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {"type": "integer", "description": "1 起的序号（与入参顺序一致）"},
+          "source": {"type": "string"},
+          "path": {"type": ["string", "null"]},
+          "ok": {"type": "boolean"},
+          "model": {"type": ["string", "null"]},
+          "fallback_used": {"type": ["boolean", "null"]},
+          "error": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

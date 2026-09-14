@@ -1,0 +1,22 @@
+[tool]
+id = "pdf.pages.to_images"
+name = "PDF 转页图"
+version = "1.0.0"
+tags = ["提取", "文档", "图片"]
+description = "PDF → 每页图片（图片翻译链第 1 步）：scale/长边可配，同时上报页数与是否含文字层"
+doc = "README.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.pdf"]
+output_types = ["image.page", "doc.pages"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 900
+concurrency = 2
+max_attempts = 2
