@@ -25,6 +25,14 @@ class PipelineRunCreate(BaseModel):
     batch_id: str | None = None
 
 
+class RerunBatchBody(BaseModel):
+    """批次失败项一键重跑：给 run_ids 或 batch_id（给 batch 时取该批次内失败态 run）。"""
+
+    run_ids: list[str] | None = None
+    batch_id: str | None = None
+    limit: int = Field(default=500, ge=1, le=2000)
+
+
 @router.post("", status_code=201)
 def create_pipeline(body: PipelineCreate) -> dict:
     try:
@@ -139,6 +147,21 @@ def get_pipeline_run(run_id: str) -> dict:
     except TaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"run": deps.get_pipeline_repo().get_run(run_id), "tasks": tasks}
+
+
+@runs_router.post("/rerun-batch", status_code=202)
+def rerun_batch(body: RerunBatchBody) -> dict:
+    """批量重跑失败项（批次一键重跑）：逐条 rerun（原 run 留档、新 run 继承 batch_id）。
+
+    paused 不在重跑范围（那是「继续」resume 的语义）；单条失败只记进 skipped。
+    """
+    service = deps.get_pipeline_service()
+    run_ids = list(body.run_ids or [])
+    if not run_ids and body.batch_id:
+        run_ids = service.failed_runs_of_batch(body.batch_id, limit=body.limit)
+    if not run_ids:
+        return {"count": 0, "rerun": [], "skipped": []}
+    return service.rerun_runs(run_ids[: body.limit])
 
 
 @runs_router.post("/{run_id}/rerun", status_code=202)

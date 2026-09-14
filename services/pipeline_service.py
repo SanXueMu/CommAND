@@ -505,9 +505,14 @@ class PipelineService:
         return {"run_id": run_id, "step_index": step_index,
                 "handle": submitted["handle"], "status": "running"}
 
-    def rerun_run(self, run_id: str, input_override: dict[str, Any] | None = None) -> dict[str, Any]:
+    def rerun_run(self, run_id: str, input_override: dict[str, Any] | None = None,
+                  keep_batch: bool = True) -> dict[str, Any]:
         """C4 重跑流（06 四.1）：原 run 留档不可变，以 run.input + 覆盖起全新 run；
-        workflow 重跑自然重建子 run 树。仅终态 run 可重跑。"""
+        workflow 重跑自然重建子 run 树。仅终态 run 可重跑。
+
+        keep_batch：新 run 继承原 run 的 batch_id（默认）——否则重跑后脱离批次，
+        批次导出按 batch_id 取 run 时会看不到这条，译文会被判为缺失。
+        """
         run = self._pipeline_repo.get_run(run_id)
         if run is None:
             raise TaskNotFoundError(f"管线运行不存在: {run_id}")
@@ -516,7 +521,9 @@ class PipelineService:
         new_input = dict(run["input"] or {})
         new_input.update(input_override or {})
         # 先建新 run 再补写审计（flow_rerun 需回填 new_run_id）
-        new_run_id = self._pipeline_repo.create_run(run["pipeline_id"], new_input)
+        new_run_id = self._pipeline_repo.create_run(
+            run["pipeline_id"], new_input,
+            batch_id=run.get("batch_id") if keep_batch else None)
         self._audit(run_id, None, "flow_rerun",
                     detail={"new_run_id": new_run_id,
                             "override": sorted(input_override) if input_override else []})
@@ -542,6 +549,37 @@ class PipelineService:
             raise
         return {"run_id": new_run_id, "rerun_of": run_id, "status": "running",
                 "first_handle": first_handle}
+
+    # 可批量重跑的状态：真失败态（paused 走「继续」/resume，不在此列）
+    RERUNNABLE_STATUSES = ("failed", "failed_review", "cancelled", "interrupted")
+
+    def rerun_runs(self, run_ids: list[str]) -> dict[str, Any]:
+        """批量重跑（批次失败项一键重跑）：逐条复用 rerun_run（原 run 留档、新 run 继承批次）。
+
+        单条失败不拖垮整批：入队异常记进 skipped，其余照常重跑。
+        """
+        rerun: list[dict[str, Any]] = []
+        skipped: list[dict[str, str]] = []
+        for run_id in run_ids:
+            run = self._pipeline_repo.get_run(run_id)
+            if run is None:
+                skipped.append({"run_id": run_id, "reason": "任务不存在"})
+                continue
+            if str(run.get("status")) not in self.RERUNNABLE_STATUSES:
+                skipped.append({"run_id": run_id,
+                                "reason": f"状态不可重跑（{run.get('status')}）"})
+                continue
+            try:
+                created = self.rerun_run(run_id)
+                rerun.append({"from": run_id, "to": created["run_id"]})
+            except Exception as exc:  # noqa: BLE001 —— 单条失败不影响整批
+                skipped.append({"run_id": run_id, "reason": f"{type(exc).__name__}: {exc}"})
+        return {"count": len(rerun), "rerun": rerun, "skipped": skipped}
+
+    def failed_runs_of_batch(self, batch_id: str, limit: int = 500) -> list[str]:
+        """批次内可重跑的 run id（失败态；paused 走继续）。"""
+        runs = self._pipeline_repo.list_runs(batch_id=batch_id, limit=limit)
+        return [r["id"] for r in runs if str(r.get("status")) in self.RERUNNABLE_STATUSES]
 
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
         """steps 快照：每步最新任务 + 定义工具名（工作区/任务中心的考证视图）。"""

@@ -98,7 +98,8 @@ def test_package_batch_restores_tree_and_suffixes_root(batch):
     assert body["missing"] == []
 
 
-def test_package_batch_failed_run_not_mixed_into_delivery(batch):
+def test_package_batch_failed_without_artifacts_passes_source_through(batch):
+    """失败但**无任何产物**（入队即失败 / 降级前的原 run）→ 放回源文件，交付目录结构保持完整。"""
     c, tmp_path, service = batch
     _manifest(tmp_path, "b2", [_entry(tmp_path, "批次", "坏文件.pdf", b"PDF")])
     service.runs["b2"] = [{"id": "r1", "status": "failed",
@@ -106,8 +107,25 @@ def test_package_batch_failed_run_not_mixed_into_delivery(batch):
     resp = c.post("/api/files/package_batch", json={"batch_id": "b2"})
     assert resp.status_code == 201
     body = resp.json()
+    assert body["translated"] == [] and body["missing"] == []
+    assert [p["rel"] for p in body["passthrough"]] == ["坏文件.pdf"]
+    assert "任务失败" in body["passthrough"][0]["reason"]
+    with zipfile.ZipFile(body["path"]) as z:
+        assert z.namelist() == ["投标资料_中文/坏文件.pdf"]
+        assert z.read("投标资料_中文/坏文件.pdf") == b"PDF"
+
+
+def test_package_batch_failed_with_partial_artifacts_stays_missing(batch):
+    """失败但**已有部分产物** → 不进交付目录（避免把半成品混进去），只报缺失。"""
+    c, tmp_path, service = batch
+    _manifest(tmp_path, "b5", [_entry(tmp_path, "批次", "半成品.pdf", b"PDF")])
+    path = str(tmp_path / "uploads/批次/半成品.pdf")
+    service.runs["b5"] = [{"id": "r1", "status": "failed", "input": {"file": path}}]
+    service.artifacts = {"r1": [_artifact(tmp_path, "hp", "半成品_中间.pdf", b"HALF")]}
+    resp = c.post("/api/files/package_batch", json={"batch_id": "b5"})
+    body = resp.json()
     assert body["translated"] == [] and body["passthrough"] == []
-    assert [m["rel"] for m in body["missing"]] == ["坏文件.pdf"]
+    assert [m["rel"] for m in body["missing"]] == ["半成品.pdf"]
     with zipfile.ZipFile(body["path"]) as z:
         assert z.namelist() == []
 

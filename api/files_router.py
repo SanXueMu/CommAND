@@ -536,8 +536,17 @@ def package_batch(body: PackageBatchBody) -> dict:
                 continue
             status = (run or {}).get("status")
             if status == "failed":
-                missing.append({"rel": rel, "reason": "任务失败：不放入交付目录"})
-                continue
+                # 失败但**无任何产物**（多为入队即失败/降级前的原 run）→ 放回源文件，
+                # 保证交付目录结构完整；只有「跑了一半有产物」的才进 missing（不混半成品）。
+                partial: list[dict] = []
+                if run is not None:
+                    try:
+                        partial = service.collect_run_artifacts(run["id"], "all")
+                    except Exception:  # noqa: BLE001
+                        partial = []
+                if partial:
+                    missing.append({"rel": rel, "reason": "任务失败（已有部分产物）：不放入交付目录"})
+                    continue
             source = Path(str(entry.get("path") or ""))
             if not source.is_file():
                 missing.append({"rel": rel, "reason": "源文件不存在"})
@@ -545,7 +554,7 @@ def package_batch(body: PackageBatchBody) -> dict:
             reason = entry.get("skip_reason") if entry.get("skip") else None
             if not reason:
                 reason = ("未翻译（保留源文件）" if status is None
-                          else f"未产出（任务{_STATUS_ZH.get(str(status), status)}）")
+                          else f"未翻译（任务{_STATUS_ZH.get(str(status), status)}，保留源文件）")
             arc = f"{prefix}/{Path(rel).name}"
             zf.write(source, arcname=arc)
             passthrough.append({"rel": rel, "name": Path(rel).name, "arcname": arc, "reason": reason})
