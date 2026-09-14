@@ -179,3 +179,38 @@ def test_unavailable_without_fallback_pauses_run(stack):
     # 「继续」可重试原流（再次撞不可用 → 仍暂停，不抛异常）
     svc.resume_run(created["run_id"])
     assert _pump_until_status(stack, created["run_id"]) == "paused"
+
+
+def test_fallback_injects_reason_when_target_declares_it(stack):
+    """降级目标若声明了 reason（如「暂不翻译」流），应写入降级原因——
+
+    否则留档记录只显示工具默认文案（「本轮不处理」），用户看不出为何被跳过。
+    """
+    svc = stack["svc"]
+    target = "test.skip.like"
+    svc.register(target, "留档型降级目标", [
+        {"tool": UNAVAILABLE_ID, "input": {"file": "{{ input.file }}", "marker": "NEVER"}},
+    ], input_schema={"type": "object", "required": ["file"],
+                     "properties": {"file": {"type": "string"}, "reason": {"type": ["string", "null"]}}})
+    source = "test.image.like"
+    svc.register(source, "图片流（不可用模型）", [
+        {"tool": UNAVAILABLE_ID, "input": {"file": "{{ input.file }}", "marker": "UNAVAILABLE"}},
+    ], on_failure={"fallback_flow": target})
+
+    src = stack["tmp"] / "图.png"
+    src.write_text("UNAVAILABLE\n", encoding="utf-8")
+    created = svc.run(source, {"file": str(src)}, batch_id="b_reason")
+    _pump_until_done(stack)
+    fb = [r for r in stack["repo"].list_runs(batch_id="b_reason", limit=10)
+          if r.get("fallback_of") == created["run_id"]]
+    assert len(fb) == 1, fb
+    reason = str(fb[0]["input"].get("reason") or "")
+    assert "已自动降级" in reason and source in reason
+
+    with stack["repo"]._db.pool.connection() as conn:
+        ids = [r[0] for r in conn.execute(
+            "SELECT id FROM pipeline_runs WHERE pipeline_id = ANY(%s)", ([target, source],)).fetchall()]
+        if ids:
+            conn.execute("DELETE FROM run_events WHERE run_id = ANY(%s)", (ids,))
+            conn.execute("DELETE FROM tasks WHERE pipeline_run = ANY(%s)", (ids,))
+            conn.execute("DELETE FROM pipeline_runs WHERE id = ANY(%s)", (ids,))

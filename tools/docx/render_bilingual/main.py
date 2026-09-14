@@ -31,20 +31,35 @@ def _is_heading2(text: str) -> bool:
     return len(letters) >= 4 and " " in t and all(c.isupper() for c in letters)
 
 
-def _table_cell_map(unit: dict, col_classes: list[dict], start: int,
+def _cell_entry(g: int, index_map, date_maps, translations, statuses) -> dict | None:
+    """按下标取译文条目；下标越界（收割区间与实际格数不一致）返回 None 而非崩溃。"""
+    if g < 0 or g >= len(index_map):
+        return None
+    u = index_map[g]
+    if not isinstance(u, int) or u < 0 or u >= len(translations):
+        return None
+    status = statuses[u] if u < len(statuses) else "ok"
+    dates = (date_maps[g] if g < len(date_maps) else None) or {}
+    entry: dict = {"status": status, "dates": dates}
+    if status == "ok":
+        final = translations[u]
+        for placeholder, value in dates.items():
+            final = final.replace(placeholder, value)
+        entry["final"] = final
+    return entry
+
+
+def _table_cell_map(unit: dict, col_classes: list[dict], start: int, count: int,
                     index_map, date_maps, translations, statuses) -> dict[tuple[int, int], dict]:
+    """逐格译文映射；以收割区间 count 为准（多出的格不消费，防止与 index_map 错位）。"""
     result: dict[tuple[int, int], dict] = {}
     rows = unit["rows"]
     for j, (row_idx, col_idx) in enumerate(unit_cells(rows, col_classes)):
-        g = start + j
-        u = index_map[g]
-        entry = {"status": statuses[u], "dates": date_maps[g]}
-        if statuses[u] == "ok":
-            final = translations[u]
-            for placeholder, value in entry["dates"].items():
-                final = final.replace(placeholder, value)
-            entry["final"] = final
-        result[(row_idx, col_idx)] = entry
+        if j >= count:
+            break
+        entry = _cell_entry(start + j, index_map, date_maps, translations, statuses)
+        if entry is not None:
+            result[(row_idx, col_idx)] = entry
     return result
 
 
@@ -85,11 +100,13 @@ def run(input: dict, ctx, emit) -> dict:
         rng = range_by_unit.get(unit["unit_id"])
         if rng is None:
             continue
+        count = int(rng.get("count") or 0)
         if unit.get("unit_type") == "table":
             cell_map = _table_cell_map(unit, col_classes.get(unit["unit_id"], []),
-                                       rng["start"], index_map, date_maps, translations, statuses)
+                                       rng["start"], count,
+                                       index_map, date_maps, translations, statuses)
             rows = unit["rows"]
-            ncols = max(len(r) for r in rows) or 1
+            ncols = max((len(r) for r in rows), default=0) or 1
             table = doc.add_table(rows=len(rows), cols=ncols)
             try:
                 table.style = "Table Grid"
@@ -112,11 +129,17 @@ def run(input: dict, ctx, emit) -> dict:
                                 r.font.bold = True
             continue
 
-        # text 单元：整段一条
+        # text 单元：整段一条；count=0（空页/无可译文本）跳过，避免读到区间外下标
+        if count <= 0:
+            continue
         g = rng["start"]
+        if g >= len(index_map):
+            continue
         u = index_map[g]
+        if not isinstance(u, int) or u < 0 or u >= len(translations):
+            continue
         translated = translations[u]
-        status = statuses[u]
+        status = statuses[u] if u < len(statuses) else "ok"
         text = unit.get("text", "")
         page = (unit.get("meta") or {}).get("page")
         label = f"第 {page} 页" if page else unit["unit_id"]

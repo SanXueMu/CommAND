@@ -270,7 +270,15 @@ class PipelineService:
         self._pipeline_repo.finish_run(run_id, status, error=error)
         if fallback_flow and run is not None:
             try:
-                created = self.run(fallback_flow, dict(run.get("input") or {}),
+                fb_input = dict(run.get("input") or {})
+                # 降级目标若声明了 reason（如「暂不翻译」流），把降级原因写进去：
+                # 否则记录只显示工具默认文案（「本轮不处理」），看不出为何被跳过
+                fb_def = self._pipeline_repo.get_definition(fallback_flow) or {}
+                if "reason" in ((fb_def.get("input_schema") or {}).get("properties") or {}):
+                    fb_input["reason"] = (
+                        f"上游「{run.get('pipeline_id')}」能力不可用（{(error or {}).get('message', '')}），"
+                        f"已自动降级为不翻译留档；如需翻译请修复密钥/模型后重跑")
+                created = self.run(fallback_flow, fb_input,
                                    batch_id=run.get("batch_id"), fallback_of=run_id)
                 self._audit(run_id, None, "run_fallback",
                             detail={"to_run": created["run_id"], "fallback_flow": fallback_flow})
