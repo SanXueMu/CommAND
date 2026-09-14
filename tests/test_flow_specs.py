@@ -109,3 +109,25 @@ def test_translate_view_unsupported_doc_hint() -> None:
     rules = TRANSLATE_VIEW["props"]["unsupported"]
     doc = next(r for r in rules if ".doc" in r["ext"])
     assert "另存为 .docx" in doc["message"]
+
+
+def test_translate_view_batch_extensions_are_routable() -> None:
+    """批量入口允许的扩展名必须都有路由，否则会「传上来却入不了队」。"""
+    props = TRANSLATE_VIEW["props"]
+    batch = props.get("batch")
+    assert batch, "翻译声明缺 batch（前端批量入口不会显示）"
+    routed = {e.lower() for r in props["routes"] for e in r["ext"]}
+    assert [e for e in batch["extensions"] if e.lower() not in routed] == []
+    unsupported = {e.lower() for r in props.get("unsupported", []) for e in r["ext"]}
+    assert not (set(batch["extensions"]) & unsupported), "批量允许的后缀不能同时被声明为不支持"
+    assert batch["maxFiles"] > 0 and batch["maxTotalMB"] > 0
+
+
+def test_translate_view_default_by_flow_stays_visible() -> None:
+    """default_by_flow 的流必须同时在 when_flow 内，否则该流下参数不可见、默认值形同虚设。"""
+    for param in TRANSLATE_VIEW["props"]["params"]:
+        visible = set(param.get("when_flow", []))
+        for flow_id, value in (param.get("default_by_flow") or {}).items():
+            assert flow_id in visible, f"{param['name']} 的 default_by_flow 流 {flow_id} 不在 when_flow 内"
+            if param.get("type") == "select":
+                assert value in {o["value"] for o in param.get("options", [])}

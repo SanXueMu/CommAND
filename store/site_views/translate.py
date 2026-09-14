@@ -36,6 +36,12 @@ TRANSLATE_VIEW: dict = {
         ],
         "templatesPath": "/translate/templates",
         "dictPath": "/translate/dict",
+        # 批量入口声明（存在才显示「单文件 / 批量」切换）；extensions 须与 routes 的后缀一致
+        "batch": {
+            "extensions": [".pdf", ".docx", ".xlsx", ".xls", ".txt", ".md"],
+            "maxFiles": 200,
+            "maxTotalMB": 500,
+        },
         # 目标/源语言候选（值须为引擎可识别语言名）
         "languages": [
             {"value": "Chinese", "label": "中文"},
@@ -47,7 +53,7 @@ TRANSLATE_VIEW: dict = {
             "Translee 全自动翻译：上传 xlsx 表格 / pdf 文档（含扫描/图片版，自动 OCR 补文字层）/ txt 文本 /"
             " docx 文档（正文与表格，支持段落对照双语或原位覆盖）→ 提取可译单元 → 批量翻译 → 保真质检 → 回填；"
             "pdf 可选版式翻译（原位覆盖单语 / 左右分栏双语对照 PDF）或双语 docx；"
-            "支持翻译模版（语言对/术语表/模型）与已译字典浏览。"
+            "支持整目录 / 压缩包批量上传（一文件一任务，各自留记录与产物）与翻译模版（语言对/术语表/模型）、已译字典浏览。"
         ),
         "empty_hint": "暂无翻译流——先运行 scripts/register_translee_flows.py 注册翻译流。",
     },
