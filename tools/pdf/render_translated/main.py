@@ -29,7 +29,8 @@ def run(input: dict, ctx, emit) -> dict:
 
         raise ToolDomainError("translations 为空：缺少译文")
 
-    mode = (input.get("mode") or "overlay").strip()
+    # 默认双语对照（用户口径 2026-09-14）；原位覆盖需显式传 mode=overlay
+    mode = (input.get("mode") or "bilingual").strip()
     if mode not in MODES:
         from core.errors import ToolDomainError
 

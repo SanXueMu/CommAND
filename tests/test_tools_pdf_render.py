@@ -62,6 +62,16 @@ def test_bilingual_keeps_source_and_adds_column(tmp_path, monkeypatch):
     assert out["drawn"] == len(translations)
 
 
+def test_default_mode_is_bilingual(tmp_path, monkeypatch):
+    """未传 mode（旧 run 重跑 / 直接调 API）默认双语对照——与工作台声明、流 schema 三处一致。"""
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path))
+    src, blocks, translations = _fixture(tmp_path)
+    out = RENDER.run({"file": str(src), "blocks": blocks, "translations": translations},
+                     _ctx(), lambda e: None)
+    assert out["mode"] == "bilingual"
+    assert "AUDIT REPORT" in pymupdf.open(out["path"])[0].get_text()
+
+
 def test_date_backfill_applied(tmp_path, monkeypatch):
     monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path))
     src, blocks, _ = _fixture(tmp_path)
