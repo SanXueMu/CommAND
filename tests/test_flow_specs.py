@@ -212,3 +212,36 @@ def test_image_pdf_flow_falls_back_to_layout_flow(register) -> None:
     assert spec["on_failure"] == {"fallback_flow": "flow.translate.pdf.layout"}
     # 版式流自身不得再声明降级（避免链式降级）
     assert not register.FLOWS["flow.translate.pdf.layout"].get("on_failure")
+
+
+def _allows_null(schema: dict) -> bool:
+    t = schema.get("type")
+    if isinstance(t, list):
+        return "null" in t
+    return "enum" in schema and None in schema["enum"]
+
+
+def test_optional_flow_keys_map_to_nullable_tool_params(register, manifests) -> None:
+    """可选流键被模板**整串引用**时，对应工具参数必须可空。
+
+    否则该键缺值（重跑历史任务、降级继承 input、前端没发）会解析成 None →
+    工具 input_schema 校验失败「None is not of type 'string'」→ 入队即失败。
+    线上实例：flow.translate.skip 的 reason —— 图片流降级到 skip 后**降级 run 必失败**。
+    """
+    for flow_id, spec in register.FLOWS.items():
+        schema = register.INPUT_SCHEMAS.get(flow_id) or {}
+        required = set(schema.get("required") or [])
+        for index, step in enumerate(spec["steps"]):
+            tool = manifests.get(step["tool"])
+            if tool is None:
+                continue
+            props = tool.io.input_schema.get("properties") or {}
+            for param, template in step["input"].items():
+                if not isinstance(template, str):
+                    continue
+                match = re.fullmatch(r"\s*\{\{\s*input\.(\w+)\s*\}\}\s*", template)
+                if not match or match.group(1) in required:
+                    continue  # 整串引用才解析为 None；必填键由调用方保证
+                assert _allows_null(props.get(param) or {}), (
+                    f"{flow_id} 第 {index} 步：可选流键 input.{match.group(1)} → 工具参数 "
+                    f"{param} 必须可空（type 含 null），否则缺值时入队即失败")

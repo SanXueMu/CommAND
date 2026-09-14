@@ -34,6 +34,7 @@ DB_URL = "postgresql://command_dev:root@192.168.8.41:5432/command_dev"
 UNAVAILABLE_ID = "tests.string.unavailable"
 PRIMARY = "test.fallback.primary"
 SECONDARY = "test.fallback.secondary"
+NO_FALLBACK = "test.no.fallback"   # P2：能力不可用且**未声明**降级流 → 应暂停而非失败
 
 
 def _db_reachable() -> bool:
@@ -78,7 +79,7 @@ def stack(tmp_path):
     with db.pool.connection() as conn:
         run_ids = [r[0] for r in conn.execute(
             "SELECT id FROM pipeline_runs WHERE pipeline_id = ANY(%s)",
-            ([PRIMARY, SECONDARY],)).fetchall()]
+            ([PRIMARY, SECONDARY, NO_FALLBACK],)).fetchall()]
         if run_ids:
             conn.execute("DELETE FROM run_events WHERE run_id = ANY(%s)", (run_ids,))
             conn.execute("DELETE FROM tasks WHERE pipeline_run = ANY(%s)", (run_ids,))
@@ -135,3 +136,46 @@ def test_fallback_flow_guard_is_pure_logic(stack):
     assert svc._fallback_flow_for(top, "failed", None) is None
     # 非失败终态 → 不降级
     assert svc._fallback_flow_for(top, "succeeded", err) is None
+
+
+def _pump_until_status(stack, run_id: str, timeout_s: float = 20.0) -> str:
+    """反复发牌直到 run 离开 running（子进程任务耗时不定，固定次数会 flaky）。"""
+    import time
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        stack["pump"]()
+        status = stack["repo"].get_run(run_id)["status"]
+        if status != "running":
+            return status
+        time.sleep(0.2)
+    return stack["repo"].get_run(run_id)["status"]
+
+
+def test_unavailable_without_fallback_pauses_run(stack):
+    """P2：能力不可用但**没有**可降级的等价流 → run 落 `paused`（而非红色失败）。
+
+    这样用户换好密钥后点「继续」即可**重试原流**；若降级到 skip 流，文件会被永久标记为
+    「不翻译」且再也无法重试（线上 PNG 的教训）。同时校验暂停的 run 能正常「继续」。
+    """
+    svc = stack["svc"]
+    svc.register(NO_FALLBACK, "单图流（无等价降级流）", [
+        {"tool": UNAVAILABLE_ID, "input": {"file": "{{ input.file }}", "marker": "UNAVAILABLE"}},
+    ])
+    src = stack["tmp"] / "扫描图.png"
+    src.write_text("UNAVAILABLE\n", encoding="utf-8")
+    created = svc.run(NO_FALLBACK, {"file": str(src)}, batch_id="b_pausetest")
+    assert _pump_until_status(stack, created["run_id"]) == "paused"
+
+    run = stack["repo"].get_run(created["run_id"])
+    assert run["status"] == "paused", run
+    assert run["error"]["paused_unavailable"] is True
+    assert run["error"]["kind"] == "unavailable"
+    assert "能力不可用" in run["error"]["message"]
+    assert "继续" in run["error"]["hint"] and "版式翻译" in run["error"]["hint"]
+    # 没有产生降级 run
+    assert not [r for r in stack["repo"].list_runs(batch_id="b_pausetest", limit=10)
+                if r.get("fallback_of")]
+
+    # 「继续」可重试原流（再次撞不可用 → 仍暂停，不抛异常）
+    svc.resume_run(created["run_id"])
+    assert _pump_until_status(stack, created["run_id"]) == "paused"

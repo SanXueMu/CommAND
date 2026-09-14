@@ -29,6 +29,14 @@ DELETE_ABORT_WAIT_S = 10.0
 # 可打包下载的产物后缀（文档类；排除 .json/.db 等中间态文件）
 ARTIFACT_SUFFIXES = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".md", ".csv", ".zip"}
 
+# 能力不可用（模型未开通/无权限/额度）且**没有**可降级等价流时的可操作提示：
+# 把 run 标为 paused，用户换好密钥后点「继续」即可重试原流。
+_UNAVAILABLE_HINT = (
+    "该密钥/模型当前不可用（未开通、无权限或额度问题）：请在「APIKey管理」确认密钥已开通该模型，"
+    "换好密钥后点「继续」重试；若该密钥确实没有该模型权限，请改用其它处理方式"
+    "（例如把图片转为 PDF 后用「版式翻译」）"
+)
+
 
 class PipelineService:
     """线性管线：首步提交 → 每步 succeeded 后解析模板入队下步 → 终态收口。
@@ -203,6 +211,20 @@ class PipelineService:
         flow = (definition.get("on_failure") or {}).get("fallback_flow")
         return flow if isinstance(flow, str) and flow else None
 
+    def _should_pause_instead(self, run: dict[str, Any] | None, status: str,
+                              error: dict[str, Any] | None) -> bool:
+        """能力不可用且该流**没有**可降级的等价流 → 把 run 标为 paused（而非 failed）。
+
+        这样用户换好密钥后点「继续」即可**重试原流**；否则会留下一条红色失败记录，
+        而且（若降级到 skip 流）文件会被永久标记为「不翻译」、再也无法重试。
+        只对顶层 run 生效（子 run 仍走失败级联）。
+        """
+        if run is None or status != "failed" or not error:
+            return False
+        if str(error.get("kind") or "") != "unavailable":
+            return False
+        return run.get("parent_run_id") is None and not run.get("fallback_of")
+
     def _finish_and_cascade(self, run_id: str, status: str,
                             error: dict[str, Any] | None = None) -> None:
         """07 级联收口：run 终态化；子 run 成功→合成任务喂父 advance（推进父下一步）；
@@ -218,6 +240,13 @@ class PipelineService:
             error["message"] = (f"{error.get('message', '')}"
                                f"（能力不可用，已自动改用「{fallback_flow}」重跑）")
             error["fallback_flow"] = fallback_flow
+        if not fallback_flow and self._should_pause_instead(run, status, error):
+            error = dict(error or {})
+            error["message"] = f"{error.get('message', '')}（能力不可用，已暂停：{_UNAVAILABLE_HINT}）"
+            error["hint"] = _UNAVAILABLE_HINT
+            error["paused_unavailable"] = True
+            self._pipeline_repo.finish_run(run_id, "paused", error=error)
+            return
         self._pipeline_repo.finish_run(run_id, status, error=error)
         if fallback_flow and run is not None:
             try:

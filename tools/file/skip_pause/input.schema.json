@@ -1,8 +1,21 @@
 {
   "type": "object",
-  "required": ["file"],
+  "required": [
+    "file"
+  ],
   "properties": {
-    "file": {"type": "string", "title": "文件", "description": "本轮刻意不处理的文件（如 PPT）"},
-    "reason": {"type": "string", "title": "暂停原因", "description": "展示给用户，说明为何跳过以及如何继续"}
+    "file": {
+      "type": "string",
+      "title": "文件",
+      "description": "本轮刻意不处理的文件（如 PPT）"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "title": "暂停原因",
+      "description": "展示给用户，说明为何跳过以及如何继续（留空给默认文案）"
+    }
   }
 }
