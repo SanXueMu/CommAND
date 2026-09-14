@@ -3,7 +3,7 @@ id = "xlsx.backfill.dict"
 name = "xlsx 回填"
 version = "1.0.0"
 tags = ["回填", "表格"]
-description = "单元组 × 列分类 × 显式映射 × 译文 → 中文版 xlsx（每单元一 sheet + 对照字典 sheet；review 格保留原文加 ⚠️）"
+description = "单元组 × 列分类 × 显式映射 × 译文 → 中文版 xlsx；默认 sheets 版式（原 sheet 之后插入 <sheet名>_翻译结果，原文并排保留），review 格保留原文加 ⚠️"
 
 [io]
 input_schema = "input.schema.json"

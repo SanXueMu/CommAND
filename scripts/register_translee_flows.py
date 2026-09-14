@@ -135,7 +135,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
 
 FLOWS: dict[str, dict] = {
     "flow.translate.xlsx": {
-        "name": "表格翻译", "doc_md": "xlsx 翻译全自动流：提取→分类→归一去重→翻译→质检→回填（双语 xlsx + 对照字典）。",
+        "name": "表格翻译", "doc_md": "xlsx 翻译全自动流：提取→分类→归一去重→翻译→质检→回填。产物为「原文｜译文」并排的中文版 xlsx（每个原 sheet 之后插入 <sheet名>_翻译结果，原 sheet 原样保留）。",
         "steps": [
             {"tool": "xlsx.extract.values", "input": {"file": "{{ input.file }}"}},
             {"tool": "table.classify.columns", "input": {"units": "{{ prev.units }}"}},

@@ -1,10 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["path", "name"],
+  "required": ["path", "name", "layout"],
   "properties": {
     "path": {"type": "string"},
     "name": {"type": "string"},
-    "dict_rows": {"type": "integer"}
+    "layout": {"type": "string", "enum": ["sheets", "dict"]},
+    "sheets_made": {"type": "integer", "description": "sheets 版式：插入的译文 sheet 数"},
+    "cells_changed": {"type": "integer", "description": "sheets 版式：改写的单元格数"},
+    "dict_rows": {"type": "integer", "description": "dict 版式：对照字典行数"}
   }
 }

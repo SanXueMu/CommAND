@@ -308,6 +308,7 @@ def _chain_fixtures():
 
 
 def test_xlsx_backfill_join(ctx, tmp_path):
+    """dict 版式（旧行为）：每单元一张 sheet + 末尾对照字典。"""
     units, cls, dedup = _chain_fixtures()
     n = len(dedup["unique"])
     backfill = load_tool("tools/xlsx/backfill_dict")
@@ -316,11 +317,13 @@ def test_xlsx_backfill_join(ctx, tmp_path):
          "segments": cls["segments"], "index_map": dedup["index_map"],
          "date_maps": dedup["date_maps"],
          "translations": [f"译{i}" for i in range(n)],
-         "statuses": ["ok"] * (n - 1) + ["review"], "file": "底稿.xlsx"},
+         "statuses": ["ok"] * (n - 1) + ["review"], "file": "底稿.xlsx",
+         "layout": "dict"},
         ctx, lambda e: None,
     )
     from openpyxl import load_workbook
 
+    assert out["layout"] == "dict"
     wb = load_workbook(out["path"])
     ws = wb["s1"]
     assert ws.cell(1, 1).value == "译0"   # 表头 项目 → ok
@@ -329,6 +332,64 @@ def test_xlsx_backfill_join(ctx, tmp_path):
     assert ws.cell(3, 1).value.startswith("⚠️")  # review 格保留原文
     assert ws.cell(3, 1).value == "⚠️ 管理费用"
     assert wb.sheetnames[-1] == "对照字典"
+
+
+def test_xlsx_backfill_sheets_layout(ctx, tmp_path):
+    """sheets 版式（默认）：原 sheet 之后插入 <sheet名>_翻译结果，原文不动，无对照字典。"""
+    from openpyxl import Workbook, load_workbook
+
+    src = tmp_path / "投标资料.xlsx"
+    wb0 = Workbook()
+    ws1 = wb0.active
+    ws1.title = "Sheet1"
+    ws1.append(["项目", "金额"])
+    ws1.append(["营业收入", "100.00"])
+    ws1.append(["管理费用", "20.00"])
+    ws2 = wb0.create_sheet("Sheet2")
+    ws2.append(["条款", "说明"])
+    ws2.append(["Payment", "within 30 days"])
+    wb0.save(src)
+
+    units = [
+        {"unit_id": "Sheet1", "unit_type": "table",
+         "rows": [["项目", "金额"], ["营业收入", "100.00"], ["管理费用", "20.00"]]},
+        {"unit_id": "Sheet2", "unit_type": "table",
+         "rows": [["条款", "说明"], ["Payment", "within 30 days"]]},
+    ]
+    cls = load_tool("tools/table/classify_columns").run({"units": units}, None, lambda e: None)
+    dedup = load_tool("tools/text/dedup_values").run({"segments": cls["segments"]}, None, lambda e: None)
+    n = len(dedup["unique"])
+    out = load_tool("tools/xlsx/backfill_dict").run(
+        {"units": units, "col_classes": cls["col_classes"], "ranges": cls["ranges"],
+         "segments": cls["segments"], "index_map": dedup["index_map"], "date_maps": dedup["date_maps"],
+         "translations": [f"译文{i}" for i in range(n)],
+         "statuses": ["ok"] * n, "file": str(src)},
+        ctx, lambda e: None,
+    )
+
+    assert out["layout"] == "sheets"
+    assert out["name"] == "投标资料_中文.xlsx"
+    assert out["sheets_made"] == 2
+    wb = load_workbook(out["path"])
+    # 每个原 sheet 之后紧跟其译文 sheet；无对照字典
+    assert wb.sheetnames == ["Sheet1", "Sheet1_翻译结果", "Sheet2", "Sheet2_翻译结果"]
+    # 译文按原坐标回填（期望值由 dedup 的唯一段序推出，不写死下标）
+    idx = {s: i for i, s in enumerate(dedup["unique"])}
+    w1 = wb["Sheet1_翻译结果"]
+    assert w1.cell(1, 1).value == f"译文{idx['项目']}"
+    assert w1.cell(2, 1).value == f"译文{idx['营业收入']}"
+    assert w1.cell(3, 1).value == f"译文{idx['管理费用']}"
+    w2 = wb["Sheet2_翻译结果"]
+    assert w2.cell(1, 1).value == f"译文{idx['条款']}"
+    assert w2.cell(2, 1).value == f"译文{idx['Payment']}"
+    assert w2.cell(2, 2).value == f"译文{idx['within 30 days']}"
+    # 原 sheet 一字不动
+    o1 = wb["Sheet1"]
+    assert o1.cell(1, 1).value == "项目"
+    assert o1.cell(2, 1).value == "营业收入"
+    # 源文件未被修改（仍只有两个 sheet）
+    assert load_workbook(src).sheetnames == ["Sheet1", "Sheet2"]
+
 
 
 def test_docx_render(ctx, tmp_path):

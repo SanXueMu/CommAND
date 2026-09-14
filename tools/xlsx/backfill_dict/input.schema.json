@@ -11,7 +11,9 @@
     "date_maps": {"title": "日期映射", "type": "array", "items": {"type": "object"}},
     "translations": {"title": "译文数组", "type": "array", "items": {"type": "string"}},
     "statuses": {"title": "状态标记", "type": "array", "items": {"enum": ["ok", "review"]}},
-    "file": {"title": "源文件路径", "type": "string", "description": "源文件路径（产物命名用）"},
-    "out_name": {"title": "产物文件名", "type": "string", "description": "产物文件名；缺省 <源名>_中文版.xlsx"}
+    "file": {"title": "源文件路径", "type": "string", "description": "源文件路径（sheets 版式下作为副本母本，只读；产物命名用）"},
+    "layout": {"title": "产物版式", "type": "string", "enum": ["sheets", "dict"],
+               "description": "sheets（默认）：原文件副本上每个 sheet 之后插入 <sheet名>_翻译结果；dict：旧行为（每单元一张 sheet + 对照字典）"},
+    "out_name": {"title": "产物文件名", "type": "string", "description": "产物文件名；缺省 <源名>_中文.xlsx"}
   }
 }
