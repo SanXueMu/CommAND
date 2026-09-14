@@ -56,6 +56,14 @@ INPUT_SCHEMAS: dict[str, dict] = {
                                   "description": "如 审计财务；留空则用模版声明的领域"},
         },
     },
+    "flow.translate.skip": {
+        "type": "object",
+        "properties": {
+            "file": {"type": "string", "format": "file", "title": "文件", "description": "本轮不处理的文件（如 PPT）"},
+            "reason": {"type": "string", "title": "暂停原因",
+                       "description": "展示给用户：为何跳过、如何继续（如「PPT 暂不支持翻译」）"},
+        },
+    },
     "flow.translate.image": {
         "type": "object",
         "required": ["file", "key_name", "target_lang"],
@@ -263,6 +271,16 @@ FLOWS: dict[str, dict] = {
                 "images": "{{ prev.paths }}",
                 "source_file": "{{ input.file }}",
                 "cleanup_dirs": ["{{ step[0].output.dir }}", "{{ step[1].output.output_dir }}"]}},
+        ],
+    },
+    "flow.translate.skip": {
+        "name": "暂不翻译（暂停留档）",
+        "doc_md": ("刻意不处理本文件（如 PPT / 指定文字版但为扫描件）：1 步流并**暂停**留档，"
+                   "让用户看到「哪些文件没处理、为什么」；源文件仍随批次导出（目录结构与原结构一致）。"),
+        "steps": [
+            {"tool": "file.skip.pause", "input": {
+                "file": "{{ input.file }}",
+                "reason": "{{ input.reason }}"}},
         ],
     },
     "flow.translate.image": {

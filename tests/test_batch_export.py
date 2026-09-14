@@ -1,0 +1,136 @@
+"""批次导出（清单驱动）测试：目录结构还原 / 根目录加后缀 / 源文件回退 / 未跑成功不混入（零 DB）。"""
+
+import json
+import zipfile
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+import deps
+from config import Config
+
+
+class _StubService:
+    """提供 list_runs(batch_id=...) 与 collect_run_artifacts。"""
+
+    def __init__(self):
+        self.runs: dict[str, list] = {}
+        self.artifacts: dict[str, list] = {}
+
+    def list_runs(self, limit: int = 50, pipeline_id: str | None = None,
+                  batch_id: str | None = None, **_: object) -> dict:
+        runs = list(self.runs.get(batch_id or "", []))
+        return {"runs": runs, "total": len(runs)}
+
+    def collect_run_artifacts(self, run_id: str, scope: str = "final") -> list:
+        return list(self.artifacts.get(run_id, []))
+
+
+@pytest.fixture
+def batch(tmp_path: Path, monkeypatch):
+    from api import files_router
+
+    stub_cfg = Config(
+        host="127.0.0.1", port=0, database_url="postgresql://x/x", worker_concurrency=1,
+        heartbeat_interval_s=15, heartbeat_timeout_s=90, tools_dir=tmp_path, data_dir=tmp_path,
+    )
+    service = _StubService()
+    monkeypatch.setattr(deps, "get_config", lambda: stub_cfg)
+    monkeypatch.setattr(deps, "get_pipeline_service", lambda: service)
+    app = FastAPI()
+    app.include_router(files_router.router, prefix="/api")
+    with TestClient(app) as c:
+        yield c, tmp_path, service
+
+
+def _manifest(tmp_path: Path, batch_id: str, entries: list[dict], root: str = "投标资料") -> None:
+    d = tmp_path / "batches"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{batch_id}.json").write_text(json.dumps(
+        {"batch_id": batch_id, "root": root, "dir": str(tmp_path / "uploads" / root),
+         "created_at": "2026-09-14", "files": entries}, ensure_ascii=False), encoding="utf-8")
+
+
+def _entry(tmp_path: Path, root: str, rel: str, payload: bytes = b"SRC", **extra) -> dict:
+    """rel 是**相对批次根目录**的路径（上传端点会剥掉根目录前缀），path 是落盘绝对路径。"""
+    p = tmp_path / "uploads" / root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(payload)
+    return {"path": str(p), "name": p.name, "rel": rel, "size": len(payload), **extra}
+
+
+def _artifact(tmp_path: Path, handle: str, name: str, payload: bytes) -> dict:
+    target = tmp_path / "outputs" / handle / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(payload)
+    return {"step": 5, "key": "path", "name": name, "path": str(target), "size": len(payload)}
+
+
+def test_package_batch_restores_tree_and_suffixes_root(batch):
+    """清单驱动：结构照原样，只有批次根目录加 _中文；无产物的文件回退源文件。"""
+    c, tmp_path, service = batch
+    _manifest(tmp_path, "b1", [
+        _entry(tmp_path, "投标资料", "A/合同.pdf", b"PDF-A"),
+        _entry(tmp_path, "投标资料", "B/说明.docx", b"PK-B"),
+        _entry(tmp_path, "投标资料", "C/演讲.pptx", b"PK-PPT", skip=True, skip_reason="PPT 暂不支持"),
+    ])
+    service.runs["b1"] = [
+        {"id": "r1", "status": "succeeded", "input": {"file": str(tmp_path / "uploads/投标资料/A/合同.pdf")}},
+        {"id": "r2", "status": "succeeded", "input": {"file": str(tmp_path / "uploads/投标资料/B/说明.docx")}},
+        {"id": "r3", "status": "paused", "input": {"file": str(tmp_path / "uploads/投标资料/C/演讲.pptx")}},
+    ]
+    service.artifacts = {"r1": [_artifact(tmp_path, "h1", "合同_中文.pdf", b"OUT-A")],
+                         "r2": [_artifact(tmp_path, "h2", "说明_中文.docx", b"OUT-B")]}
+
+    resp = c.post("/api/files/package_batch", json={"batch_id": "b1", "suffix": "_中文"})
+    assert resp.status_code == 201
+    body = resp.json()
+    with zipfile.ZipFile(body["path"]) as z:
+        names = sorted(z.namelist())
+        assert names == ["投标资料_中文/A/合同_中文.pdf", "投标资料_中文/B/说明_中文.docx",
+                         "投标资料_中文/C/演讲.pptx"]
+        assert z.read("投标资料_中文/A/合同_中文.pdf") == b"OUT-A"
+        assert z.read("投标资料_中文/C/演讲.pptx") == b"PK-PPT"
+    assert len(body["translated"]) == 2
+    assert [p["rel"] for p in body["passthrough"]] == ["C/演讲.pptx"]
+    assert body["missing"] == []
+
+
+def test_package_batch_failed_run_not_mixed_into_delivery(batch):
+    c, tmp_path, service = batch
+    _manifest(tmp_path, "b2", [_entry(tmp_path, "批次", "坏文件.pdf", b"PDF")])
+    service.runs["b2"] = [{"id": "r1", "status": "failed",
+                           "input": {"file": str(tmp_path / "uploads/批次/坏文件.pdf")}}]
+    resp = c.post("/api/files/package_batch", json={"batch_id": "b2"})
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["translated"] == [] and body["passthrough"] == []
+    assert [m["rel"] for m in body["missing"]] == ["坏文件.pdf"]
+    with zipfile.ZipFile(body["path"]) as z:
+        assert z.namelist() == []
+
+
+def test_package_batch_unknown_batch_404(batch):
+    c, _, _ = batch
+    assert c.post("/api/files/package_batch", json={"batch_id": "nope"}).status_code == 404
+    assert c.post("/api/files/package_batch", json={"batch_id": "nope"}).status_code != 500
+
+
+def test_batch_upload_marks_skip_and_writes_manifest(batch):
+    """后端过滤：skip 后缀照常落盘（导出要用），但标记 skip 并在响应/清单里回报。"""
+    c, tmp_path, _ = batch
+    resp = c.post("/api/files/batch",
+                  files=[("files", ("批/A.pdf", b"%PDF-1", "application/pdf")),
+                         ("files", ("批/B.pptx", b"PK-PPT", "application/octet-stream"))],
+                  params={"skip": ".ppt,.pptx"})
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["batch_id"] and body["skipped"] == ["B.pptx"]
+    flags = {f["rel"]: f.get("skip") for f in body["files"]}
+    assert flags == {"A.pdf": None, "B.pptx": True}
+    manifest = json.loads((tmp_path / "batches" / f"{body['batch_id']}.json").read_text(encoding="utf-8"))
+    assert manifest["root"] == "批"
+    assert [f["rel"] for f in manifest["files"]] == ["A.pdf", "B.pptx"]
+    assert manifest["files"][1]["skip"] is True

@@ -1,0 +1,22 @@
+[tool]
+id = "file.skip.pause"
+name = "跳过并暂停"
+version = "1.0.0"
+tags = ["文件", "跳过", "暂停"]
+description = "刻意不做处理的文件（如暂不支持的 PPT）：立即抛暂停，留一条可决策的任务记录，源文件随批次导出"
+doc = "README.md"
+
+[io]
+input_schema = "input.schema.json"
+output_schema = "output.schema.json"
+input_types = ["file.any"]
+output_types = ["file.passthrough"]
+
+[runtime]
+kind = "inproc"
+entry = "main.py:run"
+
+[resources]
+timeout_s = 60
+concurrency = 4
+max_attempts = 1

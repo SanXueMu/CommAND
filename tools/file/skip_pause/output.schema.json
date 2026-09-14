@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "skipped": {"type": "boolean"},
+    "file": {"type": "string"},
+    "reason": {"type": "string"}
+  }
+}

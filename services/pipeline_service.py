@@ -109,9 +109,10 @@ class PipelineService:
             raise TaskNotFoundError(f"管线不存在: {pipeline_id}")
         return definition
 
-    def run(self, pipeline_id: str, input: dict[str, Any]) -> dict[str, Any]:
+    def run(self, pipeline_id: str, input: dict[str, Any],
+            batch_id: str | None = None) -> dict[str, Any]:
         definition = self.get(pipeline_id)
-        run_id = self._pipeline_repo.create_run(pipeline_id, input)
+        run_id = self._pipeline_repo.create_run(pipeline_id, input, batch_id=batch_id)
         self._audit(run_id, None, "created", detail={"pipeline_id": pipeline_id})
         first = definition["steps"][0]
         try:
@@ -531,12 +532,13 @@ class PipelineService:
         return self._task_repo.list_by_pipeline_run(run_id)
 
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
-                  offset: int = 0) -> dict[str, Any]:
+                  offset: int = 0, batch_id: str | None = None) -> dict[str, Any]:
         """job 粒度运行列表 + 每 run 摘要（产物/用量/统计）——翻译工作台任务区数据面。
 
         摘要走**批量轻投影**（3 条聚合查询覆盖整页），不再逐 run 拉整段 tasks 载荷。
         """
-        runs = self._pipeline_repo.list_runs(pipeline_id=pipeline_id, limit=limit, offset=offset)
+        runs = self._pipeline_repo.list_runs(pipeline_id=pipeline_id, limit=limit, offset=offset,
+                                             batch_id=batch_id)
         for run in runs:
             run["summary"] = self._summaries([run])[run["id"]]
         return {"runs": runs, "total": self._pipeline_repo.count_runs(pipeline_id)}

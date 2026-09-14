@@ -30,6 +30,9 @@ TRANSLATE_VIEW: dict = {
              "label": "Word 翻译（旧版 .doc：任务将暂停，另存为 .docx 后继续）"},
             {"ext": [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"], "flow": "flow.translate.image",
              "label": "图片翻译（qwen-mt-image，保留排版）"},
+            # PPT：本轮不翻译，但**生成一条暂停记录**留档（可见、可导出），原文件随批次导出
+            {"ext": [".ppt", ".pptx"], "flow": "flow.translate.skip", "skip": True,
+             "label": "PPT（暂不支持翻译：任务暂停留档，原文件随批次导出）"},
         ],
         # 不支持的后缀 → 组件给出明确提示（声明驱动，不写死在前端）；
         # .doc 已改为可提交（子任务暂停等另存为 .docx），故不在此列。

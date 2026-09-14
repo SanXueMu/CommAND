@@ -21,6 +21,7 @@ class PipelineCreate(BaseModel):
 
 class PipelineRunCreate(BaseModel):
     input: dict[str, Any] = Field(default_factory=dict)
+    batch_id: str | None = None
 
 
 @router.post("", status_code=201)
@@ -83,7 +84,7 @@ def delete_pipeline(pipeline_id: str) -> dict:
 @router.post("/{pipeline_id}/run", status_code=202)
 def run_pipeline(pipeline_id: str, body: PipelineRunCreate) -> dict:
     try:
-        return deps.get_pipeline_service().run(pipeline_id, body.input)
+        return deps.get_pipeline_service().run(pipeline_id, body.input, batch_id=body.batch_id)
     except TaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ToolUserError as exc:
@@ -94,10 +95,11 @@ runs_router = APIRouter(prefix="/pipeline-runs", tags=["pipelines"])
 
 
 @runs_router.get("")
-def list_runs(pipeline_id: str | None = None, limit: int = 50, offset: int = 0) -> dict:
-    """job 粒度运行列表（翻译工作台任务区）。pipeline_id 缺省即全部。"""
+def list_runs(pipeline_id: str | None = None, limit: int = 50, offset: int = 0,
+              batch_id: str | None = None) -> dict:
+    """job 粒度运行列表（翻译工作台任务区）。pipeline_id / batch_id 缺省即全部。"""
     return deps.get_pipeline_service().list_runs(
-        pipeline_id=pipeline_id, limit=limit, offset=offset)
+        pipeline_id=pipeline_id, limit=limit, offset=offset, batch_id=batch_id)
 
 
 class UsageQuery(BaseModel):

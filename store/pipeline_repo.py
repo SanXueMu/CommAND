@@ -62,21 +62,27 @@ class PipelineRepo:
         return int(row[0]) if row else 0
 
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
-                  offset: int = 0) -> list[dict[str, Any]]:
+                  offset: int = 0, batch_id: str | None = None) -> list[dict[str, Any]]:
         """运行列表（job 粒度，按创建时间倒序）——translee 任务列表体验。"""
-        sql = ("SELECT id, pipeline_id, input, status, error, progress, created_at, finished_at "
+        sql = ("SELECT id, pipeline_id, input, status, error, progress, created_at, finished_at, batch_id "
                "FROM pipeline_runs")
+        clauses: list[str] = []
         params: list[Any] = []
         if pipeline_id:
-            sql += " WHERE pipeline_id = %s"
+            clauses.append("pipeline_id = %s")
             params.append(pipeline_id)
+        if batch_id:
+            clauses.append("batch_id = %s")
+            params.append(batch_id)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
         params += [limit, offset]
         with self._db.pool.connection() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [
             {"id": r[0], "pipeline_id": r[1], "input": r[2], "status": r[3], "error": r[4],
-             "progress": r[5], "created_at": r[6], "finished_at": r[7]}
+             "progress": r[5], "created_at": r[6], "finished_at": r[7], "batch_id": r[8]}
             for r in rows
         ]
 
@@ -129,16 +135,17 @@ class PipelineRepo:
 
     def create_run(self, pipeline_id: str, input: dict[str, Any],
                    parent_run_id: str | None = None,
-                   parent_step_index: int | None = None) -> str:
+                   parent_step_index: int | None = None,
+                   batch_id: str | None = None) -> str:
         """创建 run；parent 两列非空即子 run（008 唯一索引保证同父步活跃子 run 唯一）。"""
         run_id = "p_" + secrets.token_hex(8)
         with self._db.pool.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO pipeline_runs (id, pipeline_id, input, parent_run_id, parent_step_index)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO pipeline_runs (id, pipeline_id, input, parent_run_id, parent_step_index, batch_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                (run_id, pipeline_id, Json(input), parent_run_id, parent_step_index),
+                (run_id, pipeline_id, Json(input), parent_run_id, parent_step_index, batch_id),
             )
         return run_id
 

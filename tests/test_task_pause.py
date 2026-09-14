@@ -117,3 +117,15 @@ def test_pause_does_not_consume_retries(stack):
     assert run["status"] == "paused"
     tasks = stack["svc"].get_run_tasks(run_id)
     assert [t["status"] for t in tasks] == ["paused"]
+
+
+def test_skip_pause_tool_raises_task_pause():
+    """file.skip.pause：刻意不处理的文件（如 PPT）→ 抛 ToolPauseError（任务落 paused 留档）。"""
+    import types
+
+    from core.errors import ToolPauseError
+    from tools.file.skip_pause import main as skip_main
+
+    with pytest.raises(ToolPauseError, match="PPT"):
+        skip_main.run({"file": "演讲.pptx", "reason": "PPT 暂不支持翻译"},
+                      types.SimpleNamespace(handle="h"), lambda e: None)
