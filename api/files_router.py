@@ -25,6 +25,13 @@ _UNSAFE = re.compile(r"[^\w.\-\u4e00-\u9fff]+")
 # 文件名禁用字符：控制字符（含 NUL）；路径分隔符在分段时已处理
 _FORBIDDEN = re.compile(r"[\x00-\x1f]")
 _BATCH_ID_RE = re.compile(r"b_[0-9a-f]{6,32}")
+# 操作系统垃圾文件（前端已过滤，这里服务端兜底）：macOS/Windows/Office 临时文件
+_OS_JUNK = {".DS_Store", "Thumbs.db", "desktop.ini", "Icon\r"}
+
+
+def _is_os_junk(name: str) -> bool:
+    base = Path(name).name
+    return base in _OS_JUNK or base.startswith("~$")
 
 # 批量上传（多文件/目录）与压缩包解压的上限
 _MAX_BATCH_FILES = 200
@@ -267,6 +274,7 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
     batch_dir = _new_batch_dir(label or root or "批量上传")
 
     saved: list[dict] = []
+    skipped_junk: list[dict[str, str]] = []
     total = 0
     try:
         for item in files:
@@ -276,6 +284,9 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             if root and len(rel.parts) > 1 and rel.parts[0] == root:
                 rel = Path(*rel.parts[1:])
+            if any(_is_os_junk(part) for part in rel.parts):
+                skipped_junk.append({"name": str(rel), "reason": "系统临时文件，已忽略"})
+                continue
             target = batch_dir / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             size = 0
@@ -310,7 +321,7 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
     _write_batch_manifest(batch_id, root or batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": root or batch_dir.name.split("_", 1)[-1],
-            "files": saved, "skipped": _skipped_view(saved)}
+            "files": saved, "skipped": skipped_junk + _skipped_view(saved)}
 
 
 def _is_zip_symlink(info: zipfile.ZipInfo) -> bool:

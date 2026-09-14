@@ -194,3 +194,18 @@ def test_batch_empty_and_foreign_files_do_not_kill_batch(client):
     # 留档：空文件与 PPT 都还在盘上（导出按原结构放回）
     assert Path(by_rel["B/占位.txt"]["path"]).is_file()
     assert Path(by_rel["C/演讲.pptx"]["path"]).is_file()
+
+
+def test_batch_skips_os_junk_files(client):
+    """系统临时文件（.DS_Store / ~$xxx.docx）不落盘、不进清单、不占配额（服务端兜底）。"""
+    client, _ = client
+    resp = client.post("/api/files/batch", data={"paths": ["d/合同.docx", "d/.DS_Store", "d/~$合同.docx"]},
+                       files=[("files", ("d/合同.docx", b"DOCX", "application/octet-stream")),
+                              ("files", ("d/.DS_Store", b"JUNK", "application/octet-stream")),
+                              ("files", ("d/~$合同.docx", b"JUNK", "application/octet-stream"))])
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert [f["name"] for f in body["files"]] == ["合同.docx"]
+    assert {s["name"] for s in body["skipped"]} == {".DS_Store", "~$合同.docx"}
+    assert not (Path(body["path"]) / ".DS_Store").exists()
+    assert not (Path(body["path"]) / "~$合同.docx").exists()

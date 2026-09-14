@@ -41,11 +41,24 @@ def run(input: dict, ctx, emit) -> dict:
             hint="另存为 .docx 后：用新文件替换原路径再点本任务「继续」，或直接重新上传新文件",
         )
 
+    # Word 临时锁文件（~$ 开头，Word 未正常关闭时残留）：不是文档，直接暂停留档等用户处理
+    if path.name.startswith("~$"):
+        raise ToolPauseError(
+            "这是 Word 临时锁文件（~$ 开头），不是文档本体",
+            hint="删除该文件后重新上传目录；或用『替换原件』传入真正的 .docx 再点「继续」",
+        )
+
     from docx import Document
 
     from command_shared.docx_units import extract_units
 
-    document = Document(str(path))
+    try:
+        document = Document(str(path))
+    except Exception as exc:  # noqa: BLE001 —— 损坏/非 docx（含 PackageNotFoundError/BadZipFile）
+        raise ToolPauseError(
+            f"无法打开该 .docx（文件已损坏或不是有效 Word 文档）：{type(exc).__name__}",
+            hint="用 Word/WPS 另存为一份新的 .docx，再用『替换原件』换上来后点「继续」",
+        ) from exc
     result = extract_units(
         document,
         include_tables=bool(input.get("include_tables", True)),

@@ -186,3 +186,22 @@ def test_manifest_declares_expected_io():
     assert manifest.runtime.entry == "main.py:run"
     assert manifest.io.input_types == ["file.docx"]
     assert manifest.io.output_types == ["docx.units"]
+
+
+def test_lock_file_and_broken_docx_pause(tmp_path):
+    """Word 临时锁文件（~$ 开头）与损坏/非 docx → ToolPauseError（暂停等用户处理，不是红色失败）。"""
+    import pytest as _pytest
+    from core.errors import ToolPauseError
+
+    lock = tmp_path / "~$合同.docx"
+    lock.write_bytes(b"\x00\x01")
+    with _pytest.raises(ToolPauseError) as exc:
+        _tool().run({"file": str(lock)}, types.SimpleNamespace(handle="h"), lambda e: None)
+    assert "临时锁文件" in str(exc.value)
+    assert "替换原件" in (getattr(exc.value, "hint", "") or "")
+
+    broken = tmp_path / "损坏.docx"
+    broken.write_bytes(b"NOT-A-ZIP-AT-ALL")
+    with _pytest.raises(ToolPauseError) as exc2:
+        _tool().run({"file": str(broken)}, types.SimpleNamespace(handle="h"), lambda e: None)
+    assert "无法打开" in str(exc2.value)
