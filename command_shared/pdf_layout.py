@@ -29,12 +29,13 @@ def reconstruct(blocks: list[dict], index_map, date_maps, translations, statuses
     items = []
     for it in flatten_blocks(blocks):
         g = it["index"]
-        u = index_map[g] if index_map else g
+        u = index_map[g] if index_map and g < len(index_map) else g
         text = translations[u] if u < len(translations) else it["text"]
-        for placeholder, value in (date_maps[g] if date_maps else {}).items():
+        dates = date_maps[g] if date_maps and g < len(date_maps) else None
+        for placeholder, value in (dates or {}).items():
             text = text.replace(placeholder, value)
         items.append({**it, "translated": text,
-                      "status": statuses[u] if statuses else "ok"})
+                      "status": statuses[u] if statuses and u < len(statuses) else "ok"})
     return items
 
 

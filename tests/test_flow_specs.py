@@ -83,6 +83,18 @@ def test_translate_docx_flow_wiring(register) -> None:
     assert register.INPUT_SCHEMAS["flow.translate.docx"]["properties"]["mode"]["default"] == "bilingual"
 
 
+def test_translate_bilingual_flows_wire_col_classes(register) -> None:
+    """docx.render.bilingual 必须拿到 col_classes —— 漏接线时表格只翻表头、数据格回落原文。"""
+    for flow_id in ("flow.translate.pdf", "flow.translate.txt"):
+        steps = register.FLOWS[flow_id]["steps"]
+        assert steps[-1]["tool"] == "docx.render.bilingual", flow_id
+        render = steps[-1]["input"]
+        assert render["units"] == "{{ step[0].output.units }}"
+        assert render["ranges"] == "{{ step[1].output.ranges }}"
+        assert render["col_classes"] == "{{ step[1].output.col_classes }}", (
+            f"{flow_id} 的 docx.render.bilingual 未接线 col_classes（表格单元格拿不到译文）")
+
+
 def test_translate_view_declaration_consistent(register) -> None:
     props = TRANSLATE_VIEW["props"]
     known = set(register.FLOWS)
@@ -100,10 +112,14 @@ def test_translate_view_docx_route_and_mode_default(register) -> None:
     assert [r["flow"] for r in docx_routes] == ["flow.translate.docx"]
     mode = next(p for p in props["params"] if p["name"] == "mode")
     assert "flow.translate.docx" in mode["when_flow"]
-    assert mode["default"] == "overlay", "PDF 版式流默认原位覆盖"
+    assert "flow.translate.pdf.layout" in mode["when_flow"]
+    # 2026-09-14 用户口径：版式与 Word 均默认双语对照（原位覆盖仍可手动选）
+    assert mode["default"] == "bilingual", "默认双语对照"
     assert mode["default_by_flow"] == {"flow.translate.docx": "bilingual"}, "Word 流默认双语对照"
     values = {o["value"] for o in mode["options"]}
     assert values == {"overlay", "bilingual"}
+    # 流级 schema 的默认值须与工作台声明一致（FlowRunner 表单同源）
+    assert register.INPUT_SCHEMAS["flow.translate.pdf.layout"]["properties"]["mode"]["default"] == "bilingual"
 
 
 def test_translate_view_legacy_doc_pauses_instead_of_rejecting() -> None:

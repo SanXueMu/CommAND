@@ -13,6 +13,7 @@ from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError,
 from core.pipeline import evaluate_when, resolve_input, validate_when
 from services.dispatch_service import DispatchService
 from store.db import Db
+from store.key_repo import KeyRepo
 from store.pipeline_repo import PipelineRepo
 from store.run_event_repo import RunEventRepo
 from store.task_repo import TaskRepo
@@ -54,6 +55,7 @@ class PipelineService:
         dispatch_service: DispatchService,
         run_event_repo: RunEventRepo | None = None,
         data_dir: Path | None = None,
+        key_repo: KeyRepo | None = None,
     ) -> None:
         self._db = db
         self._pipeline_repo = pipeline_repo
@@ -62,6 +64,7 @@ class PipelineService:
         self._dispatch = dispatch_service
         self._run_events = run_event_repo
         self._data_dir = Path(data_dir) if data_dir is not None else None
+        self._key_repo = key_repo
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -128,9 +131,26 @@ class PipelineService:
             raise TaskNotFoundError(f"管线不存在: {pipeline_id}")
         return definition
 
+    def _validate_key_name(self, input_: dict[str, Any] | None) -> None:
+        """入队前校验 key_name：不在密钥注册表内直接拒绝（避免跑到翻译步才暂停等人工）。
+
+        key_name 缺省（None/空串）表示用默认密钥，放行。
+        """
+        name = (input_ or {}).get("key_name")
+        if not name or not isinstance(name, str):
+            return
+        if self._key_repo is None:
+            return
+        known = {str(k.get("name")) for k in self._key_repo.list()}
+        if name not in known:
+            raise ToolUserError(
+                f"密钥不存在: {name}（请先在「设置 → APIKey管理」注册该名称的密钥，"
+                f"或留空使用默认密钥）")
+
     def run(self, pipeline_id: str, input: dict[str, Any],
             batch_id: str | None = None,
             fallback_of: str | None = None) -> dict[str, Any]:
+        self._validate_key_name(input)
         definition = self.get(pipeline_id)
         run_id = self._pipeline_repo.create_run(pipeline_id, input, batch_id=batch_id,
                                                 fallback_of=fallback_of)
@@ -549,6 +569,7 @@ class PipelineService:
             raise TaskConflictError(f"run 未终态，不可重跑: {run['status']}")
         new_input = dict(run["input"] or {})
         new_input.update(input_override or {})
+        self._validate_key_name(new_input)
         # 先建新 run 再补写审计（flow_rerun 需回填 new_run_id）
         new_run_id = self._pipeline_repo.create_run(
             run["pipeline_id"], new_input,

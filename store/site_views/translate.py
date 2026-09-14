@@ -72,9 +72,9 @@ TRANSLATE_VIEW: dict = {
                  {"value": "通用", "label": "通用（不限定领域）"},
              ],
              "placeholder": "如 审计财务；留空则用模版的领域声明"},
-            {"name": "mode", "label": "输出模式", "type": "select", "default": "overlay",
+            {"name": "mode", "label": "输出模式", "type": "select", "default": "bilingual",
              "when_flow": ["flow.translate.pdf.layout", "flow.translate.docx"],
-             # 同一参数在不同流下默认不同：PDF 版式默认原位覆盖，Word 默认双语对照
+             # 版式与 Word 均默认双语对照；仍可手动改选「原位覆盖（单语译文）」
              "default_by_flow": {"flow.translate.docx": "bilingual"},
              "options": [
                  {"value": "overlay", "label": "原位覆盖（单语译文）"},

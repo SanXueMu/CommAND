@@ -137,7 +137,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "terms": {"type": "string", "format": "textarea", "title": "术语表",
                       "description": "每行：原文 => 译文（优先级最高，命中即固定译法）"},
             "mode": {"type": "string", "title": "输出模式", "enum": ["overlay", "bilingual"],
-                     "default": "overlay",
+                     "default": "bilingual",
                      "description": "overlay=原位覆盖单语译文；bilingual=左右分栏双语对照"},
         },
     },
@@ -191,6 +191,7 @@ FLOWS: dict[str, dict] = {
             {"tool": "docx.render.bilingual", "input": {
                 "units": "{{ step[0].output.units }}",
                 "ranges": "{{ step[1].output.ranges }}",
+                "col_classes": "{{ step[1].output.col_classes }}",
                 "index_map": "{{ step[2].output.index_map }}",
                 "date_maps": "{{ step[2].output.date_maps }}",
                 "translations": "{{ step[3].output.translations }}",
@@ -217,6 +218,7 @@ FLOWS: dict[str, dict] = {
             {"tool": "docx.render.bilingual", "input": {
                 "units": "{{ step[0].output.units }}",
                 "ranges": "{{ step[1].output.ranges }}",
+                "col_classes": "{{ step[1].output.col_classes }}",
                 "index_map": "{{ step[2].output.index_map }}",
                 "date_maps": "{{ step[2].output.date_maps }}",
                 "translations": "{{ step[3].output.translations }}",

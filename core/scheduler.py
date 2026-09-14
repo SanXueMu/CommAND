@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,6 +18,19 @@ from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
 
 logger = logging.getLogger("command.scheduler")
+
+
+def _exc_where(exc: BaseException) -> str:
+    """异常落点的「文件:行号」。
+
+    system 类错误原先只存 message（如 "IndexError: list index out of range"），
+    线上无从定位；补这条线索后可直接看到是哪个文件哪一行炸的。
+    """
+    tb = traceback.extract_tb(exc.__traceback__)
+    if not tb:
+        return ""
+    last = tb[-1]
+    return f"{Path(last.filename).name}:{last.lineno}"
 
 
 class Scheduler:
@@ -137,7 +151,8 @@ class Scheduler:
                 "kind": "user", "message": str(exc)})
         except Exception as exc:
             self._task_repo.finish(handle, "failed", error={
-                "kind": "system", "message": f"{type(exc).__name__}: {exc}"})
+                "kind": "system", "message": f"{type(exc).__name__}: {exc}",
+                "where": _exc_where(exc)})
         finally:
             if self._on_task_done is not None and task.get("pipeline_run"):
                 finished = self._task_repo.get(handle)
