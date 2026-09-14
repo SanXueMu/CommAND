@@ -8,6 +8,7 @@ translate_texts：批切分（条数+字符双预算）→ 并发池动态补位
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -33,6 +34,9 @@ DEFAULT_MAX_RETRIES = 1
 # 限流：DashScope 对 qwen-mt* 有请求频率上限（实测 ~120 RPM 触发 limit_requests）。
 # 跨线程均匀限速 + 429 指数退避重试，避免一条限流就把整条 run 判死。
 MT_MIN_INTERVAL_S = 1.0
+# 文本模型（非 MT）默认不限速：主要靠工具级并发闸（tool.toml 的 concurrency）约束；
+# 需要更保守时可设 CHAT_MIN_INTERVAL_S（>0 即启用跨线程均匀限速，无需改代码）。
+CHAT_MIN_INTERVAL_S = float(os.environ.get("COMMAND_CHAT_MIN_INTERVAL_S", "0") or 0)
 RATE_LIMIT_RETRIES = 6
 RATE_LIMIT_BASE_SLEEP = 1.0
 _rate_lock = threading.Lock()
@@ -116,6 +120,8 @@ def call_chat(
         extra["enable_thinking"] = False
     if (model or "").startswith("qwen-mt"):
         _throttle("qwen-mt", MT_MIN_INTERVAL_S)
+    elif CHAT_MIN_INTERVAL_S > 0:
+        _throttle("chat", CHAT_MIN_INTERVAL_S)
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         try:
             resp = client.chat.completions.create(
