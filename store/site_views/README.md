@@ -15,6 +15,28 @@ site_views/<域>.py  →  seed(lifespan)  →  PG site_views.props(JSONB)
 - 已落地域：tools / flows / tasks（sidebar + list 双槽）；detail 弹窗与动作
   （打开详情、发起运行）为前端内置语义，暂不进声明。
 
+## 页眉渲染模型（`props.nav`，可选）
+
+声明视图在页眉里怎么出现。缺省 = `tab`（平铺主导航项）；`nav` 为**向后兼容字段**，
+老 CommWEB 忽略它、新 CommWEB 据此渲染。
+
+| `nav.kind` | 页眉形态 | 伴随字段 |
+|------|------|------|
+| `tab`（缺省） | 主导航平铺项，链接到该视图路由 | — |
+| `menu` | 主导航下拉父项（点击出下拉，不跳转） | `props.defaultLabel`：下拉首项（父视图自身）文案 |
+| `child` | 归入某 `menu` 的下拉里 | `group`：父项视图 id；`label`：下拉文案（缺省用 title） |
+| `header` | 页眉右侧状态栏功能区（如「设置」下拉） | `label`；`order`（小的在前，同一宿主内排序） |
+| `hidden` | 不占导航；**路由仍注册**，可被 `openView` 当弹窗面板调起 | — |
+
+```python
+"props": {"nav": {"kind": "child", "group": "work", "label": "翻译工作台"}}
+```
+
+约束（`tests/test_site_manifest.py::test_builtin_nav_model_is_coherent` 静态校验）：
+`kind` 合法；`child.group` 必须指向存在的 `menu` 项且带 `label`；`menu` 必须给
+`defaultLabel`；`header` 必须给 `label`。**拼错 group 名会让整条视图在页眉里消失**——
+这正是该测试存在的理由。
+
 ## 模板清单（CommWEB 注册表，只能引用以下模板名）
 
 ### `list.panel` — 列表面板（DataListPanel 包装）

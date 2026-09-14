@@ -41,10 +41,13 @@ OCR_VIEW: dict = {
     "sort": 50,
     "when": {"capability": "has_pipelines"},
     "props": {
+        # 页眉渲染：归入「工作区」下拉（替换原先的独立 Tab）
+        "nav": {"kind": "child", "group": "work", "label": "OCR 工作台"},
         "description": "一站式识别工作台：选择识别模版，上传图片或 PDF，识别后查看结果并导出。",
         "recognizeFlow": "flow.ocr.smart",
         "exportFlow": "flow.ocrdb.view",
-        "genFlow": "flow.specgen.img",
+        # 模版管理：不再内嵌抽屉，改为按声明 id 调起弹窗面板（templates.manager）
+        "manageView": "templates",
         # 可搜索 PDF：扫描/图片版补隐形文字层（OCRmyPDF+Tesseract），版式不变、可选中检索
         "searchableFlow": "flow.ocr.searchable",
         # 视图预览区：预设视图快选（内置 5 + CommOCR 用户视图 6，名 → 完整 ViewSpec，点选即用）

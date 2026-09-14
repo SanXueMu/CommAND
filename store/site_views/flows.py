@@ -3,7 +3,7 @@
 
 # 一域一文件（协议 v3：改本文件即改该页面声明，seed 时聚合下发）。
 FLOWS_VIEW: dict = {
-        "id": "flows", "type": "flows.list", "title": "流",
+        "id": "flows", "type": "flows.list", "title": "工作流",
         "icon": "node-index-outlined", "sort": 20,
         "when": {"capability": "has_pipelines"},
         # 协议 v3 槽位声明（试点）：侧栏筛选 + 列表模板；detail 弹窗为前端内置语义动作。

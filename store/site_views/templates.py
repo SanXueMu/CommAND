@@ -5,5 +5,9 @@
 TEMPLATES_VIEW: dict = {
         "id": "templates", "type": "templates.manager", "title": "模版管理",
         "icon": "database-outlined", "sort": 500,
-        "props": {"description": "识别规则模版一站式管理：列表 / 启停 / 删除 / 新建覆盖。"},
+        "props": {
+            "description": "识别规则模版一站式管理：列表 / 启停 / 删除 / 新建覆盖。",
+            # 不进主导航：作为弹窗面板被工作台按声明 id 调起（OCR 工作台「管理模版」→ openView）
+            "nav": {"kind": "hidden"},
+        },
     }

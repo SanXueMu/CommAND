@@ -3,7 +3,7 @@
 与 test_flow_specs.py 同思路，覆盖 register_ocr_flows.py 的 FLOWS：
 1) 每个步骤的工具已注册、入参键 ∈ 工具 input_schema.properties、工具必填项齐备；
 2) 每条流都有流级 input_schema（工作台表单依赖它渲染）；
-3) OCR 工作台声明的 recognizeFlow/exportFlow/genFlow/searchableFlow 都指向 FLOWS 里真实存在的流；
+3) OCR 工作台声明的 recognizeFlow/exportFlow/searchableFlow 都指向 FLOWS 里真实存在的流；
 4) 批量入口声明的后缀/上限合法（与翻译工作台同口径）。
 """
 
@@ -63,7 +63,8 @@ def test_every_ocr_flow_has_flow_level_input_schema(register) -> None:
 
 def test_ocr_view_flows_are_registered(register) -> None:
     props = OCR_VIEW["props"]
-    for key in ("recognizeFlow", "exportFlow", "genFlow", "searchableFlow"):
+    # genFlow（「新建模版」跳转）已随按钮一并删除：模板新建走模板弹窗内部
+    for key in ("recognizeFlow", "exportFlow", "searchableFlow"):
         flow_id = props.get(key)
         assert flow_id, f"OCR 声明缺 {key}"
         assert flow_id in register.FLOWS, f"{key} 指向未注册的流: {flow_id}"

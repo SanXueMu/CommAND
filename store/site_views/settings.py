@@ -5,4 +5,6 @@
 SETTINGS_VIEW: dict = {
         "id": "settings", "type": "settings.keys", "title": "设置",
         "icon": "api-outlined", "sort": 900,
+        # 不进主导航：作为页眉右侧「设置」下拉的功能项（order 小的在前）
+        "props": {"nav": {"kind": "header", "label": "APIKey管理", "order": 20}},
     }
