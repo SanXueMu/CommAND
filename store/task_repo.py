@@ -179,7 +179,7 @@ class TaskRepo:
         富化：join tools/pipelines 中文名（tool_name/pipeline_name）；offset/q 分页检索，
         返回 {tasks, total}。"""
         sql = """
-            SELECT t.handle, t.tool_id, t.status, t.input, t.output, t.error,
+            SELECT t.handle, t.tool_id, t.status, t.error,
                    t.pipeline_run, t.step_index, t.attempt, t.max_attempts,
                    t.created_at, t.started_at, t.finished_at,
                    r.id, r.parent_run_id, pr.id,
@@ -222,8 +222,8 @@ class TaskRepo:
             rows = conn.execute(sql, tuple(params + [limit, offset])).fetchall()
         views = []
         for row in rows:
-            view = self._to_view(row[:13])
-            run_id, parent_run_id, parent_parent_id, root_pid, root_type, tool_name, pipeline_name = row[13:]
+            view = self._to_view(row[:11], with_payload=False)
+            run_id, parent_run_id, parent_parent_id, root_pid, root_type, tool_name, pipeline_name = row[11:]
             if run_id is None:
                 view["task_kind"] = "tool"
             elif parent_run_id is None:
@@ -300,7 +300,24 @@ class TaskRepo:
         return [self._to_view(row) for row in rows]
 
     @staticmethod
-    def _to_view(row: tuple) -> dict[str, Any]:
+    def _to_view(row: tuple, *, with_payload: bool = True) -> dict[str, Any]:
+        """行 → 视图。列表传 with_payload=False：**不取 input/output 整段 JSONB**
+        （翻译步骤的 input.segments / output.translations 动辄数 MB，列表 UI 一个字段都不用；
+        需要完整载荷走单任务接口 GET /tasks/{handle}）。"""
+        if not with_payload:
+            return {
+                "handle": row[0],
+                "tool_id": row[1],
+                "status": row[2],
+                "error": row[3],
+                "pipeline_run": row[4],
+                "step_index": row[5],
+                "attempt": row[6],
+                "max_attempts": row[7],
+                "created_at": row[8],
+                "started_at": row[9],
+                "finished_at": row[10],
+            }
         return {
             "handle": row[0],
             "tool_id": row[1],

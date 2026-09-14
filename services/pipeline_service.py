@@ -525,20 +525,40 @@ class PipelineService:
 
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
                   offset: int = 0) -> dict[str, Any]:
-        """job 粒度运行列表 + 每 run 摘要（产物/用量/统计）——翻译工作台任务区数据面。"""
+        """job 粒度运行列表 + 每 run 摘要（产物/用量/统计）——翻译工作台任务区数据面。
+
+        摘要走**批量轻投影**（3 条聚合查询覆盖整页），不再逐 run 拉整段 tasks 载荷。
+        """
         runs = self._pipeline_repo.list_runs(pipeline_id=pipeline_id, limit=limit, offset=offset)
         for run in runs:
-            run["summary"] = self._run_summary(run)
+            run["summary"] = self._summaries([run])[run["id"]]
         return {"runs": runs, "total": self._pipeline_repo.count_runs(pipeline_id)}
 
     def _run_summary(self, run: dict[str, Any]) -> dict[str, Any]:
-        outputs = self._pipeline_repo.outputs_by_step(run["id"])
-        latest = self._pipeline_repo.latest_task_by_step(run["id"])
-        definition = self._pipeline_repo.get_definition(run["pipeline_id"] or "")
+        """单 run 摘要（详情等单 run 场景用）。"""
+        return self._summaries([run])[run["id"]]
+
+    def _summaries(self, runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """批量摘要：状态/产物/用量一次取齐，逐 run 装配（契约与旧的逐 run 版一致）。"""
+        run_ids = [r["id"] for r in runs]
+        statuses = self._pipeline_repo.light_step_statuses(run_ids)
+        outputs = self._pipeline_repo.light_step_outputs(run_ids)
+        totals = self._pipeline_repo.steps_total_by_pipeline(
+            [r.get("pipeline_id") or "" for r in runs])
+        return {
+            r["id"]: self._assemble_summary(
+                statuses.get(r["id"], {}), outputs.get(r["id"], {}),
+                totals.get(r.get("pipeline_id") or ""))
+            for r in runs
+        }
+
+    @staticmethod
+    def _assemble_summary(step_statuses: dict[int, str], step_outputs: dict[int, dict[str, Any]],
+                          steps_total: int | None) -> dict[str, Any]:
         artifacts: list[dict[str, Any]] = []
         translate: dict[str, Any] | None = None
         verify: dict[str, Any] | None = None
-        for out in outputs.values():
+        for out in step_outputs.values():
             if not isinstance(out, dict):
                 continue
             if out.get("path"):
@@ -546,27 +566,28 @@ class PipelineService:
             if out.get("layered_file"):
                 artifacts.append({"name": out.get("layered_name") or "可搜索.pdf",
                                   "path": out.get("layered_file")})
-            if "usage_by_model" in out or "usage" in out:
+            if out.get("usage_by_model") is not None or out.get("usage") is not None:
                 translate = out
-            if "statuses" in out:
+            if out.get("statuses_len") is not None or out.get("review_count") is not None:
                 verify = out
         summary: dict[str, Any] = {
             "artifacts": artifacts,
-            "steps_total": len(definition["steps"]) if definition else None,
-            "steps_done": sum(1 for t in latest.values()
-                              if t.get("status") in ("succeeded", "skipped")),
+            "steps_total": steps_total,
+            "steps_done": sum(1 for s in step_statuses.values() if s in ("succeeded", "skipped")),
         }
         if translate is not None or verify is not None:
-            statuses = (verify or {}).get("statuses") or (translate or {}).get("statuses") or []
-            review = (sum(1 for s in statuses if s == "review") if statuses
-                      else (translate or {}).get("review_count") or 0)
+            counts = verify or translate or {}
+            statuses_len = counts.get("statuses_len")
+            review = counts.get("review_count")
+            if review is None:
+                review = (translate or {}).get("review_count") or 0
             summary.update({
                 "usage": (translate or {}).get("usage"),
                 "usage_by_model": (translate or {}).get("usage_by_model"),
                 "calls": (translate or {}).get("calls"),
                 "cache_hits": (translate or {}).get("cache_hits"),
                 "review_count": review,
-                "ok_count": max(len(statuses) - review, 0) if statuses else None,
+                "ok_count": max(statuses_len - review, 0) if statuses_len is not None else None,
             })
         return summary
 

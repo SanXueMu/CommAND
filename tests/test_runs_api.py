@@ -78,6 +78,42 @@ def test_run_list_summary_and_delete(svc):
     assert repo.get_run(rid) is None
 
 
+def test_summary_uses_light_projection_only(svc):
+    """摘要从轻投影装配：translations/statuses 等大数组不参与传输，计数仍准确。"""
+    service, repo, task_repo = svc
+    rid = repo.create_run(PID, {"file": "big.xlsx"})
+    h = task_repo.enqueue("tests.string.reverse", {"file": "big.xlsx"}, pipeline_run=rid, step_index=0)
+    task_repo.finish(h, "succeeded", output={
+        "translations": [f"译文{i}" for i in range(2000)],
+        "statuses": ["ok"] * 1999 + ["review"],
+        "usage_by_model": {"qwen": {"calls": 1}}, "calls": 1, "cache_hits": 0,
+    })
+    repo.finish_run_forced(rid, "succeeded")
+
+    run = service.list_runs(pipeline_id=PID)["runs"][0]
+    s = run["summary"]
+    assert s["steps_total"] == 1 and s["steps_done"] == 1
+    assert s["review_count"] == 1 and s["ok_count"] == 1999
+    assert s["calls"] == 1 and s["cache_hits"] == 0
+    assert "译文" not in str(s)  # 大数组不出现在摘要里
+
+
+def test_task_list_omits_payload(svc):
+    """任务列表不再返回 input/output 整段载荷（翻译步骤可达数 MB）。"""
+    _, repo, task_repo = svc
+    rid = repo.create_run(PID, {"file": "light.xlsx"})
+    h = task_repo.enqueue("tests.string.reverse", {"file": "light.xlsx"},
+                          pipeline_run=rid, step_index=0)
+    task_repo.finish(h, "succeeded", output={"segments": ["x"] * 5000, "path": "/tmp/a.xlsx"})
+
+    view = next(v for v in task_repo.list()["tasks"] if v["handle"] == h)
+    assert "input" not in view and "output" not in view
+    assert view["status"] == "succeeded"
+    # 详情接口仍返回完整载荷
+    detail = task_repo.get(h)
+    assert detail and detail["output"]["segments"][0] == "x"
+
+
 def test_delete_run_with_audit_events(svc):
     """回归：带审计事件的 run 删除不再 500（011 前必 ForeignKeyViolation）。"""
     service, repo, task_repo = svc

@@ -228,6 +228,96 @@ class PipelineRepo:
                 (status, Json(error) if error is not None else None, run_id),
             )
 
+    _LIGHT_OUTPUT_COLS = """
+               {p}->>'path' AS path, {p}->>'name' AS name,
+               {p}->>'layered_file' AS layered_file, {p}->>'layered_name' AS layered_name,
+               {p}->'usage' AS usage, {p}->'usage_by_model' AS usage_by_model,
+               ({p}->>'calls')::int AS calls, ({p}->>'cache_hits')::int AS cache_hits,
+               CASE WHEN jsonb_typeof({p}->'statuses') = 'array'
+                    THEN jsonb_array_length({p}->'statuses') END AS statuses_len,
+               CASE WHEN jsonb_typeof({p}->'statuses') = 'array'
+                    THEN (SELECT count(*) FROM jsonb_array_elements_text({p}->'statuses') e
+                          WHERE e = 'review') END AS review_count_arr,
+               {p}->>'review_count' AS review_count_key
+    """
+
+    def light_step_statuses(self, run_ids: list[str]) -> dict[str, dict[int, str]]:
+        """每 run 每步**最新任务的状态**（不取任何载荷）——steps_done 计数用。"""
+        if not run_ids:
+            return {}
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT ON (pipeline_run, step_index) pipeline_run, step_index, status
+                FROM tasks WHERE pipeline_run = ANY(%s)
+                ORDER BY pipeline_run, step_index, created_at DESC
+                """,
+                (list(run_ids),),
+            ).fetchall()
+        out: dict[str, dict[int, str]] = {}
+        for run_id, idx, status in rows:
+            out.setdefault(run_id, {})[idx] = status
+        return out
+
+    def light_step_outputs(self, run_ids: list[str]) -> dict[str, dict[int, dict[str, Any]]]:
+        """每 run 每步最新成功任务的**精简输出**：只投影产物路径/名称与用量计数。
+
+        绝不传输 `translations`/`segments`/`statuses` 等大数组（列表接口曾因此达数十 MB/次）。
+        C1：父 run 无任务的 pipeline 步，补该步子 run 末步成功任务的精简输出（仅补缺不覆盖）。
+        """
+        if not run_ids:
+            return {}
+        cols = self._LIGHT_OUTPUT_COLS
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT DISTINCT ON (pipeline_run, step_index) pipeline_run, step_index, {cols.format(p="output")}
+                FROM tasks WHERE pipeline_run = ANY(%s) AND status = 'succeeded'
+                ORDER BY pipeline_run, step_index, created_at DESC
+                """,
+                (list(run_ids),),
+            ).fetchall()
+            sub_rows = conn.execute(
+                f"""
+                SELECT DISTINCT ON (r.parent_run_id, r.parent_step_index)
+                       r.parent_run_id, r.parent_step_index, {cols.format(p="t.output")}
+                FROM pipeline_runs r
+                JOIN tasks t ON t.pipeline_run = r.id AND t.status = 'succeeded'
+                WHERE r.parent_run_id = ANY(%s) AND r.status = 'succeeded'
+                ORDER BY r.parent_run_id, r.parent_step_index, t.created_at DESC
+                """,
+                (list(run_ids),),
+            ).fetchall()
+        out: dict[str, dict[int, dict[str, Any]]] = {}
+        for run_id, idx, *rest in rows:
+            out.setdefault(run_id, {})[idx] = self._light_output(rest)
+        for run_id, idx, *rest in sub_rows:  # 子输出仅补缺，不覆盖父 run 本地任务
+            out.setdefault(run_id, {}).setdefault(idx, self._light_output(rest))
+        return out
+
+    @staticmethod
+    def _light_output(values: list[Any]) -> dict[str, Any]:
+        path, name, layered_file, layered_name, usage, usage_by_model, calls, cache_hits, \
+            statuses_len, review_count_arr, review_count_key = values
+        return {
+            "path": path, "name": name, "layered_file": layered_file, "layered_name": layered_name,
+            "usage": usage, "usage_by_model": usage_by_model, "calls": calls, "cache_hits": cache_hits,
+            "statuses_len": statuses_len,
+            "review_count": review_count_arr if review_count_arr is not None else (int(review_count_key) if review_count_key not in (None, "") else None),
+        }
+
+    def steps_total_by_pipeline(self, pipeline_ids: list[str]) -> dict[str, int]:
+        """批量取管线步数（供列表 x/n 的 n）——一条查询替代逐 run 取定义。"""
+        ids = [pid for pid in dict.fromkeys(pipeline_ids) if pid]
+        if not ids:
+            return {}
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, jsonb_array_length(steps) FROM pipelines WHERE id = ANY(%s)",
+                (ids,),
+            ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
     def outputs_by_step(self, run_id: str) -> dict[int, Any]:
         """每步最新成功任务的输出（DISTINCT ON 保证 rerun 后取最新成功而非旧任务）。
         C1：pipeline 步在父 run 无任务——其输出取自该步子 run 的末步任务输出。"""
