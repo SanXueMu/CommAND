@@ -34,9 +34,14 @@ def run(input: dict, ctx, emit) -> dict:
 
     from openpyxl import load_workbook
 
+    from command_shared.xls_convert import is_xls, xls_to_xlsx
+
     fhash = _file_hash(path)
+    # 老版 .xls（OLE2）：openpyxl 不支持，先转 .xlsx 再走原链路（值为准）
+    conv_tmp = xls_to_xlsx(path) if is_xls(path) else None
+    read_path = conv_tmp or path
     units = []
-    wb = load_workbook(path, read_only=True, data_only=True)
+    wb = load_workbook(read_path, read_only=True, data_only=True)
     try:
         for ws in wb.worksheets:
             rows = [
@@ -50,6 +55,8 @@ def run(input: dict, ctx, emit) -> dict:
             units.append({"unit_id": ws.title, "unit_type": "table", "rows": rows})
     finally:
         wb.close()
+        if conv_tmp is not None:
+            conv_tmp.unlink(missing_ok=True)
 
     emit({"phase": "extracted", "units": len(units)})
     return {"file": str(path), "file_hash": fhash, "kind": "xlsx", "units": units}

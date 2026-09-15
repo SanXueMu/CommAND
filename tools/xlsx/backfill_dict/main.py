@@ -94,7 +94,13 @@ def _render_sheets(src: Path, units: list[dict], range_by_unit: dict, col_classe
     """在原文件副本上插入译文 sheet（每个原 sheet 之后一张），原 sheet 不动。"""
     from openpyxl import load_workbook
 
-    wb = load_workbook(src)  # 副本在内存中改写，源文件只读
+    from command_shared.xls_convert import is_xls, xls_to_xlsx
+
+    # 老版 .xls（OLE2）：openpyxl 打不开，先转 .xlsx（值为准；产物天然升级为新格式）
+    conv_tmp = xls_to_xlsx(src) if is_xls(src) else None
+    wb = load_workbook(conv_tmp or src)  # 副本在内存中改写，源文件只读
+    if conv_tmp is not None:
+        conv_tmp.unlink(missing_ok=True)
     unit_by_title = {u["unit_id"]: u for u in units if u.get("unit_type") == "table"}
     changed = 0
     made = 0
