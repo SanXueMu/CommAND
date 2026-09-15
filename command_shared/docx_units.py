@@ -47,7 +47,8 @@ def body_index_map(document: Any) -> dict[str, Any]:
 
 
 def paragraph_text(paragraph: Any) -> str:
-    return (paragraph.text or "").strip()
+    from command_shared.text_clean import xml_safe_text
+    return xml_safe_text(paragraph.text or "").strip()
 
 
 def style_name(paragraph: Any) -> str | None:
@@ -75,7 +76,8 @@ def is_toc_paragraph(paragraph: Any) -> bool:
 
 def table_rows(table: Any) -> list[list[str]]:
     """表格 → 逐格文本（合并单元格按 python-docx 语义重复出现）。"""
-    return [[(cell.text or "").strip() for cell in row.cells] for row in table.rows]
+    from command_shared.text_clean import xml_safe_text
+    return [[xml_safe_text(cell.text or "").strip() for cell in row.cells] for row in table.rows]
 
 
 def _rows_have_text(rows: list[list[str]]) -> bool:

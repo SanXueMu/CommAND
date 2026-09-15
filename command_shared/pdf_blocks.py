@@ -28,7 +28,8 @@ def _text_blocks(page, table_boxes: list[list[float]]) -> list[dict]:
             continue
         lines = []
         for ln in b.get("lines", []):
-            txt = "".join(s.get("text", "") for s in ln.get("spans", [])).strip()
+            from command_shared.text_clean import xml_safe_text
+            txt = xml_safe_text("".join(s.get("text", "") for s in ln.get("spans", []))).strip()
             if txt:
                 lines.append({"bbox": list(ln.get("bbox") or b["bbox"]), "text": txt})
         text = "\n".join(l["text"] for l in lines).strip()

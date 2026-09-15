@@ -56,11 +56,13 @@ def table_cell_translations(unit: dict, col_classes: list[dict], start: int,
 
 
 def set_paragraph_text(paragraph: Any, text: str) -> None:
-    """整段替换文本：写入首个文本 run，清空其余文本 run。
+    """整段替换文本：写入首个文本 run，清空其余文本 run（兜底清洗 XML 不兼容控制字符）。
 
     保留含图片/对象的 run（只清有文字的 run）与段落样式；
     超链接内的 run 属 `w:hyperlink` 子元素，一并清空文本（链接关系与 URL 保留，避免半中半英）。
     """
+    from command_shared.text_clean import xml_safe_text
+    text = xml_safe_text(text)
     runs = list(paragraph.runs)
     text_runs = [r for r in runs if (r.text or "").strip()]
     if text_runs:
@@ -102,7 +104,8 @@ def _write_cell(cell: Any, text: str, status: str, mode: str, mark_review: bool,
             for extra in paragraphs[1:]:  # 单元格内多余段落清空，保持结构
                 set_paragraph_text(extra, "")
         else:  # pragma: no cover 空单元格极少见
-            cell.text = text
+            from command_shared.text_clean import xml_safe_text
+            cell.text = xml_safe_text(text)
         stats["replaced"] += 1
         return
     from docx.shared import RGBColor
@@ -115,6 +118,7 @@ def _write_cell(cell: Any, text: str, status: str, mode: str, mark_review: bool,
 
 
 def build_document_from_units(units: list[dict]) -> tuple[Any, dict[str, Any]]:
+    from command_shared.text_clean import xml_safe_text
     """源不是 docx（pdf/txt 文档翻译流）时：**按单元顺序新建文档** + 显式元素映射。
 
     关键点：pdf/txt 的 unit_id 自成体系（`pdf.extract.pages` 用 `"1"`/`"1T0"`、
@@ -139,11 +143,12 @@ def build_document_from_units(units: list[dict]) -> tuple[Any, dict[str, Any]]:
             for r, row in enumerate(rows):
                 for c in range(width):
                     value = row[c] if c < len(row) else ""
-                    table.rows[r].cells[c].text = "" if value is None else str(value)
+                    table.rows[r].cells[c].text = ("" if value is None
+                                                   else xml_safe_text(str(value)))
             if unit_id is not None:
                 element_map[str(unit_id)] = table
         else:
-            paragraph = document.add_paragraph(unit.get("text") or "")
+            paragraph = document.add_paragraph(xml_safe_text(unit.get("text") or ""))
             if unit_id is not None:
                 element_map[str(unit_id)] = paragraph
     return document, element_map

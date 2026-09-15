@@ -90,7 +90,8 @@ def run(input: dict, ctx, emit) -> dict:
     with pymupdf.open(source) as doc:
         pages_lines = []
         for page in doc:
-            pages_lines.append([l.strip() for l in page.get_text().splitlines()])
+            from command_shared.text_clean import xml_safe_text
+            pages_lines.append([xml_safe_text(l).strip() for l in page.get_text().splitlines()])
         npages = len(pages_lines)
         threshold = max(3, (npages + 2) // 3)
         counter: Counter = Counter()

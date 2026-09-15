@@ -61,6 +61,11 @@ def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None 
     if not isinstance(data, list):
         raise ValueError("应答 JSON 不是数组")
 
+    from command_shared.text_clean import xml_safe_text
+
+    def _clean(v):
+        return xml_safe_text(v) if isinstance(v, str) else v
+
     lenient = set(lenient_fields or [])
     records: list[dict] = []
     for item in data:
@@ -68,9 +73,9 @@ def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None 
             continue
         keys = set(item.keys())
         if keys == set(fields):
-            records.append({k: item[k] for k in fields})
+            records.append({k: _clean(item[k]) for k in fields})
         elif keys <= set(fields) and lenient >= (set(fields) - keys):
-            records.append({k: item.get(k, "") for k in fields})
+            records.append({k: _clean(item.get(k, "")) for k in fields})
     return records
 
 
