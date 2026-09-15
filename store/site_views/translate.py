@@ -11,10 +11,11 @@ TRANSLATE_VIEW: dict = {
     "props": {
         # 页眉渲染：归入「工作区」下拉（替换原先的独立 Tab）
         "nav": {"kind": "child", "group": "work", "label": "翻译工作台"},
-        # PDF 处理口径（批量）：声明候选 + 说明，前端不写死；text 口径下扫描件会暂停等补文字层
+        # PDF 处理口径（批量）：声明候选 + 说明，前端不写死（value 与 routes[].for 同名，前端据此选流）
         "pdfModes": [
             {"value": "auto", "label": "自动探测", "hint": "按 PDF 有无文字层自动选流：文字版走版式翻译，扫描件走图片翻译（保留版式，产物无文字层）"},
-            {"value": "text", "label": "全部文字版", "hint": "一律走文字版链路（不使用 qwen-mt-image）；扫描件会暂停，提示先补文字层（如 ocrmypdf）"},
+            {"value": "doc", "label": "全部文档翻译", "hint": "一律走文档翻译：扫描件会自动补文字层（OCRmyPDF）后翻译，产出双语 docx；不需要图片模型权限"},
+            {"value": "text", "label": "全部文字版（版式）", "hint": "一律走版式翻译（不使用 qwen-mt-image）；扫描件会暂停，提示先补文字层（如 ocrmypdf）或改用「全部文档翻译」"},
             {"value": "image", "label": "全部图片版", "hint": "一律走图片翻译（qwen-mt-image，0.004 元/张）；产物为图片版 PDF，无文字层"},
         ],
         "flow_prefix": "flow.translate.",
@@ -26,7 +27,8 @@ TRANSLATE_VIEW: dict = {
              "label": "表格翻译（每个原工作表后附「_翻译结果」工作表）"},
             {"ext": [".pdf"], "flow": "flow.translate.pdf.layout", "for": "text",
              "label": "版式翻译（原位覆盖 / 双语对照 PDF）"},
-            {"ext": [".pdf"], "flow": "flow.translate.pdf", "label": "文字版 PDF → 双语 docx"},
+            {"ext": [".pdf"], "flow": "flow.translate.pdf", "for": "doc",
+             "label": "文档翻译（自动补文字层，扫描件可用）→ 双语 docx"},
             {"ext": [".pdf"], "flow": "flow.translate.pdf.image", "for": "scanned",
              "label": "图片版 PDF（扫描件 · 图片翻译，保留版式）"},
             {"ext": [".txt", ".md"], "flow": "flow.translate.txt", "label": "文本翻译（双语 docx）"},
