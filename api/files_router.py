@@ -191,11 +191,29 @@ def _new_batch_dir(label: str) -> Path:
 
 
 @router.get("/batches")
-def batch_manifests(ids: str) -> dict:
+def batch_manifests(ids: str | None = None) -> dict:
     """批次清单摘要（只读）：批次列/导出要显示「根目录名」，刷新后仍要能查到。
 
-    返回 {names: {batch_id: 根目录名}, count: {batch_id: 条目数}}；未知 id 静默跳过。
+    带 ids → 只查这几个批次，返回 {names, count}；未知 id 静默跳过。
+    **不带 ids → 返回全部批次**（按时间倒序，无窗口）——批次下拉以此为准，
+    不再从「最新 N 条 run」反推（新 run 会把老批次挤出窗口导致下拉丢失批次）。
     """
+    if ids is None:
+        batches = []
+        for path in sorted(_manifest_dir().glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not _BATCH_ID_RE.fullmatch(path.stem):
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            batches.append({
+                "id": path.stem,
+                "root": str(data.get("root") or ""),
+                "files": len(data.get("files") or []),
+                "created_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds"),
+            })
+        return {"batches": batches}
     names: dict[str, str] = {}
     counts: dict[str, int] = {}
     for raw in (ids or "").split(","):

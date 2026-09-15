@@ -175,6 +175,24 @@ def test_batch_manifests_lookup(client):
     assert body["names"] == {bid: "投标资料"} and body["count"] == {bid: 1}
 
 
+def test_list_batches_returns_all_without_ids(client):
+    """批次下拉数据源：不带 ids 时返回全部批次（无窗口），含根目录名与文件数。"""
+    c, tmp_path = client
+    up1 = c.post("/api/files/batch", files=[("files", ("批次一/A/合同.pdf", b"%PDF", "application/pdf"))])
+    up2 = c.post("/api/files/batch", files=[("files", ("批次二/B/报告.docx", b"PK", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))])
+    resp = c.get("/api/files/batches")
+    assert resp.status_code == 200
+    batches = resp.json()["batches"]
+    ids = [b["id"] for b in batches]
+    assert up1.json()["batch_id"] in ids and up2.json()["batch_id"] in ids
+    by_id = {b["id"]: b for b in batches}
+    assert by_id[up2.json()["batch_id"]]["root"] == "批次二"
+    assert by_id[up2.json()["batch_id"]]["files"] == 1
+    assert by_id[up2.json()["batch_id"]]["created_at"]
+    # 新批次在前（created_at 倒序）
+    assert ids.index(up2.json()["batch_id"]) < ids.index(up1.json()["batch_id"])
+
+
 def test_batch_empty_and_foreign_files_do_not_kill_batch(client):
     """空文件 / 白名单外文件（PPT）不再 422 整批回滚：留档 + 打标跳过（导出能放回源文件）。"""
     c, tmp_path = client
