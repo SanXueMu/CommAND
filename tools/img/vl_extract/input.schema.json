@@ -12,17 +12,26 @@
     },
     "db": {
       "title": "结果库路径",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "结果库路径（缺省 DATA_DIR/ocr/<文件名>.ocr_results.db）"
     },
     "key_name": {
       "title": "密钥名",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "keys 服务密钥名（缺省默认密钥）"
     },
     "model": {
       "title": "视觉模型",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "视觉模型（缺省 qwen-vl-max）"
     },
     "fields": {
@@ -38,22 +47,34 @@
     },
     "prompt": {
       "title": "角色模板",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "角色模板（TaskSpec.template）"
     },
     "rules": {
       "title": "字段规则说明",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "字段规则说明（TaskSpec.rules）"
     },
     "example": {
       "title": "输出示例",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "输出示例（TaskSpec.example）"
     },
     "record_mode": {
       "title": "记录模式",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "enum": [
         "page",
         "record"
@@ -95,8 +116,11 @@
     },
     "skip_text_pdf": {
       "title": "文本型PDF直提",
-      "type": "boolean",
-      "description": "文本型 PDF 直提跳过（缺省 true）"
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "开启后带文本层的 PDF 不走视觉识别"
     },
     "render_scale": {
       "title": "渲染倍率",
@@ -124,8 +148,19 @@
     },
     "lenient": {
       "title": "全局宽松开关",
-      "type": "boolean",
+      "type": [
+        "boolean",
+        "null"
+      ],
       "description": "全局宽松开关：true=允许任一字段缺席（补空串）；与 lenient_fields 名单互斥时优先本开关"
+    },
+    "auto_rotate": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "title": "自动旋转",
+      "description": "歪页按内容方向检测回正（tesseract OSD；空白页/低置信度不动）"
     }
   }
 }

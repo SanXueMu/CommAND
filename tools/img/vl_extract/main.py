@@ -72,7 +72,8 @@ def run(input: dict, ctx, emit) -> dict:
             postprocess=input.get("postprocess") or None,
                     lenient_fields=(fields if input.get("lenient")
                             else (input.get("lenient_fields") or None)),
-            skip_text_pdf=bool(input.get("skip_text_pdf", True)),
+            skip_text_pdf=True if input.get("skip_text_pdf") is None else bool(input["skip_text_pdf"]),
+            auto_rotate=True if input.get("auto_rotate") is None else bool(input["auto_rotate"]),
             render_scale=float(input.get("render_scale", 2.0)),
             image_max_side=int(input.get("image_max_side", 2200)),
             page_concurrency=int(input.get("page_concurrency", 3)),

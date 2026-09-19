@@ -16,22 +16,34 @@
     },
     "layout_json": {
       "title": "版面 JSON 串",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "或其 JSON 串（二选一）"
     },
     "key_name": {
       "title": "密钥名",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "LLM 密钥名（空=默认密钥）"
     },
     "model": {
       "title": "模型",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "模型（默认 qwen-plus）"
     },
     "json_mode": {
       "title": "JSON 输出模式",
-      "type": "boolean",
+      "type": [
+        "boolean",
+        "null"
+      ],
       "description": "response_format json_object（默认 true）"
     }
   }

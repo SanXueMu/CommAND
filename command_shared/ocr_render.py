@@ -29,14 +29,72 @@ def calculate_file_hash(file_path, chunk_size: int = 1048576) -> str:
     return digest.hexdigest()
 
 
-def render_page(page, scale: float = 2.0, max_side: int = 2200, image_format: str = "jpeg") -> bytes:
-    """单页渲染为图片字节；长边超 max_side 动态降 scale（大幅面图纸缩小，常规页不动）。"""
+def render_page(page, scale: float = 2.0, max_side: int = 2200, image_format: str = "jpeg",
+                auto_rotate: bool = False) -> bytes:
+    """单页渲染为图片字节；长边超 max_side 动态降 scale（大幅面图纸缩小，常规页不动）。
+
+    auto_rotate=True 时用 tesseract OSD 做内容方向检测，歪页（90/180/270）回正——
+    扫描件无文字层，fitz 的 set_rotation 元数据不可信，只能按内容判。
+    """
     if max_side and max_side > 0:
         longest = max(page.rect.width, page.rect.height) * scale
         if longest > max_side:
             scale *= max_side / longest
     pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
-    return pixmap.tobytes(image_format)
+    data = pixmap.tobytes(image_format)
+    if auto_rotate:
+        deg = detect_orientation_osd(data)
+        if deg in _CW_TRANSPOSE:
+            from io import BytesIO
+
+            from PIL import Image
+
+            img = Image.open(BytesIO(data))
+            img = img.transpose(_CW_TRANSPOSE[deg])
+            buf = BytesIO()
+            fmt = "PNG" if image_format == "png" else "JPEG"
+            save_kwargs = {"quality": 92} if fmt == "JPEG" else {}
+            img.save(buf, format=fmt, **save_kwargs)
+            data = buf.getvalue()
+    return data
+
+
+# 顺时针旋转角度 → PIL transpose（PIL 的 ROTATE_* 是逆时针，注意映射）
+_CW_TRANSPOSE = {90: 6, 180: 3, 270: 2}  # Image.ROTATE_270 / ROTATE_180 / ROTATE_90
+
+
+def detect_orientation_osd(image_bytes: bytes, min_confidence: float = 0.0,
+                           timeout_s: int = 60) -> int:
+    """tesseract OSD（内容方向检测）：返回把图转正所需的顺时针角度（0/90/180/270）。
+
+    无 tesseract / 无 osd 数据 / 置信度不足 → 0（宁可不误伤也不乱转）。
+    min_confidence 默认 0（与 ocrmypdf --rotate-pages 的默认口径一致，信任 OSD）。
+    """
+    import os
+    import re
+    import subprocess
+    import tempfile
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(image_bytes)
+            png_path = tmp.name
+        try:
+            proc = subprocess.run(
+                ["tesseract", png_path, "stdout", "--psm", "0"],
+                capture_output=True, text=True, timeout=timeout_s, check=False)
+        finally:
+            os.unlink(png_path)
+    except Exception:
+        return 0
+    text = proc.stdout or ""
+    rot = re.search(r"^\s*Rotate:\s*(\d+)", text, re.M)
+    if not rot:
+        return 0
+    conf = re.search(r"Orientation confidence:\s*([\d.]+)", text)
+    if conf and float(conf.group(1)) < min_confidence:
+        return 0
+    return int(rot.group(1)) % 360
 
 
 def is_text_pdf(file_path, min_chars_per_page: int = 20) -> bool:

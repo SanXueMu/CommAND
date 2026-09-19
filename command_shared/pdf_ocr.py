@@ -77,7 +77,7 @@ def needs_ocr(path, min_chars_per_page: int = 20) -> bool:
 
 
 def _build_cmd(src: Path, dst: Path, *, languages: str, jobs: int, oversample: int,
-               deskew: bool, clean: bool, force: bool) -> list[str]:
+               deskew: bool, clean: bool, force: bool, rotate: bool = True) -> list[str]:
     cmd = [
         _bin(), "-l", languages, "--output-type", "pdf",
         "--jobs", str(jobs), "--oversample", str(oversample),
@@ -85,6 +85,8 @@ def _build_cmd(src: Path, dst: Path, *, languages: str, jobs: int, oversample: i
     ]
     if deskew:
         cmd.append("--deskew")
+    if rotate:
+        cmd.append("--rotate-pages")
     if clean:
         cmd.append("--clean")
     cmd += [str(src), str(dst)]
@@ -103,6 +105,7 @@ def add_ocr_layer(
     max_pages: int = DEFAULT_MAX_PAGES,
     timeout_s: int = DEFAULT_TIMEOUT_S,
     force: bool = False,
+    rotate: bool = True,
     progress=None,
 ) -> dict:
     """给扫描版 PDF 补隐形文字层，写出 ``dst``。
@@ -133,7 +136,7 @@ def add_ocr_layer(
                   "languages": languages})
 
     cmd = _build_cmd(src, dst, languages=languages, jobs=jobs, oversample=oversample,
-                     deskew=deskew, clean=clean, force=force)
+                     deskew=deskew, clean=clean, force=force, rotate=rotate)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:

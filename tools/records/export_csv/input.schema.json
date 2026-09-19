@@ -19,7 +19,10 @@
     },
     "name": {
       "title": "导出文件名",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "导出文件名（不含扩展名）"
     }
   }

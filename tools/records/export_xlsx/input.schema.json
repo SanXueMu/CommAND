@@ -24,7 +24,10 @@
     },
     "name": {
       "title": "导出文件名",
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "sheet_name": {
       "title": "主 Sheet 名",

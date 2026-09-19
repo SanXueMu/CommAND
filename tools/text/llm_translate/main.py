@@ -49,7 +49,8 @@ def run(input: dict, ctx, emit) -> dict:
     target_lang = input.get("target_lang") or "Chinese"
     source_lang = input.get("source_lang")
     terms = parse_terms(input.get("terms"))
-    use_cache = input.get("use_cache", True)
+    _uc = input.get("use_cache")
+    use_cache = True if _uc is None else bool(_uc)
 
     usage_total: dict | None = None
     usage_by_model: dict[str, dict] = {}

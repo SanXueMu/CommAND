@@ -78,6 +78,7 @@ def process_document(
     postprocess: list[dict] | None = None,
     lenient_fields: list[str] | None = None,
     skip_text_pdf: bool = True,
+    auto_rotate: bool = True,
     render_scale: float = 2.0,
     image_max_side: int = 2200,
     page_concurrency: int = 3,
@@ -119,7 +120,8 @@ def process_document(
             if row_number in cached:
                 continue
             page = doc.load_page(index)
-            image_bytes = render_page(page, render_scale, image_max_side, image_format)
+            image_bytes = render_page(page, render_scale, image_max_side, image_format,
+                                      auto_rotate=auto_rotate)
             page_jobs.append((row_number, index + 1, image_bytes))
     finally:
         doc.close()

@@ -48,7 +48,7 @@ def run(input: dict, ctx, emit) -> dict:
     emit({"type": "progress", "phase": "generate", "message": f"调用 {model} 生成三件套"})
     raw, usage = chat_mod.call_chat(
         client, model, SPEC_BUILDER_SYSTEM,
-        build_spec_user(requirement, layout_json), json_mode=bool(input.get("json_mode", True)))
+        build_spec_user(requirement, layout_json), json_mode=True if input.get("json_mode") is None else bool(input["json_mode"]))
     try:
         spec = parse_spec_json(raw)
     except (ValueError, json.JSONDecodeError) as exc:

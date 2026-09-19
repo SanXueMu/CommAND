@@ -38,7 +38,10 @@
     },
     "premium": {
       "title": "高价值长文模式",
-      "type": "boolean",
+      "type": [
+        "boolean",
+        "null"
+      ],
       "description": "走高价值长文模型（qwen3.7-plus），默认 false"
     },
     "target_lang": {
@@ -90,7 +93,10 @@
     },
     "use_cache": {
       "title": "缓存开关",
-      "type": "boolean",
+      "type": [
+        "boolean",
+        "null"
+      ],
       "description": "字典缓存开关（默认开；缓存只认 ok 条目）"
     }
   }

@@ -17,12 +17,18 @@
     },
     "key_name": {
       "title": "密钥名",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "VL 密钥名（空=默认）"
     },
     "model": {
       "title": "多模态模型",
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "多模态模型（默认 qwen-vl-max）"
     },
     "max_pages": {

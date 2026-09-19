@@ -34,6 +34,8 @@ def run(input: dict, ctx, emit) -> dict:
     oversample = int(input.get("oversample") or DEFAULT_OVERSAMPLE)
     deskew = bool(input.get("deskew", True))
     force = bool(input.get("force", False))
+    _rt = input.get("rotate")
+    rotate = True if _rt is None else bool(_rt)
 
     data_dir = Path(os.environ.get("COMMAND_DATA_DIR", "data"))
     out_dir = data_dir / "outputs" / ctx.handle
@@ -45,6 +47,7 @@ def run(input: dict, ctx, emit) -> dict:
         src, out_path,
         languages=languages, jobs=jobs, oversample=oversample,
         deskew=deskew, max_pages=max_pages, timeout_s=timeout_s, force=force,
+        rotate=rotate,
         progress=lambda e: emit(e),
     )
 
