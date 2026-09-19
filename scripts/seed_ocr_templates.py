@@ -41,6 +41,14 @@ SYSTEM_PARAMS: dict = {
         "default": False,
         "description": "识别完成后提取记录单元（供后续翻译链使用）；仅识别不需要开启",
     },
+    # AA2：上游 qwen-vl-max 滚动快照对密集多行表格出现「只吐第一行」行为漂移，
+    # 提供快照切换做对照试验/临时规避；留空走引擎默认（qwen-vl-max）。
+    "model": {
+        "type": ["string", "null"], "title": "多模态模型",
+        "enum": ["qwen-vl-max", "qwen-vl-plus", None],
+        "default": None,
+        "description": "留空用默认模型（qwen-vl-max）；多行识别异常时可用 qwen-vl-plus 对照",
+    },
 }
 
 

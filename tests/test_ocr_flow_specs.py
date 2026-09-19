@@ -119,3 +119,21 @@ def test_seed_template_input_schema_subset_of_smart_flow(register, seed_template
                     f"{tpl.get('id')}: 可选键 {key} 在流 schema 里不可空——留空提交会入队失败")
             assert t_set - {"null"} <= f_set - {"null"}, (
                 f"{tpl.get('id')}: 模版参数 {key} 类型 {t_set} 超出流声明 {f_set}")
+
+
+def test_voucher_rules_forbid_single_row_output() -> None:
+    """AA1：多行硬规则必须渲染进最终 prompt（上游快照「只吐第一行」行为的加固）。"""
+    import json
+
+    from command_shared.ocr_engine import build_prompt
+
+    spec = importlib.util.spec_from_file_location(
+        "ocr_builtin_templates_prompt_test", ROOT / "scripts" / "ocr_builtin_templates.py")
+    btm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(btm)
+
+    rules = "\n".join(btm.VOUCHER_RULES)
+    example = json.dumps(btm.VOUCHER_EXAMPLE, ensure_ascii=False, indent=2)
+    rendered = build_prompt(btm.VOUCHER_TEMPLATE, btm.VOUCHER_FIELDS, rules, example, "page")
+    assert "多行输出" in rendered and "严禁只输出第一行" in rendered
+    assert example[:60] in rendered

@@ -309,7 +309,9 @@ class PipelineRepo:
                {p}->>'review_count' AS review_count_key,
                CASE WHEN jsonb_typeof({p}->'failed_pages') = 'array'
                     THEN jsonb_array_length({p}->'failed_pages') END AS failed_pages_count,
-               ({p}->>'records_count')::int AS records_count
+               ({p}->>'records_count')::int AS records_count,
+               CASE WHEN jsonb_typeof({p}->'review_notes') = 'array'
+                    THEN jsonb_array_length({p}->'review_notes') END AS review_notes_count
     """
 
     def light_step_statuses(self, run_ids: list[str]) -> dict[str, dict[int, str]]:
@@ -369,13 +371,14 @@ class PipelineRepo:
     @staticmethod
     def _light_output(values: list[Any]) -> dict[str, Any]:
         path, name, layered_file, layered_name, usage, usage_by_model, calls, cache_hits, \
-            statuses_len, review_count_arr, review_count_key, failed_pages_count, records_count = values
+            statuses_len, review_count_arr, review_count_key, failed_pages_count, records_count, review_notes_count = values
         return {
             "path": path, "name": name, "layered_file": layered_file, "layered_name": layered_name,
             "usage": usage, "usage_by_model": usage_by_model, "calls": calls, "cache_hits": cache_hits,
             "statuses_len": statuses_len,
             "failed_pages": failed_pages_count,
             "records_count": records_count,
+            "review_notes_count": review_notes_count,
             "review_count": review_count_arr if review_count_arr is not None else (int(review_count_key) if review_count_key not in (None, "") else None),
         }
 

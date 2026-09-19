@@ -772,14 +772,23 @@ class PipelineService:
                       for k, v in (d.get("input_schema") or {}).get("properties", {}).items()}
             for d in self._pipeline_repo.list_definitions()
         }
-        return {
-            r["id"]: self._assemble_summary(
+        # AB2：running 的 run 附最新工具进度消息（「已识别 12/42 页」），列表/浮窗直读
+        progress_notes = (
+            self._run_events.latest_progress_bulk(
+                [r["id"] for r in runs if r.get("status") in ("running", "queued")])
+            if self._run_events is not None else {})
+        out: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            summary = self._assemble_summary(
                 statuses.get(r["id"], {}), outputs.get(r["id"], {}),
                 totals.get(r.get("pipeline_id") or ""),
                 skipped.get(r["id"], []),
                 titles.get(r.get("pipeline_id") or ""))
-            for r in runs
-        }
+            note = progress_notes.get(r["id"])
+            if note:
+                summary["latest_note"] = note
+            out[r["id"]] = summary
+        return out
 
     @staticmethod
     def _assemble_summary(step_statuses: dict[int, str], step_outputs: dict[int, dict[str, Any]],
@@ -827,6 +836,11 @@ class PipelineService:
                            for o in step_outputs.values() if isinstance(o, dict))
         if failed_pages:
             summary["failed_pages"] = failed_pages
+        # AA3：勾稽/hook 告警数（校验不平、宽松修复等）——缺行/金额错一眼可见
+        review_notes_counts = [o.get("review_notes_count") for o in step_outputs.values()
+                               if isinstance(o, dict) and o.get("review_notes_count")]
+        if review_notes_counts:
+            summary["review_notes_count"] = sum(review_notes_counts)
         # Y4：识别完成但 0 记录——列表警示「成功但空库」
         records_counts = [o.get("records_count") for o in step_outputs.values()
                           if isinstance(o, dict) and o.get("records_count") is not None]
