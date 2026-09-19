@@ -66,6 +66,16 @@ class PipelineRepo:
             ).fetchone()
         return int(row[0]) if row else 0
 
+    def batch_ids_of_flows(self, flow_ids: list[str]) -> set[str]:
+        """至少有一条 run 属于给定流域的批次 id 集合（X2：批次下拉按工作台域隔离）。"""
+        if not flow_ids:
+            return set()
+        sql = ("SELECT DISTINCT batch_id FROM pipeline_runs "
+               "WHERE batch_id IS NOT NULL AND pipeline_id = ANY(%s)")
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(sql, (flow_ids,)).fetchall()
+        return {r[0] for r in rows}
+
     def best_runs_by_batch(self, batch_id: str) -> list[dict[str, Any]]:
         """批次内**每个文件的最优 run**（成功优先 > 暂停/跳过 > 其它，同级取最新）。
 
@@ -296,7 +306,9 @@ class PipelineRepo:
                CASE WHEN jsonb_typeof({p}->'statuses') = 'array'
                     THEN (SELECT count(*) FROM jsonb_array_elements_text({p}->'statuses') e
                           WHERE e = 'review') END AS review_count_arr,
-               {p}->>'review_count' AS review_count_key
+               {p}->>'review_count' AS review_count_key,
+               CASE WHEN jsonb_typeof({p}->'failed_pages') = 'array'
+                    THEN jsonb_array_length({p}->'failed_pages') END AS failed_pages_count
     """
 
     def light_step_statuses(self, run_ids: list[str]) -> dict[str, dict[int, str]]:
@@ -356,11 +368,12 @@ class PipelineRepo:
     @staticmethod
     def _light_output(values: list[Any]) -> dict[str, Any]:
         path, name, layered_file, layered_name, usage, usage_by_model, calls, cache_hits, \
-            statuses_len, review_count_arr, review_count_key = values
+            statuses_len, review_count_arr, review_count_key, failed_pages_count = values
         return {
             "path": path, "name": name, "layered_file": layered_file, "layered_name": layered_name,
             "usage": usage, "usage_by_model": usage_by_model, "calls": calls, "cache_hits": cache_hits,
             "statuses_len": statuses_len,
+            "failed_pages": failed_pages_count,
             "review_count": review_count_arr if review_count_arr is not None else (int(review_count_key) if review_count_key not in (None, "") else None),
         }
 

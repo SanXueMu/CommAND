@@ -79,3 +79,43 @@ def test_optional_ocr_flow_keys_map_to_nullable_tool_params(register, manifests)
                 assert _allows_null(props.get(param) or {}), (
                     f"{flow_id} 第 {index} 步：可选流键 input.{match.group(1)} → 工具参数 "
                     f"{param} 必须可空（type 含 null），否则缺值时入队即失败")
+
+
+@pytest.fixture(scope="module")
+def seed_templates(register):
+    """种子模版（scripts/seed_ocr_templates.py 的 BUILTIN + CommOCR 迁移位图）。"""
+    seed_path = ROOT / "scripts" / "seed_ocr_templates.py"
+    spec = importlib.util.spec_from_file_location("seed_ocr_templates_test", seed_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module._raw_templates()
+
+
+def test_seed_template_input_schema_subset_of_smart_flow(register, seed_templates) -> None:
+    """守卫第三层（X7）：模版 input_schema ⊆ flow.ocr.smart 的 INPUT_SCHEMA。
+
+    模版声明的是 smart 流 schema 的**增量参数**——若模版出现流没有的键，
+    或类型不兼容（流不接受 null 而模版允许），级联表单提交即入队失败
+    （同族问题：H1 键名漂移 / V1 的 $.db）。模板与流的声明必须同源同步。
+    """
+    flow_schema = register.INPUT_SCHEMAS["flow.ocr.smart"]
+    flow_props = flow_schema["properties"]
+    flow_required = set(flow_schema.get("required", []))
+    for tpl in seed_templates:
+        schema = tpl.get("input_schema")
+        if not schema:
+            continue
+        for key, decl in schema.get("properties", {}).items():
+            assert key in flow_props, (
+                f"{tpl.get('id')}: 模版参数 {key} 不在 flow.ocr.smart 的 INPUT_SCHEMA 里——"
+                "级联表单会提交流不认识的键，或流模板引用取不到值")
+            t_types = decl.get("type")
+            f_types = flow_props[key].get("type")
+            t_set = set([t_types] if isinstance(t_types, str) else t_types)
+            f_set = set([f_types] if isinstance(f_types, str) else f_types)
+            if key not in flow_required:
+                # 可选键：流侧必须容忍缺失（null 或缺省），模版侧类型须落在流类型集内
+                assert "null" in f_set, (
+                    f"{tpl.get('id')}: 可选键 {key} 在流 schema 里不可空——留空提交会入队失败")
+            assert t_set - {"null"} <= f_set - {"null"}, (
+                f"{tpl.get('id')}: 模版参数 {key} 类型 {t_set} 超出流声明 {f_set}")

@@ -162,6 +162,11 @@ def _skipped_view(saved: list[dict]) -> list[dict]:
             for f in saved if f.get("skip")]
 
 
+def _batch_ids_of_flows(flow_ids: set[str]) -> set[str]:
+    """至少有一条 run 属于给定流域的批次 id 集合（X2：批次下拉按工作台域隔离）。"""
+    return deps.get_pipeline_repo().batch_ids_of_flows(sorted(flow_ids))
+
+
 def _manifest_dir() -> Path:
     return batch_manifest.manifest_dir(deps.get_config().data_dir)
 
@@ -191,17 +196,26 @@ def _new_batch_dir(label: str) -> Path:
 
 
 @router.get("/batches")
-def batch_manifests(ids: str | None = None) -> dict:
+def batch_manifests(ids: str | None = None, flow_ids: str | None = None) -> dict:
     """批次清单摘要（只读）：批次列/导出要显示「根目录名」，刷新后仍要能查到。
 
     带 ids → 只查这几个批次，返回 {names, count}；未知 id 静默跳过。
     **不带 ids → 返回全部批次**（按时间倒序，无窗口）——批次下拉以此为准，
     不再从「最新 N 条 run」反推（新 run 会把老批次挤出窗口导致下拉丢失批次）。
+    flow_ids（逗号分隔，可选）→ **按流域过滤**：只返回至少有一条 run 属于这些流的
+    批次（翻译/OCR 工作台各自的批次下拉互不可见，持久层共享但视图隔离）。
     """
     if ids is None:
+        domain_filter: set[str] | None = None
+        if flow_ids:
+            wanted = {f.strip() for f in flow_ids.split(",") if f.strip()}
+            if wanted:
+                domain_filter = _batch_ids_of_flows(wanted)
         batches = []
         for path in sorted(_manifest_dir().glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
             if not _BATCH_ID_RE.fullmatch(path.stem):
+                continue
+            if domain_filter is not None and path.stem not in domain_filter:
                 continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))

@@ -807,6 +807,11 @@ class PipelineService:
                 "review_count": review,
                 "ok_count": max(statuses_len - review, 0) if statuses_len is not None else None,
             })
+        # X4：识别部分页失败（未达熔断线时 run 落 succeeded）——列表要能看见并重试
+        failed_pages = sum(o.get("failed_pages_count") or 0
+                           for o in step_outputs.values() if isinstance(o, dict))
+        if failed_pages:
+            summary["failed_pages"] = failed_pages
         return summary
 
     def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:

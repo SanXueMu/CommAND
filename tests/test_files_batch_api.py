@@ -227,3 +227,28 @@ def test_batch_skips_os_junk_files(client):
     assert {s["name"] for s in body["skipped"]} == {".DS_Store", "~$合同.docx"}
     assert not (Path(body["path"]) / ".DS_Store").exists()
     assert not (Path(body["path"]) / "~$合同.docx").exists()
+
+
+def test_batches_domain_filter(client, monkeypatch):
+    """X2：flow_ids 只返回对应流域的批次（翻译/OCR 下拉互不可见）。"""
+    import deps
+    c, tmp_path = client
+    up1 = c.post("/api/files/batch", files=[("files", ("翻译批/a.docx", b"PK", "application/octet-stream"))])
+    b1 = up1.json()["batch_id"]
+    up2 = c.post("/api/files/batch", files=[("files", ("识别批/b.pdf", b"%PDF", "application/pdf"))])
+    b2 = up2.json()["batch_id"]
+
+    # 桩掉 run 查询（SQL 是平凡 DISTINCT；此处验端点参数解析×清单过滤的接线）
+    class _Repo:
+        @staticmethod
+        def batch_ids_of_flows(flow_ids):
+            table = {"flow.ocr.smart": {b2}, "flow.translate.image": {b1}}
+            return set().union(*(table[f] for f in flow_ids if f in table))
+    monkeypatch.setattr(deps, "get_pipeline_repo", lambda: _Repo())
+
+    all_b = c.get("/api/files/batches").json()["batches"]
+    assert {x["id"] for x in all_b} >= {b1, b2}
+    ocr_only = c.get(f"/api/files/batches?flow_ids=flow.ocr.smart").json()["batches"]
+    assert [x["id"] for x in ocr_only] == [b2]
+    tr_only = c.get(f"/api/files/batches?flow_ids=flow.translate.image").json()["batches"]
+    assert [x["id"] for x in tr_only] == [b1]
