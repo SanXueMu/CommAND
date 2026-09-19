@@ -95,7 +95,12 @@ def run(input: dict, ctx, emit) -> dict:
 
     auth_error = stats.get("auth_error")
     if auth_error and not records:
-        raise ToolDomainError(f"认证失败（{auth_error}）：请检查密钥")
+        # 403 多为密钥的模型白名单限制（AA2 换模型对照时常见）：带上模型名给可操作指引
+        model_used = input.get("model") or DEFAULT_MODEL
+        raise ToolDomainError(
+            f"认证失败（模型 {model_used}）：{auth_error}\n"
+            f"该密钥可能没有此模型的权限——到百炼控制台检查 API-Key 的模型限制并放开 "
+            f"{model_used}，或改用密钥允许的模型重跑")
     return {
         "file": str(path),
         "file_hash": stats["file_hash"],
