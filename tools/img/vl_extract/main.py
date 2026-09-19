@@ -89,6 +89,10 @@ def run(input: dict, ctx, emit) -> dict:
         emit({"type": "progress", "phase": "empty_result",
               "message": "识别完成但未产出记录（0 条）：请检查模版字段/提示词与该文档是否匹配"})
 
+    # Z1 收尾：宽松修复/失败页原因以事件透出（详情日志直接可读，不必翻输出 JSON）
+    for note in stats.get("review_notes", []):
+        emit({"type": "progress", "phase": "review", "message": str(note)})
+
     auth_error = stats.get("auth_error")
     if auth_error and not records:
         raise ToolDomainError(f"认证失败（{auth_error}）：请检查密钥")
