@@ -60,7 +60,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "model": {"type": "string", "title": "多模态模型", "description": "留空用默认模型"},
             "skip_text_pdf": {"type": ["boolean", "null"], "title": "文本层PDF直读", "description": "开启后带文本层的 PDF 不走视觉识别"},
             "auto_rotate": {"type": ["boolean", "null"], "title": "自动旋转", "description": "歪页按内容方向检测回正（默认开）"},
-            "export_units": {"type": "boolean", "title": "导出识别单元", "description": "识别完成后导出可翻译单元（供翻译流使用）"},
+            "export_units": {"type": ["boolean", "null"], "title": "导出识别单元", "description": "识别完成后导出可翻译单元（供翻译流使用）"},
         },
         # I2：级联表单声明——选模版后由模版 input_schema 渲染增量字段
         "x-form-cascade": {
@@ -137,7 +137,7 @@ INPUT_SCHEMAS: dict[str, dict] = {
             "new_template_id": {"type": "string", "title": "新模版 ID", "description": "生成的模版以此 ID 入库"},
             "new_template_name": {"type": "string", "title": "新模版名称"},
             "output_db": {"type": ["string", "null"], "title": "结果库名", "description": "试识别结果的入库标识"},
-            "export_units": {"type": "boolean", "title": "识别后导出视图", "description": "开启后提取记录并按模版视图导出 xlsx"},
+            "export_units": {"type": ["boolean", "null"], "title": "识别后导出视图", "description": "开启后提取记录并按模版视图导出 xlsx"},
             "export_name": {"type": "string", "title": "导出文件名", "description": "留空用「视图导出」"},
         },
     },

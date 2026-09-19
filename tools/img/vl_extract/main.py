@@ -84,6 +84,11 @@ def run(input: dict, ctx, emit) -> dict:
     finally:
         connection.close()
 
+    if not records and stats.get("pages_done", 0) > 0:
+        # Y4：「成功但空库」不再静默——事件留痕 + 输出标记，列表据此警示
+        emit({"type": "progress", "phase": "empty_result",
+              "message": "识别完成但未产出记录（0 条）：请检查模版字段/提示词与该文档是否匹配"})
+
     auth_error = stats.get("auth_error")
     if auth_error and not records:
         raise ToolDomainError(f"认证失败（{auth_error}）：请检查密钥")

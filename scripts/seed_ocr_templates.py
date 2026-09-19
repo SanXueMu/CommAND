@@ -36,6 +36,11 @@ SYSTEM_PARAMS: dict = {
         "default": True,
         "description": "歪页按内容方向检测回正（空白页/低置信度不动）",
     },
+    "export_units": {
+        "type": ["boolean", "null"], "title": "导出识别单元",
+        "default": False,
+        "description": "识别完成后提取记录单元（供后续翻译链使用）；仅识别不需要开启",
+    },
 }
 
 

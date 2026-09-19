@@ -47,6 +47,22 @@ class RunEventRepo:
             ).fetchall()
         return {int(r[0]) for r in rows}
 
+    def skipped_steps_bulk(self, run_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Y1/Y2：批量取每 run 的跳步明细（step_index + when 条件），一条 SQL。"""
+        if not run_ids:
+            return {}
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT run_id, detail->>'step_index', detail->'when' "
+                "FROM run_events WHERE run_id = ANY(%s) AND kind = 'step_skipped'",
+                (list(run_ids),),
+            ).fetchall()
+        out: dict[str, list[dict[str, Any]]] = {}
+        for run_id, idx, when in rows:
+            out.setdefault(run_id, []).append(
+                {"step_index": int(idx), "when": when or {}})
+        return out
+
     def list(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
             rows = conn.execute(

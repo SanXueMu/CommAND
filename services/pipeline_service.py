@@ -726,7 +726,8 @@ class PipelineService:
                 entry["subrun"] = {"run_id": sub["id"], "status": sub["status"],
                                    "pipeline_id": sub["pipeline_id"]}
             steps.append(entry)
-        return {"run": run, "steps": steps}
+        # Y2：详情直出 summary（进度含跳步、0 记录警示同列表口径）
+        return {"run": run, "steps": steps, "summary": self._run_summary(run)}
 
     def list_run_events(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
         if self._pipeline_repo.get_run(run_id) is None:
@@ -763,16 +764,28 @@ class PipelineService:
         outputs = self._pipeline_repo.light_step_outputs(run_ids)
         totals = self._pipeline_repo.steps_total_by_pipeline(
             [r.get("pipeline_id") or "" for r in runs])
+        skipped: dict[str, list[dict[str, Any]]] = (
+            self._run_events.skipped_steps_bulk(run_ids)
+            if self._run_events is not None else {})
+        titles: dict[str, dict[str, str]] = {
+            d["id"]: {k: v.get("title") or k
+                      for k, v in (d.get("input_schema") or {}).get("properties", {}).items()}
+            for d in self._pipeline_repo.list_definitions()
+        }
         return {
             r["id"]: self._assemble_summary(
                 statuses.get(r["id"], {}), outputs.get(r["id"], {}),
-                totals.get(r.get("pipeline_id") or ""))
+                totals.get(r.get("pipeline_id") or ""),
+                skipped.get(r["id"], []),
+                titles.get(r.get("pipeline_id") or ""))
             for r in runs
         }
 
     @staticmethod
     def _assemble_summary(step_statuses: dict[int, str], step_outputs: dict[int, dict[str, Any]],
-                          steps_total: int | None) -> dict[str, Any]:
+                          steps_total: int | None,
+                          skipped: list[dict[str, Any]] | None = None,
+                          param_titles: dict[str, str] | None = None) -> dict[str, Any]:
         artifacts: list[dict[str, Any]] = []
         translate: dict[str, Any] | None = None
         verify: dict[str, Any] | None = None
@@ -791,7 +804,9 @@ class PipelineService:
         summary: dict[str, Any] = {
             "artifacts": artifacts,
             "steps_total": steps_total,
-            "steps_done": sum(1 for s in step_statuses.values() if s in ("succeeded", "skipped")),
+            # Y1：when 跳过的步无 task 行，单独并入分母口径（2/3 误导的根因）
+            "steps_done": sum(1 for s in step_statuses.values() if s in ("succeeded", "skipped"))
+                          + len(skipped or []),
         }
         if translate is not None or verify is not None:
             counts = verify or translate or {}
@@ -808,11 +823,39 @@ class PipelineService:
                 "ok_count": max(statuses_len - review, 0) if statuses_len is not None else None,
             })
         # X4：识别部分页失败（未达熔断线时 run 落 succeeded）——列表要能看见并重试
-        failed_pages = sum(o.get("failed_pages_count") or 0
+        failed_pages = sum(o.get("failed_pages") or 0
                            for o in step_outputs.values() if isinstance(o, dict))
         if failed_pages:
             summary["failed_pages"] = failed_pages
+        # Y4：识别完成但 0 记录——列表警示「成功但空库」
+        records_counts = [o.get("records_count") for o in step_outputs.values()
+                          if isinstance(o, dict) and o.get("records_count") is not None]
+        if records_counts:
+            summary["records_count"] = records_counts[-1]
+        # Y2：跳步明细（人话原因）
+        if skipped:
+            summary["steps_skipped"] = [
+                {"step_index": sk.get("step_index"),
+                 "reason": PipelineService._skip_reason(sk.get("when") or {}, param_titles or {})}
+                for sk in skipped]
         return summary
+
+    @staticmethod
+    def _skip_reason(when: dict[str, Any], titles: dict[str, str]) -> str:
+        """把 when 条件翻译成人话（Y2）：input.export_units=True → 未开启：导出识别单元。"""
+        parts: list[str] = []
+        for key, expected in when.items():
+            title = titles.get(key[6:]) if key.startswith("input.") else None
+            name = title or key
+            if expected == "@exists":
+                parts.append(f"「{name}」无值（该步需要它）")
+            elif expected is True:
+                parts.append(f"未开启「{name}」")
+            elif expected is False:
+                parts.append(f"「{name}」需关闭")
+            else:
+                parts.append(f"「{name}」需为 {expected}")
+        return "；".join(parts) or "条件未满足"
 
     def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:
         """删除任务（含审计事件）；`purge_files` 连带删除其全部产物目录（结果与临时结果随任务绑定）。
