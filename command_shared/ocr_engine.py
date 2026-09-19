@@ -144,15 +144,17 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
                          page_jobs, progress) -> dict:
     """整文档一记录：逐页识别，跨页合并非缺席值（同字段多值 ； 连接）。"""
     failed_pages: list[int] = []
+    fix_notes: list[str] = []
     merged: dict[str, list[str]] = {}
     seen: set[str] = set()
     pages_done = 0
     for row_number, page_number, image_bytes in page_jobs:
         try:
             raw = call_vl(client, prompt, image_bytes, model, image_format)
-            records = parse_records(raw, fields, lenient_fields)
-        except Exception:
+            records = parse_records(raw, fields, lenient_fields, fix_notes)
+        except Exception as exc:
             failed_pages.append(page_number)
+            fix_notes.append(f"第 {page_number} 页识别失败：{str(exc)[:200]}")
             continue
         pages_done += 1
         for record in records:
@@ -179,7 +181,7 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
     if progress:
         progress("recognize", f"record 模式完成 {pages_done}/{len(page_jobs)} 页")
     return {"pages_done": pages_done, "failed_pages": failed_pages,
-            "records_written": 1 if final else 0, "review_notes": notes}
+            "records_written": 1 if final else 0, "review_notes": notes + fix_notes}
 
 
 def _process_page_mode(connection, client, prompt, fields, model, image_format, hooks,
@@ -192,16 +194,19 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
     auth_error: str | None = None
     review_notes: list[str] = []
 
+    page_fail_notes: list[str] = []
+
     def recognize_page(page_number: int, image_bytes: bytes):
+        notes: list[str] = []
         try:
             raw = call_vl(client, prompt, image_bytes, model, image_format)
-            records = parse_records(raw, fields, lenient_fields)
+            records = parse_records(raw, fields, lenient_fields, notes)
         except Exception as exc:
             message = str(exc)
             if "401" in message or "403" in message:
                 raise _AuthFail(message) from exc
+            page_fail_notes.append(f"第 {page_number} 页识别失败：{message[:200]}")
             raise
-        notes: list[str] = []
         if hooks and records:
             def _review(note: str) -> None:
                 notes.append(str(note))
@@ -254,5 +259,6 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
             progress("recognize", f"已识别 {done} 页")
 
     return {"pages_done": done, "failed_pages": sorted(set(failed_pages)),
-            "records_written": written, "review_notes": review_notes,
+            "records_written": written,
+            "review_notes": review_notes + page_fail_notes[:10],
             "auth_error": auth_error}

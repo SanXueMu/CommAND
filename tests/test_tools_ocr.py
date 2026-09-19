@@ -66,11 +66,31 @@ def _pdf(path, pages: int = 2, rotate_text: bool = False) -> str:
 # ---------- ocr_validate ----------
 
 def test_parse_records_strict_and_lenient():
+    """Z1：对齐 CommOCR——严格模式键集不符抛错（不再静默丢行），宽松修复并留痕。"""
     raw = '```json\n[{"发票号": "123", "金额": "100"}, {"发票号": "456"}]\n```'
-    assert parse_records(raw, ["发票号", "金额"], None) == [
-        {"发票号": "123", "金额": "100"}]  # 严格：缺金额记录丢弃
-    assert parse_records(raw, ["发票号", "金额"], ["金额"]) == [
+    with pytest.raises(ValueError, match="第 2 条记录字段不符.*缺少 金额"):
+        parse_records(raw, ["发票号", "金额"], None)  # 严格：整页失败、可见可重试
+    notes: list[str] = []
+    assert parse_records(raw, ["发票号", "金额"], ["金额"], notes) == [
         {"发票号": "123", "金额": "100"}, {"发票号": "456", "金额": ""}]
+    assert notes and "第 2 条记录已宽松修复" in notes[0]
+
+
+def test_parse_records_strict_extra_key_raises_and_lenient_drops_it():
+    """多余键：严格抛错；宽松丢弃留痕（旧版两模式都静默丢行）。"""
+    raw = '[{"a": "1"}, {"a": "2", "多余": "x"}]'
+    with pytest.raises(ValueError, match="多余 多余"):
+        parse_records(raw, ["a"], None)
+    notes: list[str] = []
+    out = parse_records(raw, ["a"], ["a"], notes)
+    assert out == [{"a": "1"}, {"a": "2"}]
+    assert len(notes) == 1
+
+
+def test_parse_records_lenient_missing_outside_allowed_raises():
+    """宽松只放宽指定字段：缺失字段不在白名单仍抛错。"""
+    with pytest.raises(ValueError, match="缺少 a"):
+        parse_records('[{"a": "1", "b": "2"}, {"b": "3"}]', ["a", "b"], ["b"])
 
 
 def test_parse_records_bad_json_raises():

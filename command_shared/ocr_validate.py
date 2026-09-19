@@ -36,7 +36,8 @@ def _collect_json_values(text: str) -> list[str]:
     return []
 
 
-def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None = None) -> list[dict]:
+def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None = None,
+                  notes: list[str] | None = None) -> list[dict]:
     """解析 VL 应答 → 记录列表（每条键集与 fields 一致）。
 
     严格：键集完全一致才收；宽松：允许缺 lenient_fields 内的键（补空串）。
@@ -66,16 +67,29 @@ def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None 
     def _clean(v):
         return xml_safe_text(v) if isinstance(v, str) else v
 
+    field_set = set(fields)
     lenient = set(lenient_fields or [])
     records: list[dict] = []
-    for item in data:
+    for i, item in enumerate(data):
         if not isinstance(item, dict):
             continue
-        keys = set(item.keys())
-        if keys == set(fields):
+        missing = field_set - set(item)
+        extra = set(item) - field_set
+        if not missing and not extra:
             records.append({k: _clean(item[k]) for k in fields})
-        elif keys <= set(fields) and lenient >= (set(fields) - keys):
-            records.append({k: _clean(item.get(k, "")) for k in fields})
+            continue
+        # Z1：对齐 CommOCR 语义——严格模式键集不符即抛错（整页失败、可见可重试），
+        # 不再静默丢行（旧版一页多行只留键集恰好全对的行 = 「一张只剩一行」的根因）。
+        if not lenient or not missing <= lenient:
+            raise ValueError(
+                f"第 {i + 1} 条记录字段不符：缺少 {'、'.join(sorted(missing)) or '无'}；"
+                f"多余 {'、'.join(sorted(extra)) or '无'}（共应答 {len(data)} 条）")
+        # 宽松：丢多余键 + 允许缺的键补空串，修复说明进 notes（留痕可审）
+        records.append({k: _clean(item.get(k, "")) for k in fields})
+        if notes is not None:
+            notes.append(
+                f"第 {i + 1} 条记录已宽松修复：补缺 {'、'.join(sorted(missing)) or '无'}、"
+                f"弃多余 {'、'.join(sorted(extra)) or '无'}")
     return records
 
 
