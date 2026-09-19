@@ -63,6 +63,21 @@ class RunEventRepo:
                 {"step_index": int(idx), "when": when or {}})
         return out
 
+    def latest_progress_bulk(self, run_ids: list[str]) -> dict[str, str]:
+        """AB2：批量取每 run 最新一条工具进度消息（「已识别 12/42 页」），一条 SQL。"""
+        if not run_ids:
+            return {}
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT ON (run_id) run_id, detail->>'message' "
+                "FROM run_events "
+                "WHERE run_id = ANY(%s) AND kind = 'progress' "
+                "AND detail->>'message' IS NOT NULL "
+                "ORDER BY run_id, id DESC",
+                (list(run_ids),),
+            ).fetchall()
+        return {run_id: msg for run_id, msg in rows if msg}
+
     def list(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
         with self._db.pool.connection() as conn:
             rows = conn.execute(

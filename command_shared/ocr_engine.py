@@ -108,13 +108,12 @@ def process_document(
                       "failed_pages": [], "records_written": 0, "review_notes": []})
         return stats
 
-    if progress:
-        progress("render", f"打开文档: {src.name}")
-
     page_jobs: list[tuple[int, int, bytes]] = []
     doc = open_document(src)
+    total = doc.page_count
+    if progress:
+        progress("render", f"打开文档: {src.name}（共 {total} 页）")
     try:
-        total = doc.page_count
         for index in range(total):
             row_number = index + 1
             if row_number in cached:
@@ -123,6 +122,8 @@ def process_document(
             image_bytes = render_page(page, render_scale, image_max_side, image_format,
                                       auto_rotate=auto_rotate)
             page_jobs.append((row_number, index + 1, image_bytes))
+            if progress and ((index + 1) % 5 == 0 or index + 1 == total):
+                progress("render", f"渲染 {index + 1}/{total} 页")
     finally:
         doc.close()
     stats["pages_total"] = total
@@ -256,7 +257,7 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
         review_notes.extend(notes)
         done += 1
         if progress and (done % 5 == 0 or done == len(results)):
-            progress("recognize", f"已识别 {done} 页")
+            progress("recognize", f"已识别 {done}/{len(page_jobs)} 页")
 
     return {"pages_done": done, "failed_pages": sorted(set(failed_pages)),
             "records_written": written,
