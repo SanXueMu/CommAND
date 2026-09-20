@@ -107,6 +107,34 @@ def test_delete_unreferenced_uploads(client, tmp_path):
     assert not any(u["dir"] in roots for u in listing)
 
 
+def test_uploads_files_lists_details(client, tmp_path):
+    """AN：某批次目录的文件明细（相对 rel 保留结构 + 绝对 path 可直接起 run）。"""
+    day = tmp_path / "uploads" / date.today().isoformat() / "abcd1234_合同目录"
+    (day / "子目录").mkdir(parents=True)
+    (day / "a.pdf").write_bytes(b"x")
+    (day / "子目录" / "b.docx").write_bytes(b"yy")
+    (day / ".DS_Store").write_bytes(b"junk")  # 系统垃圾应过滤
+    out = client.get("/api/files/uploads/files", params={"dir": "abcd1234_合同目录"})
+    assert out.status_code == 200, out.text
+    body = out.json()
+    assert body["count"] == 2
+    rels = sorted(f["rel"] for f in body["files"])
+    assert rels == ["a.pdf", "子目录/b.docx"]
+    assert all(Path(f["path"]).is_file() and f["size"] > 0 for f in body["files"])
+
+
+def test_uploads_files_rejects_injection(client):
+    """AN：只接受目录名——上跳/绝对路径/多段路径一律 422。"""
+    for bad in ["../x", "/etc", "a/b", ""]:
+        resp = client.get("/api/files/uploads/files", params={"dir": bad})
+        assert resp.status_code == 422, f"{bad!r} 应被拒: {resp.text}"
+
+
+def test_uploads_files_unknown_dir(client):
+    assert client.get("/api/files/uploads/files",
+                      params={"dir": "不存在目录"}).status_code == 404
+
+
 def test_missing_artifacts_flag(client, monkeypatch):
     """run 详情：产物文件已不在盘 → missing_artifacts 列出（前端标「已删除」）。"""
     from store.pipeline_repo import PipelineRepo

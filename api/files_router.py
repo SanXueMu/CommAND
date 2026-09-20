@@ -777,6 +777,36 @@ def list_uploads() -> dict:
     return {"uploads": items}
 
 
+@router.get("/uploads/files")
+def list_upload_files(dir: str) -> dict:
+    """某上传批次目录下的文件明细（AN：从「已上传原件」选文件复用，免重新上传）。
+
+    只接受目录名（目录名带 uuid8 前缀全局唯一，防路径注入）；
+    返回文件绝对 path（可直接作管线 file 入参）+ 相对 rel（保留原目录结构）。
+    """
+    name = Path(dir).name
+    if not name or name != dir:
+        raise HTTPException(status_code=422, detail="只接受批次目录名")
+    uploads_root = (Path(deps.get_config().data_dir) / "uploads").resolve()
+    matches = [m for m in uploads_root.glob(f"*/{name}") if m.is_dir()]
+    if not matches:
+        raise HTTPException(status_code=404, detail=f"批次目录不存在: {name}")
+    root = matches[0].resolve()
+    if uploads_root not in root.parents:
+        raise HTTPException(status_code=422, detail=f"非法目录: {name}")
+    files: list[dict] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or _is_os_junk(path.name):
+            continue
+        files.append({
+            "rel": path.relative_to(root).as_posix(),
+            "name": path.name,
+            "path": str(path),
+            "size": path.stat().st_size,
+        })
+    return {"dir": name, "root": str(root), "count": len(files), "files": files}
+
+
 class DeleteUploadsBody(BaseModel):
     roots: list[str]
 
