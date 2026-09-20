@@ -394,6 +394,15 @@ class PipelineRepo:
             ).fetchall()
         return {r[0]: r[1] for r in rows}
 
+    def db_reference_count(self, db_path: str) -> int:
+        """AD3：该库路径被多少个成功任务的输出引用（结果库面板删除前的防呆）。"""
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                "SELECT count(*) FROM tasks WHERE status = 'succeeded' AND output::text LIKE %s",
+                (f"%{db_path}%",),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
     def db_referenced_outside(self, db_path: str, tree_ids: list[str]) -> bool:
         """AD1：该库路径是否还被树外 run 的任务输出引用（LIKE 文本匹配，防误删共享库）。"""
         if not tree_ids:
