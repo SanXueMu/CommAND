@@ -63,9 +63,12 @@ def _load_spec(raw: dict):
 
 
 def test_builtin_voucher_view_has_year_month_columns():
-    """AO3：发票凭证视图含「年份」「月份」两列（均 first_value），供 Excel 数值排序。"""
+    """AO3/AM3：发票凭证视图含「年份」「月份」两列（first_value）与「标准大写」对照列。"""
     from command_shared.ocr_views import BUILTIN_VIEWS
     spec = next(v for v in BUILTIN_VIEWS if v["id"] == "builtin-voucher")["spec"]
     assert spec["columns"][:2] == ["年份", "月份"]
     agg = {a["column"]: a["op"] for a in spec["aggregates"]}
     assert agg["年份"] == "first_value" and agg["月份"] == "first_value"
+    # 「合计大写」（模型原文）与「标准大写」（按借贷合计生成）并排，供人工对照
+    assert agg["合计大写"] == "first_value" and agg["标准大写"] == "first_value"
+    assert spec["columns"].index("标准大写") == spec["columns"].index("合计大写") + 1

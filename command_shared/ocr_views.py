@@ -409,7 +409,8 @@ BUILTIN_VIEWS = [
         "spec": {
             "name": "发票凭证视图",
             "columns": ["年份", "月份", "页码", "日期", "凭证类别", "凭证号", "摘要", "总账科目",
-                        "明细科目", "借方金额", "贷方金额", "附件", "领款人", "合计大写", "备注"],
+                        "明细科目", "借方金额", "贷方金额", "附件", "领款人", "合计大写",
+                        "标准大写", "备注"],
             "absent_values": ["", "未见", "未出现"],
             # AG1：凭证一页多条分录（AE 修复后 seq 全入库）——record 模式每条分录一行，
             # 页聚合（none+first_value）会把同页多条折成第一条，正是「一页只剩一行」的视图侧根因
@@ -429,6 +430,7 @@ BUILTIN_VIEWS = [
                 {"column": "附件", "op": "first_value"},
                 {"column": "领款人", "op": "first_value"},
                 {"column": "合计大写", "op": "first_value"},
+                {"column": "标准大写", "op": "first_value"},
                 {"column": "备注", "op": "first_value"},
             ],
             "sort": [{"column": "页码", "order": "asc"}],
