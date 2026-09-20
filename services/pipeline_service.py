@@ -268,6 +268,7 @@ class PipelineService:
             self._pipeline_repo.finish_run(run_id, "paused", error=error)
             return
         self._pipeline_repo.finish_run(run_id, status, error=error)
+        self._purge_decisive(run_id, status, error, fallback_flow is not None)
         if fallback_flow and run is not None:
             try:
                 fb_input = dict(run.get("input") or {})
@@ -959,6 +960,29 @@ class PipelineService:
                     ids.append(sub["id"])
                     queue.append(sub["id"])
         return ids
+
+    # AF3：决定性错误 = 重试无意义（用户参数/用法错 user、模型能力不可用 unavailable）。
+    # 此类失败收口时自动清产物（含 OCR 库与 raw.json），只留 run/error/事件供排查；
+    # 暂时性错误（system/domain/网络类）保留产物，供「重跑失败项」续上页级缓存。
+    DECISIVE_ERROR_KINDS = {"user", "unavailable"}
+
+    def _purge_decisive(self, run_id: str, status: str,
+                        error: dict[str, Any] | None, fallback: bool) -> None:
+        if status != "failed" or fallback:
+            return
+        kind = str((error or {}).get("kind") or "")
+        if kind not in self.DECISIVE_ERROR_KINDS:
+            return
+        try:
+            tree_ids = self._run_tree_ids(run_id)
+            handles = [t["handle"] for rid in tree_ids
+                       for t in self._task_repo.list_by_pipeline_run(rid)]
+            purged = self._purge_artifacts(handles)
+            ocr = purge_ocr_dbs(self._pipeline_repo, self._data_dir, tree_ids)
+            self._audit(run_id, None, "artifacts_purged", detail={
+                "reason": f"decisive:{kind}", **purged, **ocr})
+        except Exception:  # noqa: BLE001 —— 清产物失败不掩盖失败原因本身
+            logger.exception("决定性错误清理产物失败 run=%s", run_id)
 
     def collect_run_artifacts(self, run_id: str, scope: str = "final") -> list[dict[str, Any]]:
         """收集某 run 的产物文件（供批量打包下载）。
