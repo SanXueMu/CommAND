@@ -874,6 +874,9 @@ class PipelineService:
     def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:
         """删除任务（含审计事件）；`purge_files` 连带删除其全部产物目录（结果与临时结果随任务绑定）。
 
+        AD1：OCR 结果库（data/ocr/*.ocr_results.db 及其 .raw.json 留痕）不在 outputs 目录，
+        需单独收集清理；被树外其它 run 引用的库跳过（防显式同名库误删）。
+
         运行中/暂停 → 先自动中止（cancelled 立即落库）并等待活跃任务收口（≤DELETE_ABORT_WAIT_S），
         超时仍继续删除，pending 列表回报给调用方（避免与 worker 竞态）。
         """
@@ -891,13 +894,16 @@ class PipelineService:
                 if not pending:
                     break
                 time.sleep(0.5)
-        handles = [t["handle"] for rid in self._run_tree_ids(run_id)
+        tree_ids = self._run_tree_ids(run_id)
+        handles = [t["handle"] for rid in tree_ids
                    for t in self._task_repo.list_by_pipeline_run(rid)]
         purged = self._purge_artifacts(handles) if purge_files else {
             "files_removed": 0, "bytes_freed": 0, "dirs_removed": 0}
+        ocr_purged = purge_ocr_dbs(self._pipeline_repo, self._data_dir, tree_ids) \
+            if purge_files else {"dbs_removed": 0, "dbs_shared": []}
         self._pipeline_repo.delete_run(run_id)
         return {"id": run_id, "status": "deleted", "aborted": aborted,
-                "pending_tasks": pending, "purge_files": purge_files, **purged}
+                "pending_tasks": pending, "purge_files": purge_files, **purged, **ocr_purged}
 
     def _run_tree_ids(self, run_id: str) -> list[str]:
         """run 及其全部子 run（workflow 的 pipeline 步产物也随父任务绑定）。"""
@@ -1025,3 +1031,52 @@ class PipelineService:
             dirs_removed += 1
         return {"files_removed": files_removed, "bytes_freed": bytes_freed,
                 "dirs_removed": dirs_removed}
+
+
+def _iter_output_strings(value: Any):
+    """递归取出 output 里全部字符串值（dict 键值/列表元素）。"""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _iter_output_strings(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _iter_output_strings(v)
+
+
+def purge_ocr_dbs(repo: PipelineRepo, data_dir: Path | None, tree_ids: list[str]) -> dict:
+    """AD1：清理 run 树的 OCR 结果库（*.ocr_results.db 及其 .raw.json 留痕）。
+
+    只动 data_dir 内、后缀匹配的文件；被树外 run 的任务输出引用的库跳过（dbs_shared 回报），
+    防止用户显式同名库被连带误删。
+    """
+    empty = {"dbs_removed": 0, "dbs_shared": []}
+    if data_dir is None or not tree_ids:
+        return empty
+    root = data_dir.resolve()
+    candidates: set[str] = set()
+    for rid in tree_ids:
+        for output in (repo.outputs_by_step(rid) or {}).values():
+            for text in _iter_output_strings(output):
+                if text.endswith(".ocr_results.db") or text.endswith(".ocr_results.db.raw.json"):
+                    candidates.add(text)
+    removed = 0
+    shared: list[str] = []
+    for raw_path in sorted(candidates):
+        path = Path(raw_path)
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if root != resolved and root not in resolved.parents:
+            continue  # data 目录之外不动
+        if repo.db_referenced_outside(str(path), tree_ids):
+            shared.append(str(path))
+            continue
+        try:
+            resolved.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return {"dbs_removed": removed, "dbs_shared": shared}

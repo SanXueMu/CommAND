@@ -394,6 +394,23 @@ class PipelineRepo:
             ).fetchall()
         return {r[0]: r[1] for r in rows}
 
+    def db_referenced_outside(self, db_path: str, tree_ids: list[str]) -> bool:
+        """AD1：该库路径是否还被树外 run 的任务输出引用（LIKE 文本匹配，防误删共享库）。"""
+        if not tree_ids:
+            return True
+        with self._db.pool.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM tasks
+                WHERE pipeline_run <> ALL(%s)
+                  AND status = 'succeeded'
+                  AND output::text LIKE %s
+                LIMIT 1
+                """,
+                (tree_ids, f"%{db_path}%"),
+            ).fetchone()
+        return row is not None
+
     def outputs_by_step(self, run_id: str) -> dict[int, Any]:
         """每步最新成功任务的输出（DISTINCT ON 保证 rerun 后取最新成功而非旧任务）。
         C1：pipeline 步在父 run 无任务——其输出取自该步子 run 的末步任务输出。"""
