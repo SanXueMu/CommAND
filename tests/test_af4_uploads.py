@@ -134,7 +134,8 @@ def test_missing_artifacts_flag(client, monkeypatch):
         from api import pipelines_router as pr
         monkeypatch.setattr(pr.deps, "get_pipeline_service",
                             lambda: type("S", (), {"get_run_tasks": staticmethod(
-                                lambda r: [{"output": {"db": gone}}])})())
+                                lambda r: [{"output": {"db": gone}}]),
+                                "detail_summary": staticmethod(lambda r: None)})())
         monkeypatch.setattr(pr.deps, "get_pipeline_repo",
                             lambda: type("R", (), {"get_run": staticmethod(lambda r: {"id": r})})())
         detail = pr.get_pipeline_run(rid)

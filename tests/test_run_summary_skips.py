@@ -46,40 +46,68 @@ def test_no_skipped_no_noise() -> None:
     assert "records_count" not in out
 
 
-def test_detail_endpoint_returns_summary(tmp_path, monkeypatch):
-    """AI1b：详情端点补 summary（latest_note/steps_done/skipped_steps）——抽屉进度渲染位不再恒空。"""
+def test_detail_endpoint_returns_summary(monkeypatch):
+    """AI1b：详情端点补 summary（latest_note/steps_done/skipped_steps）——抽屉进度渲染位不再恒空。
+    池隔离（全套跑不串扰）：自建 dev-PG 连接与真 service，不走 deps.get_db 的 lru_cache 单例——
+    此前 monkeypatch get_config 后经单例开池，桩 URL 'x' 的后台线程会污染后续用例（e3 全链曾挂）。"""
+    import json
+    import secrets
+
     import deps
-    from config import Config
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from api import pipelines_router
     from store.db import Db
+    from tests._dbutil import db_reachable
+    from store.event_repo import EventRepo
+    from store.pipeline_repo import PipelineRepo
+    from store.run_event_repo import RunEventRepo
+    from store.task_repo import TaskRepo
+    from store.tool_repo import ToolRepo
+    from services.dispatch_service import DispatchService
+    from services.pipeline_service import PipelineService
 
-    monkeypatch.setattr(deps, "get_config", lambda: Config(
-        host="127.0.0.1", port=0, database_url="postgresql://x/x", worker_concurrency=1,
-        heartbeat_interval_s=15, heartbeat_timeout_s=90,
-        tools_dir=tmp_path, data_dir=tmp_path))
+    DB_URL = "postgresql://command_dev:root@192.168.8.41:5432/command_dev"
+    if not db_reachable(DB_URL):
+        import pytest
+
+        pytest.skip("dev PG 不可达，跳过集成测试")
+    db = Db(DB_URL)
+    db.apply_migrations()
+    svc = PipelineService(
+        db=db, pipeline_repo=PipelineRepo(db), task_repo=TaskRepo(db),
+        tool_repo=ToolRepo(db),
+        dispatch_service=DispatchService(db=db, task_repo=TaskRepo(db),
+                                         tool_repo=ToolRepo(db), event_repo=EventRepo(db)),
+        run_event_repo=RunEventRepo(db))
+    monkeypatch.setattr(deps, "get_pipeline_service", lambda: svc)
+    monkeypatch.setattr(deps, "get_pipeline_repo", lambda: svc._pipeline_repo)
+    monkeypatch.setattr(deps, "get_run_event_repo", lambda: RunEventRepo(db))
     app = FastAPI()
-    app.include_router(pipelines_router.router, prefix="/api")
+    app.include_router(pipelines_router.runs_router, prefix="/api")
 
-    with TestClient(app) as client:
-        repo = deps.get_pipeline_repo()
-        db = deps.get_db()
+    rid = "p_ai1_" + secrets.token_hex(6)
+    with db.pool.connection() as conn:
+        conn.execute(
+            "INSERT INTO pipelines (id, name, steps) VALUES (%s, 'AI1', %s) ON CONFLICT DO NOTHING",
+            ("flow.ai1.detail", json.dumps([{"tool": "t", "input": {}}])))
+        conn.execute(
+            "INSERT INTO pipeline_runs (id, pipeline_id, input, status) "
+            "VALUES (%s, 'flow.ai1.detail', %s, 'running')",
+            (rid, json.dumps({"file": "x.pdf"})))
+    events = RunEventRepo(db)
+    events.append(rid, None, "created", detail={"pipeline_id": "flow.ai1.detail"})
+    events.append(rid, None, "progress", actor="tool",
+                  detail={"type": "progress", "phase": "recognize", "message": "已识别 3/50 页"})
+    try:
+        with TestClient(app) as client:
+            resp = client.get(f"/api/pipeline-runs/{rid}")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert "summary" in body
+            assert body["summary"].get("latest_note") == "已识别 3/50 页"
+    finally:
         with db.pool.connection() as conn:
-            conn.execute(
-                "INSERT INTO pipelines (id, name, steps) VALUES (%s, 'AI1', %s) ON CONFLICT DO NOTHING",
-                ("flow.ai1.detail", __import__("json").dumps([{"tool": "t", "input": {}}])))
-            conn.execute(
-                "INSERT INTO pipeline_runs (id, pipeline_id, input, status) "
-                "VALUES (%s, %s, %s, 'running')",
-                ("p_ai1_detail", "flow.ai1.detail", __import__("json").dumps({"file": "x.pdf"})))
-        events = deps.get_run_event_repo()
-        events.append("p_ai1_detail", None, "created", detail={"pipeline_id": "flow.ai1.detail"})
-        events.append("p_ai1_detail", None, "progress", actor="tool",
-                      detail={"type": "progress", "phase": "recognize", "message": "已识别 3/50 页"})
-
-        resp = client.get("/api/pipeline-runs/p_ai1_detail")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "summary" in body
-        assert body["summary"].get("latest_note") == "已识别 3/50 页"
+            conn.execute("DELETE FROM run_events WHERE run_id = %s", (rid,))
+            conn.execute("DELETE FROM pipeline_runs WHERE id = %s", (rid,))
+        db.close()

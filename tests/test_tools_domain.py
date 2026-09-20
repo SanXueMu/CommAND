@@ -215,15 +215,17 @@ def test_pdf_and_txt_extract(ctx, tmp_path):
 
 def test_ocrdb_extract(ctx, tmp_path):
     import json
-    import sqlite3
+
+    from command_shared import ocr_storage
 
     long_text = "长" * 250
-    db = sqlite3.connect(p := tmp_path / "ocr.sqlite")
+    # AJ1 后查询含 seq 列——桩库必须走 ocr_storage 建表（自动迁移不认外来同名表）
+    p = tmp_path / "ocr.sqlite"
+    db = ocr_storage.connect(p)
+    ocr_storage.initialize(db)
     db.execute(
-        "CREATE TABLE records (id INTEGER PRIMARY KEY, source_path TEXT, page_number INTEGER, data TEXT)"
-    )
-    db.execute(
-        "INSERT INTO records VALUES (1, 'scan.pdf', 1, ?)",
+        "INSERT OR REPLACE INTO records (file_hash, source_path, row_number, seq, page_number, data) "
+        "VALUES ('h1', 'scan.pdf', 1, 0, 1, ?)",
         (json.dumps({"发票号": "INV-1", "金额": "100.00", "备注": long_text}),),
     )
     db.commit()
