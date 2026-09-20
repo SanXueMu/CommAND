@@ -6,7 +6,11 @@ import argparse
 def create_app():
     from contextlib import asynccontextmanager
 
+    import logging
+
     from fastapi import FastAPI
+
+    logger = logging.getLogger(__name__)
 
     import deps
     from api import data_router, files_router, keys_router, meta_router, ocr_records_router, ocr_templates_router, ocr_view_router, pipelines_router, system_router, tasks_router, tools_router, translate_router
@@ -19,6 +23,10 @@ def create_app():
         db.apply_migrations()
         # 纯壳准则：站点声明是数据——启动/热部署即幂等 seed 进 PG，经 /meta/site 下发
         deps.get_site_repo().seed(BUILTIN_SITE_VIEWS)
+        # AF2：进程重启即收口上次残留的 running run（无人推进的死任务 → interrupted 可重跑）
+        recovered = deps.get_pipeline_service().recover_stale_runs()
+        if recovered:
+            logger.info("启动收口 %d 个残留 running run → interrupted", len(recovered))
         scheduler = deps.get_scheduler()
         scheduler.start()
         yield

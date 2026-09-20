@@ -106,6 +106,13 @@ class PipelineRepo:
             for r in rows
         ]
 
+    def running_run_ids(self) -> list[str]:
+        """AF2：仍在 running 态的 run（启动 stale 收口用——进程重启后这些已无人推进）。"""
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id FROM pipeline_runs WHERE status = 'running'").fetchall()
+        return [row[0] for row in rows]
+
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
                   offset: int = 0, batch_id: str | None = None) -> list[dict[str, Any]]:
         """运行列表（job 粒度，按创建时间倒序）——translee 任务列表体验。"""

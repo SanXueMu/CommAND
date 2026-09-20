@@ -391,6 +391,24 @@ class PipelineService:
             return {"run_id": run_id, "status": "paused"}
         return {"run_id": run_id, "status": "paused"}  # 已是 paused，幂等
 
+    def recover_stale_runs(self) -> list[str]:
+        """AF2：启动收口——进程重启后库内仍 running 的 run 已无人推进，统一标 interrupted。
+
+        用户裁定：不做时间窗超时（上百页 PDF 逐页识别慢是常态，不误伤）——只按
+        **进程存活**判定：本方法只在 lifespan 启动时调用，此刻内存无任何活跃 run，
+        库里的 running 必然是上次进程死亡留下的。事件留痕、可重跑（interrupted 在
+        RERUNNABLE_STATUSES 内）；paused 不动（那是「可继续」语义，与进程无关）。
+        """
+        recovered: list[str] = []
+        for run_id in self._pipeline_repo.running_run_ids():
+            self._pipeline_repo.finish_run_forced(
+                run_id, "interrupted",
+                error={"message": "进程重启中断，可重跑", "kind": "transient"})
+            self._audit(run_id, None, "run_recovered",
+                        {"reason": "process_restart", "status": "interrupted"})
+            recovered.append(run_id)
+        return recovered
+
     def resume_run(self, run_id: str) -> dict[str, Any]:
         """恢复即查询（重放）：定位首个未成功步骤分派；已 succeeded 步骤永不重发。"""
         run = self._pipeline_repo.get_run(run_id)
