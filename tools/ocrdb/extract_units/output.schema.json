@@ -8,7 +8,14 @@
   ],
   "properties": {
     "file": {
-      "type": "string"
+      "title": "来源标识",
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "单库时为库路径；多库合并时为「合并导出(N库)」"
+        }
+      ],
+      "description": "来源库标识（多库合并时为汇总描述）"
     },
     "file_hash": {
       "type": "string"

@@ -89,7 +89,11 @@ INPUT_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["db", "view_spec"],
         "properties": {
-            "db": {"type": "string", "title": "OCR 库名", "description": "要导出的 OCR 结果库标识"},
+            "db": {"anyOf": [
+                    {"type": "string", "title": "OCR 库名", "description": "单个结果库（.ocr_results.db 路径或标识）"},
+                    {"type": "array", "items": {"type": "string"}, "minItems": 2,
+                     "description": "多库合并导出（AJ1）：逐库读取按来源分组排序"}],
+                "title": "OCR 库名", "description": "要导出的 OCR 结果库（单个或多个合并）"},
             "view_spec": {"type": "string", "title": "视图定义", "description": "JSON：列/拆分 sheet 规则"},
             "name": {"type": "string", "title": "导出文件名"},
         },

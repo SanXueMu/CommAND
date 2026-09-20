@@ -7,8 +7,21 @@
   "properties": {
     "file": {
       "title": "结果库路径",
-      "type": "string",
-      "description": "commOcr 结果库路径（.db/.sqlite）"
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "单个结果库路径（.db/.sqlite）"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "多个结果库路径（合并导出：逐库读取按来源分组排序）"
+        }
+      ],
+      "description": "commOcr 结果库路径；传数组即多库合并（AJ1）"
     },
     "long_value_chars": {
       "title": "长值阈值",

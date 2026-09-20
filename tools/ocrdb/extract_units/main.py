@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from contextlib import closing
+from contextlib import AbstractContextManager, closing
 from pathlib import Path
 
 
@@ -19,6 +19,15 @@ def _file_hash(path: Path) -> str:
         while chunk := f.read(1048576):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _file_hash_list(paths: list[Path]) -> str:
+    """AJ1：多库合并导出的稳定哈希（排序后路径逐一哈希再汇总，与顺序无关）。"""
+    inner = hashlib.sha256()
+    for p in sorted(paths):
+        inner.update(str(p).encode())
+        inner.update(_file_hash(p).encode())
+    return inner.hexdigest()
 
 
 def _format_cell(value) -> str:
@@ -38,11 +47,15 @@ def _ocr_storage_connection(p: Path):
 
 
 def run(input: dict, ctx, emit) -> dict:
-    path = Path(input["file"])
-    if not path.is_file():
+    # AJ1：file 接受单库或库列表（多库合并导出）；str 归一为单元素列表
+    raw_files = input["file"]
+    paths = [Path(p) for p in (raw_files if isinstance(raw_files, list) else [raw_files])]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
         from core.errors import ToolDomainError
 
-        raise ToolDomainError(f"文件不存在: {path}")
+        raise ToolDomainError(f"文件不存在: {', '.join(missing)}")
+    path = paths[0]  # 单库路径（units 模式/输出元信息沿用）
     long_value_chars = int(input.get("long_value_chars", 200))
     def _open(p: Path) -> AbstractContextManager:
         """统一走 ocr_storage 连接（触发旧库 seq 迁移），杜绝表结构知识散落。"""
@@ -52,21 +65,28 @@ def run(input: dict, ctx, emit) -> dict:
 
     if mode == "records":
         records: list[dict] = []
-        with _open(path) as conn:
-            cursor = conn.execute(
-                "SELECT source_path, page_number, data FROM records ORDER BY source_path, page_number"
-            )
-            for source_path, page_number, data_json in cursor:
-                try:
-                    data = json.loads(data_json)
-                except (TypeError, json.JSONDecodeError):
-                    data = {}
-                record = dict(data) if isinstance(data, dict) else {"数据": data}
-                record["页码"] = page_number
-                record["来源文件"] = Path(source_path).name
-                records.append(record)
+        # AJ1：多库逐读合并（页级缓存库间天然隔离，来源文件字段区分归属）；
+        # AE 后同页多条分录按 seq 排序，跨库按来源路径分组有序
+        for p in paths:
+            with _open(p) as conn:
+                cursor = conn.execute(
+                    "SELECT source_path, page_number, data FROM records "
+                    "ORDER BY source_path, page_number, seq"
+                )
+                for source_path, page_number, data_json in cursor:
+                    try:
+                        data = json.loads(data_json)
+                    except (TypeError, json.JSONDecodeError):
+                        data = {}
+                    record = dict(data) if isinstance(data, dict) else {"数据": data}
+                    record["页码"] = page_number
+                    record["来源文件"] = Path(source_path).name
+                    records.append(record)
         emit({"phase": "extracted", "records": len(records)})
-        return {"file": str(path), "file_hash": _file_hash(path), "kind": "ocr_db",
+        merged = len(paths) > 1
+        file_label = f"合并导出({len(paths)}库)" if merged else str(path)
+        file_hash = _file_hash(paths[0]) if not merged else _file_hash_list(paths)
+        return {"file": file_label, "file_hash": file_hash, "kind": "ocr_db",
                 "records": records}
 
     table_units: dict[str, dict] = {}
@@ -74,7 +94,8 @@ def run(input: dict, ctx, emit) -> dict:
     seen_ids: set[str] = set()
     with _open(path) as conn:
         cursor = conn.execute(
-            "SELECT source_path, page_number, data FROM records ORDER BY source_path, page_number"
+            "SELECT source_path, page_number, data FROM records "
+            "ORDER BY source_path, page_number, seq"
         )
         for source_path, page_number, data_json in cursor:
             unit = table_units.setdefault(source_path, {

@@ -426,3 +426,41 @@ def test_docx_render_table_unit(ctx):
 
     doc = Document(out["path"])
     assert doc.tables and doc.tables[0].cell(1, 0).text == "译2"
+
+
+def test_ocrdb_extract_records_merge_multi_db(ctx, tmp_path):
+    """AJ1：file 传数组即多库合并导出——逐库读取、来源分组、同页按 seq 排序。"""
+    import json
+    import sqlite3
+
+    from command_shared import ocr_storage
+
+    def _mk_db(name: str, rows: list[tuple[str, int, int, dict]]) -> str:
+        p = tmp_path / name
+        conn = ocr_storage.connect(p)
+        ocr_storage.initialize(conn)
+        for src, page, seq, data in rows:
+            conn.execute(
+                "INSERT OR REPLACE INTO records (file_hash, source_path, row_number, seq, page_number, data) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (f"h-{src}", src, page, seq, page, json.dumps(data, ensure_ascii=False)),
+            )
+        conn.commit()
+        conn.close()
+        return str(p)
+
+    a = _mk_db("a.ocr_results.db", [
+        ("/a.pdf", 1, 0, {"金额": "100"}),
+        ("/a.pdf", 1, 1, {"金额": "200"}),
+        ("/a.pdf", 2, 0, {"金额": "300"}),
+    ])
+    b = _mk_db("b.ocr_results.db", [("/b.pdf", 1, 0, {"金额": "999"})])
+
+    out = load_tool("tools/ocrdb/extract_units").run(
+        {"file": [a, b], "mode": "records"}, ctx, lambda e: None)
+    assert out["file"] == "合并导出(2库)"
+    amounts = [r["金额"] for r in out["records"]]
+    # 同页按 seq（100→200），跨库来源分组有序（a 全部在前、b 在后）
+    assert amounts == ["100", "200", "300", "999"]
+    assert out["records"][0]["来源文件"] == "a.pdf"
+    assert out["records"][-1]["来源文件"] == "b.pdf"
