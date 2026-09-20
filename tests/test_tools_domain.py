@@ -466,7 +466,40 @@ def test_ocrdb_extract_records_merge_multi_db(ctx, tmp_path):
     assert amounts == ["100", "200", "300", "999"]
     assert out["records"][0]["来源文件"] == "2002年3月记账凭证_1_.pdf"
     assert out["records"][-1]["来源文件"] == "2002年4月记账凭证_1_.pdf"
-    # AL：月份从原件文件名提取（视图「月份」列数据源）
-    assert out["records"][0]["月份"] == "2002年3月"
-    assert out["records"][2]["月份"] == "2002年3月"
-    assert out["records"][-1]["月份"] == "2002年4月"
+    # AO：年份/月份拆两列纯数字串（来源仍是文件名；Excel 数值排序正确）
+    assert out["records"][0]["年份"] == "2002" and out["records"][0]["月份"] == "3"
+    assert out["records"][2]["年份"] == "2002" and out["records"][2]["月份"] == "3"
+    assert out["records"][-1]["年份"] == "2002" and out["records"][-1]["月份"] == "4"
+
+
+def test_ocrdb_extract_records_month_order(ctx, tmp_path):
+    """AO2：多库合并行序按（年份, 月份）数字序——10 月不得排在 2 月之前。"""
+    import json
+
+    from command_shared import ocr_storage
+
+    def _mk_db(name: str, src: str) -> str:
+        p = tmp_path / name
+        conn = ocr_storage.connect(p)
+        ocr_storage.initialize(conn)
+        conn.execute(
+            "INSERT OR REPLACE INTO records (file_hash, source_path, row_number, seq, page_number, data) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (f"h-{src}", src, 1, 0, 1, json.dumps({"金额": "1"}, ensure_ascii=False)))
+        conn.commit()
+        conn.close()
+        return str(p)
+
+    # 目录名（含 2002年10月 / 2002年2月）按字典序恰好是「10 月在 2 月前」
+    oct_db = _mk_db("oct.ocr_results.db", "/2002年10月记账凭证_1_.pdf")
+    feb_db = _mk_db("feb.ocr_results.db", "/2002年2月记账凭证_1_.pdf")
+    out = load_tool("tools/ocrdb/extract_units").run(
+        {"file": [oct_db, feb_db], "mode": "records"}, ctx, lambda e: None)
+    months = [r["月份"] for r in out["records"]]
+    assert months == ["2", "10"], f"行序应按月份数字序: {months}"
+    assert [r["年份"] for r in out["records"]] == ["2002", "2002"]
+    # 无年月模式的来源：两列留空且排最后
+    other = _mk_db("other.ocr_results.db", "/无年月标记.pdf")
+    out2 = load_tool("tools/ocrdb/extract_units").run(
+        {"file": [other, feb_db], "mode": "records"}, ctx, lambda e: None)
+    assert out2["records"][-1]["年份"] == "" and out2["records"][-1]["月份"] == ""

@@ -38,13 +38,24 @@ def _format_cell(value) -> str:
     return str(value)
 
 
-def _month_from_source(source_path: str) -> str:
-    """AL：从原件路径提取「月份」（如 2002年3月记账凭证_1_.pdf → 2002年3月）。
-    发票凭证视图的「月份」列 first_value 直读此字段；提不到留空（absent 显示空）。"""
+def _year_month_from_source(source_path: str) -> tuple[str, str]:
+    """AO：从原件文件名提取（年份, 月份）两列纯数字串。
+
+    2002年3月记账凭证_1_.pdf → ("2002", "3")。拆两列是为 Excel 数值排序正确——
+    「2002年10月」按文本序会排在「2002年2月」之前。提不到时两列都留空。
+    """
     import re
 
     m = re.search(r"(\d{4})年(\d{1,2})月", Path(source_path).name)
-    return f"{m.group(1)}年{int(m.group(2))}月" if m else ""
+    return (m.group(1), str(int(m.group(2)))) if m else ("", "")
+
+
+def _year_month_key(record: dict) -> tuple[int, int]:
+    """AO2：行序键——按（年份, 月份）数字序；无年月的记录排最后。"""
+    year, month = str(record.get("年份") or ""), str(record.get("月份") or "")
+    if year.isdigit() and month.isdigit():
+        return (int(year), int(month))
+    return (9999, 99)
 
 
 def _ocr_storage_connection(p: Path):
@@ -90,8 +101,13 @@ def run(input: dict, ctx, emit) -> dict:
                     record = dict(data) if isinstance(data, dict) else {"数据": data}
                     record["页码"] = page_number
                     record["来源文件"] = Path(source_path).name
-                    record["月份"] = _month_from_source(source_path)
+                    year, month = _year_month_from_source(source_path)
+                    record["年份"] = year
+                    record["月份"] = month
                     records.append(record)
+        # AO2：行序按（年份, 月份）数字序（原按 source_path 字典序会把 10 月排在 1 月前）；
+        # 同（年,月）内保持 SQL 的 source_path/page_number/seq 顺序（稳定排序）
+        records.sort(key=_year_month_key)
         emit({"phase": "extracted", "records": len(records)})
         merged = len(paths) > 1
         file_label = f"合并导出({len(paths)}库)" if merged else str(path)

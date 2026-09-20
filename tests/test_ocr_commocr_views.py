@@ -60,3 +60,12 @@ def test_builtin_voucher_view_record_mode_multi_row():
 def _load_spec(raw: dict):
     from command_shared.ocr_views import ViewSpec
     return ViewSpec(**raw)
+
+
+def test_builtin_voucher_view_has_year_month_columns():
+    """AO3：发票凭证视图含「年份」「月份」两列（均 first_value），供 Excel 数值排序。"""
+    from command_shared.ocr_views import BUILTIN_VIEWS
+    spec = next(v for v in BUILTIN_VIEWS if v["id"] == "builtin-voucher")["spec"]
+    assert spec["columns"][:2] == ["年份", "月份"]
+    agg = {a["column"]: a["op"] for a in spec["aggregates"]}
+    assert agg["年份"] == "first_value" and agg["月份"] == "first_value"

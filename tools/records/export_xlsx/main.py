@@ -13,6 +13,25 @@ from core.errors import ToolDomainError
 
 MAX_SHEET_NAME = 31
 
+# AO4：纯数字串 → 数值单元格（Excel 才能按数值排序/求和；文本「10」会排在「9」前）
+_NUM_RE = re.compile(r"^-?\d+(\.\d+)?$")
+_MAX_NUM_DIGITS = 12  # 超长纯数字（流水号/证件号）保留文本，避免精度丢失与科学计数
+
+
+def _cell(value):
+    """纯数字串写数值；其余（含前导零串、超长数字、中文/日期）一律保留原文。"""
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    digits = text.replace("-", "").replace(".", "")
+    if not text or len(digits) > _MAX_NUM_DIGITS:
+        return value
+    if len(text) > 1 and text[0] == "0" and "." not in text:
+        return value  # 前导零（如凭证号 007）保留文本，不丢位
+    if _NUM_RE.match(text):
+        return float(text) if "." in text else int(text)
+    return value
+
 
 def _sheet_title(raw: str, used: set[str]) -> str:
     base = re.sub(r'[\\/*?:\[\]]+', "_", (raw or "Sheet").strip())[:MAX_SHEET_NAME] or "Sheet"
@@ -28,7 +47,7 @@ def _sheet_title(raw: str, used: set[str]) -> str:
 def _write_sheet(worksheet, columns: list[str], rows: list) -> None:
     worksheet.append(columns)
     for row in rows:
-        worksheet.append([row.get(c, "") if isinstance(row, dict) else row for c in columns])
+        worksheet.append([_cell(row.get(c, "")) if isinstance(row, dict) else row for c in columns])
     for index, column in enumerate(columns, start=1):
         width = max(10, min(48, max((len(str(row.get(column, ""))) for row in rows), default=10) + 4))
         worksheet.column_dimensions[get_column_letter(index)].width = width
