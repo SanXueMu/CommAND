@@ -44,3 +44,42 @@ def test_no_skipped_no_noise() -> None:
     out = _summary(None, statuses={0: "succeeded"})
     assert "steps_skipped" not in out
     assert "records_count" not in out
+
+
+def test_detail_endpoint_returns_summary(tmp_path, monkeypatch):
+    """AI1b：详情端点补 summary（latest_note/steps_done/skipped_steps）——抽屉进度渲染位不再恒空。"""
+    import deps
+    from config import Config
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from api import pipelines_router
+    from store.db import Db
+
+    monkeypatch.setattr(deps, "get_config", lambda: Config(
+        host="127.0.0.1", port=0, database_url="postgresql://x/x", worker_concurrency=1,
+        heartbeat_interval_s=15, heartbeat_timeout_s=90,
+        tools_dir=tmp_path, data_dir=tmp_path))
+    app = FastAPI()
+    app.include_router(pipelines_router.router, prefix="/api")
+
+    with TestClient(app) as client:
+        repo = deps.get_pipeline_repo()
+        db = deps.get_db()
+        with db.pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO pipelines (id, name, steps) VALUES (%s, 'AI1', %s) ON CONFLICT DO NOTHING",
+                ("flow.ai1.detail", __import__("json").dumps([{"tool": "t", "input": {}}])))
+            conn.execute(
+                "INSERT INTO pipeline_runs (id, pipeline_id, input, status) "
+                "VALUES (%s, %s, %s, 'running')",
+                ("p_ai1_detail", "flow.ai1.detail", __import__("json").dumps({"file": "x.pdf"})))
+        events = deps.get_run_event_repo()
+        events.append("p_ai1_detail", None, "created", detail={"pipeline_id": "flow.ai1.detail"})
+        events.append("p_ai1_detail", None, "progress", actor="tool",
+                      detail={"type": "progress", "phase": "recognize", "message": "已识别 3/50 页"})
+
+        resp = client.get("/api/pipeline-runs/p_ai1_detail")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "summary" in body
+        assert body["summary"].get("latest_note") == "已识别 3/50 页"

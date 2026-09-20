@@ -19,6 +19,8 @@ AUDIT_KINDS = {
     "file_replaced", "input_updated",  # 017：替换任务原件 / 就地修正任务参数
     "run_recovered",  # AF2：进程重启收口残留 running run → interrupted
     "artifacts_purged",  # AF3：决定性错误收口自动清理产物（只留 run/error/事件）
+    "progress",  # AI1：工具进度消息（「已识别 12/42 页」）双写审计总线——
+    # 此前只进 task_events，latest_progress_bulk 查 run_events 恒空（AB2 链路断裂的根因）
 }
 
 

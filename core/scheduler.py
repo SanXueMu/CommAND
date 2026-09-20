@@ -46,6 +46,7 @@ class Scheduler:
         config: Config,
         on_task_done: Callable[[dict[str, Any]], None] | None = None,
         key_repo: Any | None = None,
+        audit_repo: Any | None = None,
     ) -> None:
         self._db = db
         self._runner = runner
@@ -55,6 +56,9 @@ class Scheduler:
         self._config = config
         self._on_task_done = on_task_done
         self._key_repo = key_repo
+        # AI1：审计总线 repo（RunEventRepo）——工具进度消息双写 run_events(kind=progress)，
+        # 供详情日志与 latest_note 直读；不注入则维持旧行为（只写 task_events）
+        self._audit_repo = audit_repo
         self._stop = threading.Event()
         self._running: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
@@ -112,6 +116,16 @@ class Scheduler:
                 data = {"detail": event}
             self._event_repo.append(handle, "progress", data)
             self._task_repo.heartbeat(handle)
+            # AI1：同一条进度消息双写审计总线（run_events）——task_events 只有工具流消费者，
+            # 详情日志/latest_progress_bulk 读的都是 run_events（此前恒空）
+            if self._audit_repo is not None:
+                run_id = task.get("pipeline_run")
+                if run_id:
+                    try:
+                        self._audit_repo.append(run_id, handle, "progress",
+                                                actor="tool", detail=data)
+                    except Exception:  # 进度是旁路信息：审计写失败不拖垮任务
+                        pass
 
         try:
             tool = self._tool_repo.get(task["tool_id"])

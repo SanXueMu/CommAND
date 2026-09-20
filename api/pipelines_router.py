@@ -257,8 +257,22 @@ def get_pipeline_run(run_id: str) -> dict:
                 continue
             if data_dir in resolved.parents and not resolved.exists():
                 missing.append(value)
+    # AI3：工具名映射（日志人话化用）——step 事件的 tool id → manifest 中文名
+    tool_names: dict[str, str] = {}
+    tool_repo = deps.get_tool_repo()
+    for task in tasks:
+        tid = task.get("tool_id")
+        if tid and tid not in tool_names:
+            tool = tool_repo.get(str(tid))
+            if tool:
+                manifest = tool.get("manifest") or {}
+                tool_names[str(tid)] = str(manifest.get("name") or tid)
     return {"run": deps.get_pipeline_repo().get_run(run_id), "tasks": tasks,
-            "missing_artifacts": sorted(set(missing))}
+            "missing_artifacts": sorted(set(missing)),
+            # AI1b：详情摘要（latest_note 进度 / steps_done / steps_skipped 中文原因）——
+            # 抽屉顶部「当前进度」与跳步原因直读
+            "summary": service.detail_summary(run_id),
+            "tool_names": tool_names}
 
 
 @runs_router.post("/rerun-batch", status_code=202)

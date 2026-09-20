@@ -94,6 +94,7 @@ def get_scheduler() -> Scheduler:
         # 惰性解析打断 dispatch→scheduler→pipeline→dispatch 构造环
         on_task_done=lambda task: get_pipeline_service().advance(task),
         key_repo=get_key_repo(),
+        audit_repo=get_run_event_repo(),
     )
 
 

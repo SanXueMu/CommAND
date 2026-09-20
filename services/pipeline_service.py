@@ -776,6 +776,14 @@ class PipelineService:
         """单 run 摘要（详情等单 run 场景用）。"""
         return self._summaries([run])[run["id"]]
 
+    def detail_summary(self, run_id: str) -> dict[str, Any] | None:
+        """AI1b：详情端点摘要——detail 此前不返回 summary，抽屉里 latest_note
+        （「已识别 12/42 页」）渲染位恒空。"""
+        run = self._pipeline_repo.get_run(run_id)
+        if run is None:
+            return None
+        return self._run_summary(run)
+
     def _summaries(self, runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         """批量摘要：状态/产物/用量一次取齐，逐 run 装配（契约与旧的逐 run 版一致）。"""
         run_ids = [r["id"] for r in runs]
