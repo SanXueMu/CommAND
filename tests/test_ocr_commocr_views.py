@@ -39,3 +39,24 @@ def test_all_presets_compile_and_dry_run():
         spec = ViewSpec(**p["spec"])
         out = compute_view([], spec)
         assert isinstance(out, dict)
+
+
+def test_builtin_voucher_view_record_mode_multi_row():
+    """AG1：发票凭证内置视图 record 模式——一页多条分录必须逐条成行（不再页聚合折叠）。"""
+    from command_shared.ocr_views import BUILTIN_VIEWS, compute_view
+    spec = next(v for v in BUILTIN_VIEWS if v["id"] == "builtin-voucher")
+    rows = [
+        (3, {"月份": "2002-03", "凭证号": "记-5", "摘要": "购文具", "借方金额": "100.00"}),
+        (3, {"月份": "2002-03", "凭证号": "记-5", "摘要": "现金", "贷方金额": "100.00"}),
+        (4, {"月份": "2002-03", "凭证号": "记-6", "摘要": "付房租", "借方金额": "2000.00"}),
+    ]
+    result = compute_view(rows, type("S", (), {"__mro__": ()}) if False else _load_spec(spec["spec"]))
+    assert len(result["rows"]) == 3
+    assert result["rows"][0]["摘要"] == "购文具"
+    assert result["rows"][1]["摘要"] == "现金"
+    assert result["rows"][1]["页码"] == 3
+
+
+def _load_spec(raw: dict):
+    from command_shared.ocr_views import ViewSpec
+    return ViewSpec(**raw)
