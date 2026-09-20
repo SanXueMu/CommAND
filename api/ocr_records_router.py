@@ -94,7 +94,7 @@ def read_records(db: str, limit: int = 200, offset: int = 0, path: str | None = 
         total = connection.execute(f"SELECT COUNT(*) FROM records{where}", params).fetchone()[0]
         cursor = connection.execute(
             "SELECT file_hash, source_path, row_number, page_number, data"
-            f" FROM records{where} ORDER BY source_path, row_number LIMIT ? OFFSET ?",
+            f" FROM records{where} ORDER BY source_path, row_number, seq LIMIT ? OFFSET ?",
             [*params, limit, offset],
         )
         for r in cursor:

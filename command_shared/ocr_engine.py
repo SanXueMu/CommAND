@@ -259,7 +259,11 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
         records, notes = result
         payload = [(row_number, record) for record in records]
         if payload:
-            written += ocr_storage.append_records(connection, file_hash, source_path, payload)
+            page_wrote = ocr_storage.append_records(connection, file_hash, source_path, payload)
+            written += page_wrote
+            if page_wrote < len(records):  # AE3 对账：入库少于解析数当场暴露
+                review_notes.append(
+                    f"第{page_number}页入库 {page_wrote}/{len(records)} 条（部分记录未落库）")
         review_notes.extend(notes)
         done += 1
         if progress and (done % 5 == 0 or done == len(results)):

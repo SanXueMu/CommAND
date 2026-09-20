@@ -138,10 +138,12 @@ def test_storage_roundtrip_and_breakpoint(tmp_path):
         connection, "hash1", "a.pdf",
         [(1, {"发票号": "1", "页码": 1}), (2, {"发票号": "2", "页码": 2})])
     assert written == 2
-    # OR IGNORE 首写为准：同 (hash, path, row) 重写被忽略，返回真实新增 0
+    # AE2 页级替换：同页重写覆盖旧内容（旧 OR IGNORE 首写为准曾静默吞行，已废弃）
     written = ocr_storage.append_records(
         connection, "hash1", "a.pdf", [(2, {"发票号": "2", "页码": 2})])
-    assert written == 0
+    assert written == 1
+    rows = ocr_storage.read_records(connection, "hash1", "a.pdf")
+    assert len(rows) == 2 and rows[1]["发票号"] == "2"
     assert set(ocr_storage.get_cached_rows(connection, "hash1", "a.pdf")) == {1, 2}
     assert len(ocr_storage.read_records(connection, "hash1", "a.pdf")) == 2
     connection.close()

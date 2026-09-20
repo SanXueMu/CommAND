@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -28,6 +29,14 @@ def _format_cell(value) -> str:
     return str(value)
 
 
+def _ocr_storage_connection(p: Path):
+    from command_shared import ocr_storage
+
+    conn = ocr_storage.connect(p)
+    ocr_storage.initialize(conn)
+    return conn
+
+
 def run(input: dict, ctx, emit) -> dict:
     path = Path(input["file"])
     if not path.is_file():
@@ -35,11 +44,15 @@ def run(input: dict, ctx, emit) -> dict:
 
         raise ToolDomainError(f"文件不存在: {path}")
     long_value_chars = int(input.get("long_value_chars", 200))
+    def _open(p: Path) -> AbstractContextManager:
+        """统一走 ocr_storage 连接（触发旧库 seq 迁移），杜绝表结构知识散落。"""
+        return closing(_ocr_storage_connection(p))
+
     mode = input.get("mode") or "units"
 
     if mode == "records":
         records: list[dict] = []
-        with sqlite3.connect(path) as conn:
+        with _open(path) as conn:
             cursor = conn.execute(
                 "SELECT source_path, page_number, data FROM records ORDER BY source_path, page_number"
             )
@@ -59,7 +72,7 @@ def run(input: dict, ctx, emit) -> dict:
     table_units: dict[str, dict] = {}
     text_units: list[dict] = []
     seen_ids: set[str] = set()
-    with sqlite3.connect(path) as conn:
+    with _open(path) as conn:
         cursor = conn.execute(
             "SELECT source_path, page_number, data FROM records ORDER BY source_path, page_number"
         )
