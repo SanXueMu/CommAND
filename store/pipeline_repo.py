@@ -142,9 +142,11 @@ class PipelineRepo:
             row = conn.execute(sql, params).fetchone()
         return int(row[0]) if row else 0
 
-    def delete_run(self, run_id: str) -> None:
-        """删除 run（含子 run 整棵树、审计事件），解绑整棵子树的 tasks（保留任务历史）。
+    def delete_run(self, run_id: str, drop_tasks: bool = False) -> None:
+        """删除 run（含子 run 整棵树、审计事件）。
 
+        AF1：drop_tasks=True（勾删产物口径）时 tasks 整删（彻底删除，不留孤儿引用）；
+        默认 False 仍为解绑（保留任务历史，purge_files=false 的审计口径）。
         run_events.run_id 在 006 里是无级联外键（NO ACTION），不先清事件会
         ForeignKeyViolation → 500（011 迁移已改 CASCADE，此处仍显式清理以防旧库未迁移）；
         pipeline_runs.parent_run_id 同为无级联 self-FK，故按深度降序先子后父删除。
@@ -165,8 +167,11 @@ class PipelineRepo:
             ids = [row[0] for row in rows]
             with conn.transaction():
                 conn.execute("DELETE FROM run_events WHERE run_id = ANY(%s)", (ids,))
-                conn.execute("UPDATE tasks SET pipeline_run = NULL WHERE pipeline_run = ANY(%s)",
-                             (ids,))
+                if drop_tasks:
+                    conn.execute("DELETE FROM tasks WHERE pipeline_run = ANY(%s)", (ids,))
+                else:
+                    conn.execute("UPDATE tasks SET pipeline_run = NULL WHERE pipeline_run = ANY(%s)",
+                                 (ids,))
                 for rid in ids:
                     conn.execute("DELETE FROM pipeline_runs WHERE id = %s", (rid,))
 
@@ -395,23 +400,32 @@ class PipelineRepo:
         return {r[0]: r[1] for r in rows}
 
     def db_reference_count(self, db_path: str) -> int:
-        """AD3：该库路径被多少个成功任务的输出引用（结果库面板删除前的防呆）。"""
+        """AD3：该库路径被多少个成功任务的输出引用（结果库面板删除前的防呆）。
+
+        AF1：孤儿 task（pipeline_run IS NULL，run 已删）不算引用——否则用户删光任务后
+        仍被历史残行挡住无法删库。
+        """
         with self._db.pool.connection() as conn:
             row = conn.execute(
-                "SELECT count(*) FROM tasks WHERE status = 'succeeded' AND output::text LIKE %s",
+                "SELECT count(*) FROM tasks WHERE status = 'succeeded' "
+                "AND pipeline_run IS NOT NULL AND output::text LIKE %s",
                 (f"%{db_path}%",),
             ).fetchone()
         return int(row[0]) if row else 0
 
     def db_referenced_outside(self, db_path: str, tree_ids: list[str]) -> bool:
-        """AD1：该库路径是否还被树外 run 的任务输出引用（LIKE 文本匹配，防误删共享库）。"""
+        """AD1：该库路径是否还被树外 run 的任务输出引用（LIKE 文本匹配，防误删共享库）。
+
+        AF1：孤儿 task（pipeline_run IS NULL）不算引用。
+        """
         if not tree_ids:
             return True
         with self._db.pool.connection() as conn:
             row = conn.execute(
                 """
                 SELECT 1 FROM tasks
-                WHERE pipeline_run <> ALL(%s)
+                WHERE pipeline_run IS NOT NULL
+                  AND pipeline_run <> ALL(%s)
                   AND status = 'succeeded'
                   AND output::text LIKE %s
                 LIMIT 1
@@ -419,6 +433,25 @@ class PipelineRepo:
                 (tree_ids, f"%{db_path}%"),
             ).fetchone()
         return row is not None
+
+    def failed_runs_by_file(self, file_key: str, exclude_ids: list[str]) -> list[dict]:
+        """AF1：同原件文件的全部失败态 run（含窗口外旧尝试），供删除任务时连带清理。
+
+        失败态 = failed / failed_review / cancelled / interrupted（paused 是「可继续」语义不删）。
+        """
+        statuses = ("failed", "failed_review", "cancelled", "interrupted")
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, status FROM pipeline_runs
+                WHERE input->>'file' = %s
+                  AND status = ANY(%s)
+                  AND id <> ALL(%s)
+                ORDER BY created_at
+                """,
+                (file_key, list(statuses), exclude_ids),
+            ).fetchall()
+        return [{"id": row[0], "status": row[1]} for row in rows]
 
     def outputs_by_step(self, run_id: str) -> dict[int, Any]:
         """每步最新成功任务的输出（DISTINCT ON 保证 rerun 后取最新成功而非旧任务）。
