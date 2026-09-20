@@ -38,6 +38,15 @@ def _format_cell(value) -> str:
     return str(value)
 
 
+def _month_from_source(source_path: str) -> str:
+    """AL：从原件路径提取「月份」（如 2002年3月记账凭证_1_.pdf → 2002年3月）。
+    发票凭证视图的「月份」列 first_value 直读此字段；提不到留空（absent 显示空）。"""
+    import re
+
+    m = re.search(r"(\d{4})年(\d{1,2})月", Path(source_path).name)
+    return f"{m.group(1)}年{int(m.group(2))}月" if m else ""
+
+
 def _ocr_storage_connection(p: Path):
     from command_shared import ocr_storage
 
@@ -81,6 +90,7 @@ def run(input: dict, ctx, emit) -> dict:
                     record = dict(data) if isinstance(data, dict) else {"数据": data}
                     record["页码"] = page_number
                     record["来源文件"] = Path(source_path).name
+                    record["月份"] = _month_from_source(source_path)
                     records.append(record)
         emit({"phase": "extracted", "records": len(records)})
         merged = len(paths) > 1

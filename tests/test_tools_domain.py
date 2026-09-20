@@ -452,11 +452,11 @@ def test_ocrdb_extract_records_merge_multi_db(ctx, tmp_path):
         return str(p)
 
     a = _mk_db("a.ocr_results.db", [
-        ("/a.pdf", 1, 0, {"金额": "100"}),
-        ("/a.pdf", 1, 1, {"金额": "200"}),
-        ("/a.pdf", 2, 0, {"金额": "300"}),
+        ("/2002年3月记账凭证_1_.pdf", 1, 0, {"金额": "100"}),
+        ("/2002年3月记账凭证_1_.pdf", 1, 1, {"金额": "200"}),
+        ("/2002年3月记账凭证_2_.pdf", 2, 0, {"金额": "300"}),
     ])
-    b = _mk_db("b.ocr_results.db", [("/b.pdf", 1, 0, {"金额": "999"})])
+    b = _mk_db("b.ocr_results.db", [("/2002年4月记账凭证_1_.pdf", 1, 0, {"金额": "999"})])
 
     out = load_tool("tools/ocrdb/extract_units").run(
         {"file": [a, b], "mode": "records"}, ctx, lambda e: None)
@@ -464,5 +464,9 @@ def test_ocrdb_extract_records_merge_multi_db(ctx, tmp_path):
     amounts = [r["金额"] for r in out["records"]]
     # 同页按 seq（100→200），跨库来源分组有序（a 全部在前、b 在后）
     assert amounts == ["100", "200", "300", "999"]
-    assert out["records"][0]["来源文件"] == "a.pdf"
-    assert out["records"][-1]["来源文件"] == "b.pdf"
+    assert out["records"][0]["来源文件"] == "2002年3月记账凭证_1_.pdf"
+    assert out["records"][-1]["来源文件"] == "2002年4月记账凭证_1_.pdf"
+    # AL：月份从原件文件名提取（视图「月份」列数据源）
+    assert out["records"][0]["月份"] == "2002年3月"
+    assert out["records"][2]["月份"] == "2002年3月"
+    assert out["records"][-1]["月份"] == "2002年4月"
