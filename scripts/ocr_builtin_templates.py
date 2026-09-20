@@ -14,8 +14,9 @@
 """
 
 VOUCHER_POSTPROCESS_CODE = '''
-"""凭证页级后处理：金额归一 → 借贷/大写三方校验（不平写备注）
-→ 合计大写清洗 → 大写空缺程序换算兜底。零 API 成本。"""
+"""凭证页级后处理：金额归一 → 借贷平衡与大写一致性分开校验（借贷不平写备注，
+大写不符给标准大写供人工仲裁）→ 合计大写清洗。零 API 成本。
+大写列只存识别原文：纸面大写栏空缺时保持空串，不做程序换算回填。"""
 
 import re as _re  # 钩子命名空间已预置 re/json/math，此行仅为兼容独立运行
 
@@ -130,12 +131,11 @@ def normalize_amount(text):
         return str(text).strip()
 
 
-def _fmt_cents(cents):
-    return f"{cents / 100:.2f}"
-
-
 def page_amount_check(records):
-    """对一页分录做程序校验：借方合计 = 贷方合计 = 合计大写。"""
+    """对一页分录做程序校验：借方合计 = 贷方合计 = 合计大写。
+
+    只返回结构化结果；备注文案由 transform_page 统一生成（日志与「备注」同源）。
+    """
     borrow = credit = 0
     anchors = []
     for record in records:
@@ -157,17 +157,7 @@ def page_amount_check(records):
 
     balanced = borrow == credit
     anchor_ok = anchor is None or (anchor != "CONFLICT" and anchor == borrow == credit)
-
-    if balanced and anchor_ok:
-        return {"ok": True, "borrow": borrow, "credit": credit, "anchor": anchor, "note": ""}
-
-    parts = [f"校验不平：借{_fmt_cents(borrow)} 贷{_fmt_cents(credit)}"]
-    if anchor == "CONFLICT":
-        parts.append("合计大写各行不一致(疑串行)")
-    elif anchor is not None:
-        parts.append(f"合计大写{_fmt_cents(anchor)}")
-    return {"ok": False, "borrow": borrow, "credit": credit, "anchor": anchor,
-            "note": "，".join(parts)}
+    return {"ok": balanced and anchor_ok, "borrow": borrow, "credit": credit, "anchor": anchor}
 
 
 _CN_D = "零壹贰叁肆伍陆柒捌玖"
@@ -230,55 +220,46 @@ def transform_page(records, ctx):
         for field in ("借方金额", "贷方金额"):
             record[field] = normalize_amount(record.get(field))
 
-    # 2) 程序校验：借方合计 = 贷方合计 = 合计大写；不平则写备注交人工核查
+    # 2) 程序校验：借贷不平衡（真问题）与大写不符（勾稽提示）分开报，避免误伤
     #    「合计」行（科目汇总表）不计入借贷统计，仅作合计参考
     summary_rows = [r for r in records if str(r.get("总账科目") or "").strip() == "合计"]
     body_rows = [r for r in records if str(r.get("总账科目") or "").strip() != "合计"]
     verdict = page_amount_check(body_rows)
     if not verdict["ok"]:
-        borrow = f"{verdict['borrow'] / 100:.2f}"
-        credit = f"{verdict['credit'] / 100:.2f}"
-        if summary_rows:
-            s_borrow = sum(_to_cents(str(r.get("借方金额") or "")) for r in summary_rows)
-            s_credit = sum(_to_cents(str(r.get("贷方金额") or "")) for r in summary_rows)
-            same = "，源表合计数相同" if s_borrow == s_credit else ""
-            note = (f"校验不平，借：{borrow}，贷：{credit}，"
-                    f"合计：{s_borrow / 100:.2f}/{s_credit / 100:.2f}{same}，需人工核查。")
-        elif isinstance(verdict["anchor"], int) and verdict["anchor"] in (verdict["borrow"], verdict["credit"]):
-            note = (f"校验不平，借：{borrow}，贷：{credit}，"
-                    f"合计：{verdict['anchor'] / 100:.2f}，需人工核查。")
-        elif isinstance(verdict["anchor"], int):
-            dx = f"{verdict['anchor'] / 100:.2f}"
-            total = f"{max(verdict['borrow'], verdict['credit']) / 100:.2f}"
-            note = (f"校验不平且合计识别有歧义，借：{borrow}，贷：{credit}，"
-                    f"合计大写：{dx}，合计：{total}，需人工核查")
+        borrow, credit = verdict["borrow"], verdict["credit"]
+        b_s, c_s = f"{borrow / 100:.2f}", f"{credit / 100:.2f}"
+        if borrow != credit:
+            note = f"借贷不平：借 {b_s}，贷 {c_s}"
+            if summary_rows:
+                s_borrow = sum(_to_cents(str(r.get("借方金额") or "")) for r in summary_rows)
+                s_credit = sum(_to_cents(str(r.get("贷方金额") or "")) for r in summary_rows)
+                same = "，源表合计数相同" if s_borrow == s_credit else ""
+                note += f"，源表合计 {s_borrow / 100:.2f}/{s_credit / 100:.2f}{same}"
+            note += "，需人工核查。"
+        elif verdict["anchor"] == "CONFLICT":
+            note = "合计大写各行不一致（疑串行），需人工核对原件。"
         else:
-            note = f"校验不平，借：{borrow}，贷：{credit}，需人工核查。"
+            # 借=贷 但大写不符：借贷本身平衡，多为模型误推大写，给标准大写供人工仲裁
+            raw_dx = next((str(r.get("合计大写") or "").strip() for r in records
+                           if str(r.get("合计大写") or "").strip()), "")
+            std = to_cn_upper(borrow / 100)
+            note = (f"大写与金额不符：原件大写「{raw_dx}」，按借贷合计 {b_s} 标准大写应为"
+                    f"「{std}」，请核对原件。")
         review = ctx.get("review")
         if review:
-            review(verdict["note"])
+            review(note)
         for record in records:
             record["备注"] = note
 
-    # 3) 兜底①：合计大写只保留汉字形态；含数字/￥符号一律视为误抄，清空
+    # 3) 兜底：合计大写只保留汉字形态；含数字/￥符号一律视为误抄，清空
+    #    （模型违规照抄数字格 = 纸面大写栏无手写汉字，清空以保持「只存识别原文」）
     for record in records:
         dx = str(record.get("合计大写") or "")
         if dx and any(ch.isdigit() or ch in "￥¥" for ch in dx):
             record["合计大写"] = ""
 
-    # 4) 兜底②：纸面没有手写大写（大写字段为空）时，
-    #    用合计数字程序换算人民币大写填入（锚口径与备注一致）
-    if summary_rows:
-        s_borrow = sum(_to_cents(str(r.get("借方金额") or "")) for r in summary_rows)
-        s_credit = sum(_to_cents(str(r.get("贷方金额") or "")) for r in summary_rows)
-        anchor_cents = s_borrow if s_borrow == s_credit else max(s_borrow, s_credit)
-    else:
-        anchor_cents = (verdict["borrow"] if verdict["borrow"] == verdict["credit"]
-                        else max(verdict["borrow"], verdict["credit"]))
-    if anchor_cents > 0 and not any(str(r.get("合计大写") or "").strip() for r in records):
-        dx_value = to_cn_upper(anchor_cents / 100)
-        for record in records:
-            record["合计大写"] = dx_value
+    # 4) 不做程序回填：纸面大写栏空缺时保持空串（2026-09-20 用户口径——
+    #    「合计大写」列只存识别原文，程序换算值不进列以免编造；需要标准大写看备注）
     return records
 '''.strip()
 
