@@ -39,12 +39,25 @@ def _run(hook, rows):
     return out, logs
 
 
-def test_mismatch_reports_standard_upper_but_keeps_raw(hook):
-    """借=贷但大写不符：备注给标准大写，大写列保持识别原文。"""
-    out, logs = _run(hook, [_row(borrow="30000.00", credit="30000.00", dx="叁佰万元整")])
-    assert out[0]["合计大写"] == "叁佰万元整", "大写列必须保持识别原文，不得改写"
-    assert "大写与金额不符" in out[0]["备注"] and "叁万元整" in out[0]["备注"]
-    assert logs and logs[0] == out[0]["备注"], "日志与备注同源"
+def test_mismatch_clears_fabricated_upper_and_notes_standard(hook):
+    """借=贷但大写不符（模型编造）：清空大写列，原件值与标准大写进备注；备注须简短。"""
+    out, logs = _run(hook, [_row(borrow="15949.00", credit="15949.00",
+                                 dx="壹佰伍拾玖万肆仟玖佰元整")])
+    assert out[0]["合计大写"] == "", "与借贷合计不符的大写（模型编造）必须清空"
+    note = out[0]["备注"]
+    assert note == "大写不符：原件「壹佰伍拾玖万肆仟玖佰元整」应为「壹万伍仟玖佰肆拾玖元整」"
+    assert len(note) <= 40, f"备注须简短（现 {len(note)} 字）: {note}"
+    assert logs and logs[0] == note, "日志与备注同源"
+
+
+def test_conflict_rows_also_cleared(hook):
+    """同行大写互相不一致（疑串行）：一并清空，备注给标准大写（不罗列原件值）。"""
+    out, _ = _run(hook, [
+        _row(borrow="100.00", dx="壹佰元整"),
+        _row(credit="100.00", dx="贰佰元整"),
+    ])
+    assert {r["合计大写"] for r in out} == {""}
+    assert out[0]["备注"] == "大写各行不一致，应为「壹佰元整」"
 
 
 def test_imbalance_reports_borrow_credit(hook):
@@ -68,10 +81,17 @@ def test_digit_form_upper_cleared(hook):
 
 
 def test_correct_upper_untouched(hook):
-    """识别正确的中文大写：原样保留、无备注。"""
+    """识别正确且与借贷合计一致的中文大写：原样保留、无备注。"""
     out, logs = _run(hook, [_row(borrow="511.84", credit="511.84", dx="伍佰壹拾壹元捌角肆分")])
     assert out[0]["合计大写"] == "伍佰壹拾壹元捌角肆分"
     assert out[0]["备注"] == "" and not logs
+
+
+def test_imbalance_keeps_upper(hook):
+    """借贷本身不平：金额不可信 → 不动大写列（只报借贷不平），留待人工核对。"""
+    out, _ = _run(hook, [_row(borrow="100.00"), _row(credit="200.00", dx="壹佰元整")])
+    assert any(r["合计大写"] == "壹佰元整" for r in out), "借贷不平时不得据此清空大写"
+    assert "借贷不平" in out[0]["备注"]
 
 
 def test_upper_never_becomes_digits(hook):

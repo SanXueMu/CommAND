@@ -14,9 +14,9 @@
 """
 
 VOUCHER_POSTPROCESS_CODE = '''
-"""凭证页级后处理：金额归一 → 借贷平衡与大写一致性分开校验（借贷不平写备注，
-大写不符给标准大写供人工仲裁）→ 合计大写清洗。零 API 成本。
-大写列只存识别原文：纸面大写栏空缺时保持空串，不做程序换算回填。"""
+"""凭证页级后处理：金额归一 → 借贷平衡与大写一致性分开校验（借贷不平写备注；
+借=贷但大写不符则**清空大写列**并把原件值/标准大写写进备注供人工核对）→ 合计大写清洗。
+大写列只存识别正确的大写：纸面空缺保持空串、模型编造的值清空，均不做程序换算回填。零 API 成本。"""
 
 import re as _re  # 钩子命名空间已预置 re/json/math，此行仅为兼容独立运行
 
@@ -233,18 +233,20 @@ def transform_page(records, ctx):
             if summary_rows:
                 s_borrow = sum(_to_cents(str(r.get("借方金额") or "")) for r in summary_rows)
                 s_credit = sum(_to_cents(str(r.get("贷方金额") or "")) for r in summary_rows)
-                same = "，源表合计数相同" if s_borrow == s_credit else ""
-                note += f"，源表合计 {s_borrow / 100:.2f}/{s_credit / 100:.2f}{same}"
-            note += "，需人工核查。"
-        elif verdict["anchor"] == "CONFLICT":
-            note = "合计大写各行不一致（疑串行），需人工核对原件。"
+                note += f"（源表 {s_borrow / 100:.2f}/{s_credit / 100:.2f}）"
         else:
-            # 借=贷 但大写不符：借贷本身平衡，多为模型误推大写，给标准大写供人工仲裁
-            raw_dx = next((str(r.get("合计大写") or "").strip() for r in records
-                           if str(r.get("合计大写") or "").strip()), "")
+            # 借=贷（金额自洽）而大写不符/各行不一致 → 判定为模型编造（实测：模型常把金额
+            # 数字串按「元」写成大写，如 15949.00→「壹佰伍拾玖万肆仟玖佰元整」），
+            # 故**清空大写列**（保持「只存识别正确的大写」），原件值与标准大写写进备注
+            raw_values = [str(r.get("合计大写") or "").strip() for r in records]
             std = to_cn_upper(borrow / 100)
-            note = (f"大写与金额不符：原件大写「{raw_dx}」，按借贷合计 {b_s} 标准大写应为"
-                    f"「{std}」，请核对原件。")
+            if verdict["anchor"] == "CONFLICT":
+                note = f"大写各行不一致，应为「{std}」"
+            else:
+                raw_dx = next((v for v in raw_values if v), "")
+                note = f"大写不符：原件「{raw_dx}」应为「{std}」"
+            for record in records:
+                record["合计大写"] = ""
         review = ctx.get("review")
         if review:
             review(note)
