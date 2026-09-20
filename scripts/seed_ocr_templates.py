@@ -41,6 +41,12 @@ SYSTEM_PARAMS: dict = {
         "default": False,
         "description": "识别完成后提取记录单元（供后续翻译链使用）；仅识别不需要开启",
     },
+    # AP-B：页级缓存命中时不会重识别；改过模版/规则后想拿新结果就勾这个（强制全量重跑）
+    "force": {
+        "type": ["boolean", "null"], "title": "重新识别（忽略已有结果）",
+        "default": False,
+        "description": "清掉该文件在本库的旧结果再全量识别；改过模版/规则后用，平时关闭可命中页级缓存省钱",
+    },
     # AA2：上游 qwen-vl-max 滚动快照对密集多行表格出现「只吐第一行」行为漂移，
     # 提供快照切换做对照试验/临时规避；留空走引擎默认（qwen-vl-max）。
     "model": {

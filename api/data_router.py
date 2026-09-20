@@ -36,13 +36,14 @@ def list_dbs() -> dict:
 
 
 @router.delete("/dbs")
-def delete_db(path: str) -> dict:
+def delete_db(path: str, force: bool = False) -> dict:
     """AD3：删除结果库（连同其 .raw.json 留痕）。
 
-    仅允许 data 目录内的 .ocr_results.db；被任何 run 的任务输出引用时拒绝并回报引用数
-    （先在任务清单删除对应任务）。 """
+    仅允许 data 目录内的 .ocr_results.db；被任务输出引用时默认拒绝并回报引用数
+    （先在任务清单删除对应任务）。AP-D：`force=true` 时无视引用强删——引用它的任务
+    详情会自动显示产物「已删除」（AF4），不再被卡死。 """
     try:
-        return _delete_db_impl(path)
+        return _delete_db_impl(path, force=force)
     except ToolUserError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TaskNotFoundError as exc:
@@ -51,7 +52,7 @@ def delete_db(path: str) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-def _delete_db_impl(path: str) -> dict:
+def _delete_db_impl(path: str, force: bool = False) -> dict:
     data_dir = Path(deps.get_config().data_dir).resolve()
     target = Path(path)
     try:
@@ -67,9 +68,10 @@ def _delete_db_impl(path: str) -> dict:
 
     repo = PipelineRepo(deps.get_db())
     refs = repo.db_reference_count(str(target))
-    if refs:
+    if refs and not force:
         raise TaskConflictError(
-            f"该结果库仍被 {refs} 个任务引用：请先在任务清单删除对应任务（选「并删除产物」）")
+            f"该结果库仍被 {refs} 个任务引用：可先在任务清单删除对应任务（选「并删除产物」），"
+            "或改用强制删除")
 
     removed = [resolved]
     resolved.unlink()
@@ -77,4 +79,4 @@ def _delete_db_impl(path: str) -> dict:
     if raw.is_file():
         raw.unlink()
         removed.append(raw)
-    return {"removed": [str(p) for p in removed]}
+    return {"removed": [str(p) for p in removed], "forced": bool(force), "references": refs}

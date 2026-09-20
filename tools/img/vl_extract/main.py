@@ -54,9 +54,7 @@ def run(input: dict, ctx, emit) -> dict:
             input.get("prompt") or "你是专业的文档识别助手。请仔细识别图片中的全部内容。",
             fields, input.get("rules") or "", input.get("example") or "", record_mode)
 
-    db_path = Path(input["db"]) if input.get("db") else (
-        Path(__import__("os").environ.get("COMMAND_DATA_DIR", "data"))
-        / "ocr" / f"{path.stem}.ocr_results.db")
+    db_path = Path(input["db"]) if input.get("db") else ocr_storage.default_db_path(path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = ocr_storage.connect(db_path)
     try:
@@ -79,6 +77,7 @@ def run(input: dict, ctx, emit) -> dict:
             image_max_side=int(input.get("image_max_side", 2200)),
             page_concurrency=int(input.get("page_concurrency", 3)),
             fail_circuit=int(input.get("fail_circuit", ocr_engine.PAGE_FAIL_CIRCUIT)),
+            force=bool(input.get("force")),
             progress=progress,
         )
         records = ocr_storage.read_records(connection, stats["file_hash"], path.name)

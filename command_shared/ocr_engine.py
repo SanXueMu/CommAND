@@ -1,15 +1,17 @@
 """OCR 识别引擎主链（CommOCR pipeline.process 移植）：渲染 → VL → 解析校验 → 钩子 → 落库。
 
 含态机制全部内化（与 llm_engine 同裁定）：
-- 页级缓存/断点续跑（缓存键 file_hash+source_path+row_number，跳过已存行）
+- 页级缓存/断点续跑（缓存键 file_hash+source_path+**识别指纹**；改模版/规则/钩子/模型即失效）
 - 连续失败熔断（fail_circuit）、401/403 首页即败（_AuthFail）
 - 页级并发（ThreadPoolExecutor；渲染在主线程串行——PyMuPDF 线程安全约束）
 - 文本型 PDF 直提跳过（skip_text_pdf）
+- force：忽略缓存强制全量重识别
 record 模式：逐页识别后跨页合并为一条记录（比 CommOCR 的整文档多图单请求
 对长文档更稳，行为差异已在本会话蓝图裁定记录）。
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -33,6 +35,28 @@ AUTH_FAIL_PREFIXES = ("401", "403")
 
 class _AuthFail(Exception):
     pass
+
+
+def _recognition_fingerprint(prompt: str, fields: list[str], model: str, record_mode: str,
+                             image_format: str, render_scale: float, image_max_side: int,
+                             auto_rotate: bool, lenient_fields: list[str] | None,
+                             postprocess: list[dict]) -> str:
+    """AP-A：识别配置指纹——影响识别结果的入参全在，与产出无关的（并发/熔断）不在。"""
+    material = json.dumps({
+        "prompt": prompt,
+        "fields": list(fields or []),
+        "model": model,
+        "record_mode": record_mode,
+        "image_format": image_format,
+        "render_scale": render_scale,
+        "image_max_side": image_max_side,
+        "auto_rotate": bool(auto_rotate),
+        "lenient_fields": list(lenient_fields or []),
+        "postprocess": [{"name": h.get("name", ""), "code": h.get("code", "")}
+                        for h in (postprocess or [])],
+    }, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
 
 
 def build_prompt(template: str, fields: list[str], rules: str, example: str,
@@ -84,11 +108,13 @@ def process_document(
     page_concurrency: int = 3,
     page_retries: int = PAGE_RETRIES,
     fail_circuit: int = PAGE_FAIL_CIRCUIT,
+    force: bool = False,
     progress=None,
 ) -> dict:
     """主链：识别一份文档（PDF/图片）并写入结果库。返回统计 dict。
 
     progress: callable(phase: str, message: str) 可选。
+    force: 忽略页级缓存，先清掉该文件在本库的全部行再全量重识别（AP-B）。
     """
     src = Path(path)
     if not src.is_file():
@@ -100,8 +126,15 @@ def process_document(
 
     file_hash = calculate_file_hash(src)
     source_path = src.name
-    cached = ocr_storage.get_cached_rows(connection, file_hash, source_path)
-    stats: dict = {"file": str(src), "file_hash": file_hash, "pages_cached": len(cached)}
+    # AP-A：识别配置指纹——模版/规则/钩子/模型/图像参数任一变化即失效页级缓存
+    fingerprint = _recognition_fingerprint(
+        prompt, fields, model, record_mode, image_format, render_scale,
+        image_max_side, auto_rotate, lenient_fields, postprocess or [])
+    if force:
+        ocr_storage.delete_file_rows(connection, file_hash, source_path)
+    cached = ocr_storage.get_cached_rows(connection, file_hash, source_path, fingerprint)
+    stats: dict = {"file": str(src), "file_hash": file_hash, "pages_cached": len(cached),
+                   "fingerprint": fingerprint, "forced": bool(force)}
 
     if skip_text_pdf and is_text_pdf(src):
         stats.update({"skipped_text_pdf": True, "pages_total": 0, "pages_done": 0,
@@ -132,18 +165,18 @@ def process_document(
     if record_mode == "record":
         stats.update(_process_record_mode(
             client, prompt, fields, model, image_format, hooks, lenient_fields,
-            file_hash, source_path, connection, page_jobs, progress))
+            file_hash, source_path, connection, page_jobs, fingerprint, progress))
     else:
         stats.update(_process_page_mode(
             connection, client, prompt, fields, model, image_format, hooks,
             lenient_fields, file_hash, source_path, page_jobs,
-            page_concurrency, fail_circuit, progress))
+            page_concurrency, fail_circuit, fingerprint, progress))
     return stats
 
 
 def _process_record_mode(client, prompt, fields, model, image_format, hooks,
                          lenient_fields, file_hash, source_path, connection,
-                         page_jobs, progress) -> dict:
+                         page_jobs, fingerprint, progress) -> dict:
     """整文档一记录：逐页识别，跨页合并非缺席值（同字段多值 ； 连接）。"""
     failed_pages: list[int] = []
     fix_notes: list[str] = []
@@ -181,7 +214,7 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
         final = merged_records[0] if merged_records else final
     if final:
         final["页码"] = page_jobs[0][1] if page_jobs else 1
-        ocr_storage.append_records(connection, file_hash, source_path, [(1, final)])
+        ocr_storage.append_records(connection, file_hash, source_path, [(1, final)], fingerprint)
     if progress:
         progress("recognize", f"record 模式完成 {pages_done}/{len(page_jobs)} 页")
     return {"pages_done": pages_done, "failed_pages": failed_pages,
@@ -191,7 +224,7 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
 
 def _process_page_mode(connection, client, prompt, fields, model, image_format, hooks,
                        lenient_fields, file_hash, source_path, page_jobs,
-                       page_concurrency, fail_circuit, progress) -> dict:
+                       page_concurrency, fail_circuit, fingerprint, progress) -> dict:
     """逐页逐记录：页级并发 + 熔断 + 钩子 + 落库。"""
     failed_pages: list[int] = []
     results: dict[int, tuple] = {}
@@ -259,7 +292,8 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
         records, notes = result
         payload = [(row_number, record) for record in records]
         if payload:
-            page_wrote = ocr_storage.append_records(connection, file_hash, source_path, payload)
+            page_wrote = ocr_storage.append_records(
+                connection, file_hash, source_path, payload, fingerprint)
             written += page_wrote
             if page_wrote < len(records):  # AE3 对账：入库少于解析数当场暴露
                 review_notes.append(

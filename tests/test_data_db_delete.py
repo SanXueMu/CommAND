@@ -96,3 +96,24 @@ def test_outside_or_wrong_suffix_rejected(app):
         rogue = data / "rogue.txt"
         rogue.write_text("x")
         assert c.delete("/api/data/dbs", params={"path": str(rogue)}).status_code == 400
+
+
+def test_force_delete_ignores_references(app):
+    """AP-D：force=true 无视引用强删（引用它的任务详情会显示产物「已删除」）。"""
+    application, data = app
+    db_file = data / "ocr" / "z.ocr_results.db"
+    db_file.write_bytes(b"db")
+    raw = data / "ocr" / "z.ocr_results.db.raw.json"
+    raw.write_text("{}", encoding="utf-8")
+    repo = PipelineRepo(Db(DB_URL))
+    rid = _referencing_run(repo, str(db_file))
+    try:
+        with TestClient(application) as c:
+            blocked = c.delete("/api/data/dbs", params={"path": str(db_file)})
+            assert blocked.status_code == 409
+            resp = c.delete("/api/data/dbs", params={"path": str(db_file), "force": "true"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["forced"] is True and resp.json()["references"] == 1
+        assert not db_file.exists() and not raw.exists()
+    finally:
+        _cleanup(repo, rid)

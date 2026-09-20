@@ -226,11 +226,58 @@ def test_engine_page_mode_and_breakpoint(tmp_path, monkeypatch):
     records = ocr_storage.read_records(connection, stats["file_hash"], "doc.pdf")
     assert {r["发票号"] for r in records} == {"A1", "A2"}
 
-    # 断点续跑：全部页已缓存 → 零调用
+    # 断点续跑：全部页已缓存 → 零调用（AP：同配置才算命中，故模型/提示词需一致）
     stats2 = ocr_engine.process_document(
-        pdf, connection, object(), "prompt", ["发票号", "金额"], model="m",
+        pdf, connection, object(), "prompt", ["发票号", "金额"], model="qwen-vl-max",
         skip_text_pdf=False)
     assert stats2["pages_cached"] == 2 and stats2["pages_done"] == 0
+    connection.close()
+
+
+def test_engine_cache_invalidated_by_config_change(tmp_path, monkeypatch):
+    """AP-A：识别配置（提示词/规则/钩子/模型/图像参数）变了 → 旧缓存失效、全部页重新识别。"""
+    pdf = _pdf(tmp_path / "doc.pdf", pages=2)
+    connection = ocr_storage.connect(tmp_path / "o.db")
+    ocr_storage.initialize(connection)
+    calls = {"n": 0}
+
+    def fake(*_a, **_k):
+        calls["n"] += 1
+        return json.dumps([{"发票号": f"A{calls['n']}"}], ensure_ascii=False)
+
+    monkeypatch.setattr(ocr_engine, "call_vl", fake)
+    run = lambda prompt, model="m": ocr_engine.process_document(  # noqa: E731
+        pdf, connection, object(), prompt, ["发票号"], model=model,
+        skip_text_pdf=False, page_concurrency=1)
+
+    assert run("prompt-v1")["pages_done"] == 2 and calls["n"] == 2
+    assert run("prompt-v1")["pages_cached"] == 2 and calls["n"] == 2, "同配置应命中缓存"
+    changed = run("prompt-v2")  # 改提示词（等于改了模版/规则）
+    assert changed["pages_cached"] == 0 and calls["n"] == 4, "配置变了必须重识别"
+    assert run("prompt-v2", model="other")["pages_cached"] == 0 and calls["n"] == 6, "换模型同样失效"
+    connection.close()
+
+
+def test_engine_force_ignores_cache(tmp_path, monkeypatch):
+    """AP-B：force=true 先清掉该文件旧行再全量识别（改完模版拿新结果用）。"""
+    pdf = _pdf(tmp_path / "doc.pdf", pages=2)
+    connection = ocr_storage.connect(tmp_path / "o.db")
+    ocr_storage.initialize(connection)
+    calls = {"n": 0}
+
+    def fake(*_a, **_k):
+        calls["n"] += 1
+        return json.dumps([{"发票号": f"A{calls['n']}"}], ensure_ascii=False)
+
+    monkeypatch.setattr(ocr_engine, "call_vl", fake)
+    args = (pdf, connection, object(), "prompt", ["发票号"])
+    kwargs = {"model": "m", "skip_text_pdf": False, "page_concurrency": 1}
+    ocr_engine.process_document(*args, **kwargs)
+    assert calls["n"] == 2
+    forced = ocr_engine.process_document(*args, force=True, **kwargs)
+    assert forced["forced"] is True and forced["pages_cached"] == 0 and calls["n"] == 4
+    rows = ocr_storage.read_records(connection, forced["file_hash"], "doc.pdf")
+    assert {r["发票号"] for r in rows} == {"A3", "A4"}, "旧行已被替换为新结果"
     connection.close()
 
 
