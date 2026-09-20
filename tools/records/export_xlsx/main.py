@@ -62,7 +62,10 @@ def run(input: dict, ctx, emit) -> dict:
     data_dir = Path(__import__("os").environ.get("COMMAND_DATA_DIR", "data"))
     out_dir = data_dir / "outputs" / "exports"
     out_dir.mkdir(parents=True, exist_ok=True)
-    target = out_dir / f"{re.sub(r'[\\/:*?\"<>|]+', '_', (input.get('name') or '视图导出').strip() or '视图导出')}.xlsx"
+    raw_name = (input.get("name") or "视图导出").strip() or "视图导出"
+    # 调用方可能已带 .xlsx/.xls 后缀 → 先剥掉再统一补，避免 xxx.xlsx.xlsx
+    raw_name = re.sub(r"\.(xlsx|xls)$", "", raw_name, flags=re.IGNORECASE) or "视图导出"
+    target = out_dir / f"{re.sub(r'[\\/:*?\"<>|]+', '_', raw_name)}.xlsx"
 
     workbook = Workbook()
     used: set[str] = set()

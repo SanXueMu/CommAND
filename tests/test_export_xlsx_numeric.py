@@ -45,3 +45,17 @@ def test_pure_number_strings_become_numeric_cells(tmp_path, monkeypatch, tool):
     assert ws.cell(2, 7).value == "12345678901234567890", "超长数字保留文本防精度丢失"
     assert ws.cell(2, 8).value == "007", "前导零串保留文本不丢位"
     assert ws.cell(3, 8).value == 12
+
+
+@pytest.mark.parametrize("given,expected", [
+    ("2003年1月记账凭证（2）", "2003年1月记账凭证（2）.xlsx"),
+    ("2003年1月记账凭证（2）.xlsx", "2003年1月记账凭证（2）.xlsx"),
+    ("合并导出12库.xls", "合并导出12库.xlsx"),
+    ("", "视图导出.xlsx"),
+])
+def test_export_name_never_doubles_suffix(tmp_path, monkeypatch, tool, given, expected):
+    """P2：调用方带不带 .xlsx/.xls 后缀，产物名都只出现一次后缀。"""
+    monkeypatch.setenv("COMMAND_DATA_DIR", str(tmp_path))
+    out = tool.run({"rows": [{"a": "1"}], "columns": ["a"], "name": given, "sheet_name": "视图"},
+                   None, lambda e: None)
+    assert Path(out["file"]).name == expected
