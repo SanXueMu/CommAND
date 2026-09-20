@@ -90,6 +90,9 @@ def parse_records(raw: str, fields: list[str], lenient_fields: list[str] | None 
             notes.append(
                 f"第 {i + 1} 条记录已宽松修复：补缺 {'、'.join(sorted(missing)) or '无'}、"
                 f"弃多余 {'、'.join(sorted(extra)) or '无'}")
+    # AC3 计数对账：应答条数与入库条数不一致（非对象被忽略）时留痕
+    if notes is not None and len(records) != len(data):
+        notes.append(f"模型应答 {len(data)} 条，其中 {len(data) - len(records)} 条非对象被忽略，入库 {len(records)} 条")
     return records
 
 

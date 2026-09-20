@@ -105,7 +105,8 @@ def process_document(
 
     if skip_text_pdf and is_text_pdf(src):
         stats.update({"skipped_text_pdf": True, "pages_total": 0, "pages_done": 0,
-                      "failed_pages": [], "records_written": 0, "review_notes": []})
+                      "failed_pages": [], "records_written": 0, "review_notes": [],
+                      "raw_pages": {}})
         return stats
 
     page_jobs: list[tuple[int, int, bytes]] = []
@@ -149,9 +150,11 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
     merged: dict[str, list[str]] = {}
     seen: set[str] = set()
     pages_done = 0
+    raw_pages: dict[int, str] = {}
     for row_number, page_number, image_bytes in page_jobs:
         try:
             raw = call_vl(client, prompt, image_bytes, model, image_format)
+            raw_pages[page_number] = raw
             records = parse_records(raw, fields, lenient_fields, fix_notes)
         except Exception as exc:
             failed_pages.append(page_number)
@@ -182,7 +185,8 @@ def _process_record_mode(client, prompt, fields, model, image_format, hooks,
     if progress:
         progress("recognize", f"record 模式完成 {pages_done}/{len(page_jobs)} 页")
     return {"pages_done": pages_done, "failed_pages": failed_pages,
-            "records_written": 1 if final else 0, "review_notes": notes + fix_notes}
+            "records_written": 1 if final else 0, "review_notes": notes + fix_notes,
+            "raw_pages": raw_pages}
 
 
 def _process_page_mode(connection, client, prompt, fields, model, image_format, hooks,
@@ -196,11 +200,13 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
     review_notes: list[str] = []
 
     page_fail_notes: list[str] = []
+    raw_pages: dict[int, str] = {}
 
     def recognize_page(page_number: int, image_bytes: bytes):
         notes: list[str] = []
         try:
             raw = call_vl(client, prompt, image_bytes, model, image_format)
+            raw_pages[page_number] = raw
             records = parse_records(raw, fields, lenient_fields, notes)
         except Exception as exc:
             message = str(exc)
@@ -262,4 +268,5 @@ def _process_page_mode(connection, client, prompt, fields, model, image_format, 
     return {"pages_done": done, "failed_pages": sorted(set(failed_pages)),
             "records_written": written,
             "review_notes": review_notes + page_fail_notes[:10],
+            "raw_pages": raw_pages,
             "auth_error": auth_error}

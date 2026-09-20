@@ -45,9 +45,9 @@ SYSTEM_PARAMS: dict = {
     # 提供快照切换做对照试验/临时规避；留空走引擎默认（qwen-vl-max）。
     "model": {
         "type": ["string", "null"], "title": "多模态模型",
-        "enum": ["qwen-vl-max", "qwen-vl-plus", None],
+        "examples": ["qwen-vl-max", "qwen-vl-plus"],
         "default": None,
-        "description": "留空用默认模型（qwen-vl-max）；多行识别异常时可用 qwen-vl-plus 对照",
+        "description": "留空用默认模型（qwen-vl-max）；候选 qwen-vl-max / qwen-vl-plus，也可填官方具体快照名（如 qwen-vl-max-2025-01-25）固定版本规避滚动更新行为变化",
     },
 }
 

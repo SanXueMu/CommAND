@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -93,6 +94,18 @@ def run(input: dict, ctx, emit) -> dict:
     for note in stats.get("review_notes", []):
         emit({"type": "progress", "phase": "review", "message": str(note)})
 
+    # AC2 原始应答留痕：模型逐页原文落 <结果库>.raw.json，争议可回溯（解析/钩子/模型定责）
+    raw_pages = stats.get("raw_pages") or {}
+    raw_file = ""
+    if raw_pages:
+        raw_path = db_path.with_name(db_path.name + ".raw.json")
+        raw_path.write_text(json.dumps({
+            "file": str(path),
+            "model": input.get("model") or DEFAULT_MODEL,
+            "pages": {str(k): v for k, v in sorted(raw_pages.items())},
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        raw_file = str(raw_path)
+
     auth_error = stats.get("auth_error")
     if auth_error and not records:
         # 403 多为密钥的模型白名单限制（AA2 换模型对照时常见）：带上模型名给可操作指引
@@ -113,4 +126,5 @@ def run(input: dict, ctx, emit) -> dict:
         "skipped_text_pdf": stats.get("skipped_text_pdf", False),
         "failed_pages": stats.get("failed_pages", []),
         "review_notes": stats.get("review_notes", []),
+        "raw_file": raw_file,
     }

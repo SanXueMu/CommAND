@@ -337,6 +337,11 @@ def test_tool_vl_extract_with_fake_client(tmp_path, monkeypatch):
          "prompt": "识别发票", "key_name": "dashscope"}, FakeCtx(), lambda e: None)
     assert out["records_count"] == 1 and out["records"][0]["发票号"] == "F1"
     assert out["failed_pages"] == [] and os.path.exists(out["db"])
+    # AC2：原始应答留痕——raw 文件落盘且内容 = 模型原文
+    assert out["raw_file"] and os.path.exists(out["raw_file"])
+    raw = json.load(open(out["raw_file"], encoding="utf-8"))
+    assert raw["model"] == "qwen-vl-max" and list(raw["pages"]) == ["1"]
+    assert json.loads(raw["pages"]["1"])[0]["发票号"] == "F1"
 
 
 def test_tool_vl_extract_requires_key(tmp_path, monkeypatch):
