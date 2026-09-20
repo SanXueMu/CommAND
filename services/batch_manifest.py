@@ -38,12 +38,14 @@ def path_of(data_dir: str | Path, batch_id: str) -> Path:
 
 
 def write(data_dir: str | Path, batch_id: str, root: str, batch_dir: str | Path,
-          files: list[dict], skip_exts: set[str] | None = None) -> None:
+          files: list[dict], skip_exts: set[str] | None = None,
+          source: str | None = None) -> None:
     prune(data_dir)
     payload = {
         "batch_id": batch_id, "root": root, "dir": str(batch_dir),
         "created_at": date.today().isoformat(),
         "skip_exts": sorted(skip_exts or ()), "files": files,
+        "source": source or "unknown",  # AF4：上传来源（translate/ocr 工作台）
     }
     path_of(data_dir, batch_id).write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

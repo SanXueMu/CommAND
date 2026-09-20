@@ -172,13 +172,14 @@ def _manifest_dir() -> Path:
 
 
 def _write_batch_manifest(batch_id: str, root: str, batch_dir: Path,
-                          saved: list[dict], skip_exts: set[str] | None = None) -> None:
+                          saved: list[dict], skip_exts: set[str] | None = None,
+                          source: str | None = None) -> None:
     """上传即固化批次清单：导出按它还原原目录结构，不依赖 run 是否存在/成功。
 
     顺带清理 30 天前的旧清单（防止无限增长）。
     """
     batch_manifest.write(deps.get_config().data_dir, batch_id, root, batch_dir,
-                         saved, skip_exts)
+                         saved, skip_exts, source=source)
 
 
 # 单段名长度上限（**字节**）：Linux 单段 255 字节，取 200 留余量；
@@ -282,7 +283,8 @@ def list_files(path: str | None = None, extensions: str | None = None,
 
 @router.post("/batch", status_code=201)
 async def upload_batch(files: list[UploadFile], extensions: str | None = None,
-                       skip: str | None = None, label: str | None = None) -> dict:
+                       skip: str | None = None, label: str | None = None,
+                       source: str | None = None) -> dict:
     """多文件 / 目录上传：每个 file.filename 可含相对路径（浏览器 webkitdirectory 形态）。
 
     落盘：uploads/<日期>/<uuid8>_<label>/<相对路径>。
@@ -350,7 +352,7 @@ async def upload_batch(files: list[UploadFile], extensions: str | None = None,
         shutil.rmtree(batch_dir, ignore_errors=True)
         raise
     batch_id = _new_batch_id()
-    _write_batch_manifest(batch_id, root or batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
+    _write_batch_manifest(batch_id, root or batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts, source=source)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": root or batch_dir.name.split("_", 1)[-1],
             "files": saved, "skipped": skipped_junk + _skipped_view(saved)}
@@ -361,7 +363,7 @@ def _is_zip_symlink(info: zipfile.ZipInfo) -> bool:
 
 
 @router.post("/archive", status_code=201)
-async def upload_archive(file: UploadFile, extensions: str | None = None,
+async def upload_archive(file: UploadFile, extensions: str | None = None, source: str | None = None,
                          skip: str | None = None) -> dict:
     """.zip 压缩包 → 解压到 uploads/<日期>/<uuid8>_<名>/（stdlib zipfile，零新依赖）。
 
@@ -447,7 +449,7 @@ async def upload_archive(file: UploadFile, extensions: str | None = None,
         shutil.rmtree(batch_dir, ignore_errors=True)
         raise HTTPException(status_code=422, detail=f"压缩包内没有可用的文件（跳过 {len(skipped)} 条）")
     batch_id = _new_batch_id()
-    _write_batch_manifest(batch_id, batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts)
+    _write_batch_manifest(batch_id, batch_dir.name.split("_", 1)[-1], batch_dir, saved, skip_exts, source=source)
     return {"path": str(batch_dir), "name": batch_dir.name.split("_", 1)[-1], "count": len(saved),
             "size": total, "batch_id": batch_id, "root": batch_dir.name.split("_", 1)[-1],
             "files": saved, "skipped": _skipped_view(saved) + skipped}
@@ -724,3 +726,102 @@ async def upload(file: UploadFile) -> dict:
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="空文件")
     return {"path": str(target), "name": raw_name, "size": size}
+
+
+# ---- AF4：上传原件台账（来源记录 + 引用展示 + 单删/批量删） -----------------------
+
+def _iter_batch_manifests() -> dict[str, dict]:
+    """dir 名 → manifest（含 source/batch_id/created_at）；损坏清单跳过。"""
+    out: dict[str, dict] = {}
+    for mf in _manifest_dir().glob("*.json"):
+        try:
+            payload = json.loads(mf.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        dir_name = Path(str(payload.get("dir") or "")).name
+        if dir_name:
+            out[dir_name] = payload
+    return out
+
+
+@router.get("/uploads")
+def list_uploads() -> dict:
+    """已上传原件台账：按批次目录聚合（文件数/大小/来源/引用任务数与最新状态）。
+
+    source 取批次清单里的记录（AF4 起上传端点带 source 落档；旧批次无此字段 → unknown）。
+    """
+    uploads_root = Path(deps.get_config().data_dir) / "uploads"
+    manifests = _iter_batch_manifests()
+    repo = deps.get_pipeline_repo()
+    items: list[dict] = []
+    if uploads_root.is_dir():
+        for day_dir in sorted(uploads_root.iterdir(), reverse=True):
+            if not day_dir.is_dir():
+                continue
+            for batch_dir in sorted(day_dir.iterdir(), reverse=True):
+                if not batch_dir.is_dir():
+                    continue
+                files = [f for f in batch_dir.rglob("*") if f.is_file() and not _is_os_junk(f.name)]
+                size = sum(f.stat().st_size for f in files)
+                meta = manifests.get(batch_dir.name, {})
+                refs = repo.runs_referencing_upload(batch_dir.name)
+                items.append({
+                    "dir": batch_dir.name, "date": day_dir.name,
+                    "label": batch_dir.name.split("_", 1)[-1],
+                    "path": str(batch_dir), "count": len(files), "size": size,
+                    "source": str(meta.get("source") or "unknown"),
+                    "batch_id": meta.get("batch_id"),
+                    "runs": {"count": len(refs),
+                             "latest_status": refs[0]["status"] if refs else None},
+                })
+    return {"uploads": items}
+
+
+class DeleteUploadsBody(BaseModel):
+    roots: list[str]
+
+
+@router.delete("/uploads")
+def delete_uploads(body: DeleteUploadsBody) -> dict:
+    """删除上传批次目录（单删/批量删）。被任何 run 引用（input.file 在目录内）→ 整体 409。
+
+    用户裁定：有引用先删任务（任务删除会连带失败尝试与产物，AF1/AF3）；
+    无引用原件直接删目录 + 顺带清理批次清单。
+    """
+    if not body.roots:
+        raise HTTPException(status_code=422, detail="未指定要删除的原件目录")
+    uploads_root = (Path(deps.get_config().data_dir) / "uploads").resolve()
+    repo = deps.get_pipeline_repo()
+    # 先全量校验，再统一删除（不做半批）
+    plans: list[tuple[Path, str | None]] = []
+    for raw in body.roots:
+        name = Path(raw).name  # 只接受目录名，防路径注入
+        # 目录实际位于 uploads/<日期>/<目录名>（目录名带 uuid8 前缀全局唯一）
+        matches = [m for m in uploads_root.glob(f"*/{name}") if m.is_dir()]
+        if not matches:
+            continue
+        target = matches[0].resolve()
+        if uploads_root not in target.parents:
+            raise HTTPException(status_code=422, detail=f"非法目录: {name}")
+        refs = repo.runs_referencing_upload(name)
+        if refs:
+            raise HTTPException(
+                status_code=409,
+                detail=f"「{name.split('_', 1)[-1]}」仍被 {len(refs)} 个任务引用："
+                       f"请先在任务清单删除对应任务（选「并删除产物」）")
+        plans.append((target, name))
+    removed: list[str] = []
+    for target, _ in plans:
+        shutil.rmtree(target, ignore_errors=True)
+        removed.append(target.name)
+    # 顺带清掉指向已删目录的批次清单（孤儿清单会误导批次下拉）
+    if removed:
+        gone = set(removed)
+        for mf in _manifest_dir().glob("*.json"):
+            try:
+                payload = json.loads(mf.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if Path(str(payload.get("dir") or "")).name in gone:
+                mf.unlink(missing_ok=True)
+    return {"removed": removed}

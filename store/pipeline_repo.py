@@ -76,6 +76,20 @@ class PipelineRepo:
             rows = conn.execute(sql, (flow_ids,)).fetchall()
         return {r[0] for r in rows}
 
+    def runs_referencing_upload(self, upload_dir_name: str) -> list[dict[str, Any]]:
+        """AF4：原件引用查询——input.file 落在该上传批次目录内的 run（任何状态）。
+
+        目录名含 uuid8 前缀（<uuid8>_<label>），全局唯一，LIKE 匹配安全；
+        返回 [{id, status}] 供删除防呆（有引用 → 409 提示先删任务）与面板展示。
+        """
+        with self._db.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, status FROM pipeline_runs "
+                "WHERE input->>'file' LIKE %s ORDER BY created_at DESC",
+                (f"%/{upload_dir_name}/%",),
+            ).fetchall()
+        return [{"id": r[0], "status": r[1]} for r in rows]
+
     def best_runs_by_batch(self, batch_id: str) -> list[dict[str, Any]]:
         """批次内**每个文件的最优 run**（成功优先 > 暂停/跳过 > 其它，同级取最新）。
 

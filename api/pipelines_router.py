@@ -234,7 +234,31 @@ def get_pipeline_run(run_id: str) -> dict:
         tasks = service.get_run_tasks(run_id)
     except TaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"run": deps.get_pipeline_repo().get_run(run_id), "tasks": tasks}
+    # AF4：产物失效标记——任务输出里指向的产物文件已不在盘上（被删/被清理）时列出，
+    # 前端产物区显示「已删除」徽标，避免点了下载才 404。
+    data_dir = Path(deps.get_config().data_dir).resolve()
+    missing: list[str] = []
+    for task in tasks:
+        out = task.get("output")
+        if not isinstance(out, dict):
+            continue
+        for key, value in out.items():
+            if (not isinstance(value, str) or not value
+                    or key.endswith("_name") or key == "name"):
+                continue
+            if Path(value).suffix.lower() not in {
+                    ".pdf", ".docx", ".xlsx", ".txt", ".md", ".csv", ".json",
+                    ".pptx", ".xls", ".doc", ".zip", ".html", ".png", ".jpg", ".jpeg",
+                    ".db"}:
+                continue
+            try:
+                resolved = Path(value).resolve()
+            except OSError:
+                continue
+            if data_dir in resolved.parents and not resolved.exists():
+                missing.append(value)
+    return {"run": deps.get_pipeline_repo().get_run(run_id), "tasks": tasks,
+            "missing_artifacts": sorted(set(missing))}
 
 
 @runs_router.post("/rerun-batch", status_code=202)
