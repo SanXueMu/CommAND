@@ -43,7 +43,6 @@ OCR_VIEW: dict = {
     "props": {
         # 页眉渲染：归入「工作区」下拉（替换原先的独立 Tab）
         "nav": {"kind": "child", "group": "work", "label": "OCR 工作台"},
-        "description": "一站式识别工作台：选择识别模版，上传图片或 PDF，识别后查看结果并导出。",
         "recognizeFlow": "flow.ocr.smart",
         "exportFlow": "flow.ocrdb.view",
         # 本工作台的任务清单过滤（通用 RunListPanel 用：只列 OCR 相关流）
@@ -56,6 +55,9 @@ OCR_VIEW: dict = {
         "viewTool": "records.view.query",
         "templatesPath": "/ocr/templates",
         "recordsPath": "/ocr/records",
+        "dbsPath": "/ocr/records/dbs",
+        "records": {"export": False},
+        # UI 原则（2026-09-24）：结果 Tab 仅展示（导出只在视图 Tab）；面板默认收纳等由组件内置
         "dbsPath": "/ocr/records/dbs",
         # 批量入口声明（存在才显示「单文件 / 批量」切换）：一次上传多文件/目录/压缩包，
         # 逐文件各起一条识别任务（各自留记录与产物）
