@@ -11,6 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 import pymupdf as fitz
+from PIL import Image
 
 SUPPORTED_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 
@@ -59,8 +60,10 @@ def render_page(page, scale: float = 2.0, max_side: int = 2200, image_format: st
     return data
 
 
-# 顺时针旋转角度 → PIL transpose（PIL 的 ROTATE_* 是逆时针，注意映射）
-_CW_TRANSPOSE = {90: 6, 180: 3, 270: 2}  # Image.ROTATE_270 / ROTATE_180 / ROTATE_90
+# 顺时针旋转角度 → PIL transpose。PIL 的 ROTATE_* 是逆时针，故 CW90=ROTATE_270、CW270=ROTATE_90。
+# ⚠ 别用数字字面量：Pillow 的 TRANSPOSE=5/TRANSVERSE=6 是镜像翻折不是旋转——
+#   此前 90 分支误写 6 号导致歪页被镜像（像从纸背面看字），模型全页幻觉（2026-09-21 定案）。
+_CW_TRANSPOSE = {90: Image.ROTATE_270, 180: Image.ROTATE_180, 270: Image.ROTATE_90}
 
 
 def detect_orientation_osd(image_bytes: bytes, min_confidence: float = 0.0,

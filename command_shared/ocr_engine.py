@@ -32,6 +32,11 @@ PAGE_FAIL_CIRCUIT = 5
 PAGE_RETRIES = 3
 AUTH_FAIL_PREFIXES = ("401", "403")
 
+# 渲染/旋转管线版本：进识别指纹——管线本身修过 bug 就 bump，旧缓存自动失效重跑。
+# v2（2026-09-21）：修复 ocr_render 90° 回正误用 TRANSVERSE（镜像）的真 bug——
+# 此前所有被 OSD 判为需回正 90° 的页发给模型的是镜像图，产出全页幻觉记录。
+RENDER_PIPELINE_VERSION = "v2"
+
 
 class _AuthFail(Exception):
     pass
@@ -41,7 +46,8 @@ def _recognition_fingerprint(prompt: str, fields: list[str], model: str, record_
                              image_format: str, render_scale: float, image_max_side: int,
                              auto_rotate: bool, lenient_fields: list[str] | None,
                              postprocess: list[dict]) -> str:
-    """AP-A：识别配置指纹——影响识别结果的入参全在，与产出无关的（并发/熔断）不在。"""
+    """AP-A：识别配置指纹——影响识别结果的入参全在，与产出无关的（并发/熔断）不在。
+    渲染管线版本也计入：渲染代码修过 bug 后，旧缓存必须整体失效（RENDER_PIPELINE_VERSION）。"""
     material = json.dumps({
         "prompt": prompt,
         "fields": list(fields or []),
@@ -51,6 +57,7 @@ def _recognition_fingerprint(prompt: str, fields: list[str], model: str, record_
         "render_scale": render_scale,
         "image_max_side": image_max_side,
         "auto_rotate": bool(auto_rotate),
+        "render_pipeline": RENDER_PIPELINE_VERSION if auto_rotate else "off",
         "lenient_fields": list(lenient_fields or []),
         "postprocess": [{"name": h.get("name", ""), "code": h.get("code", "")}
                         for h in (postprocess or [])],
