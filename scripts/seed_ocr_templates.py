@@ -28,13 +28,13 @@ from command_shared.ocr_templates import TemplateStore  # noqa: E402
 # 伪默认值（voucher/contract/…）会触发「密钥不存在」暂停 —— 已废除默认值、改为密钥下拉。
 SYSTEM_PARAMS: dict = {
     "key_name": {
-        "type": ["string", "null"], "title": "识别所用密钥", "format": "keys",
-        "description": "调用视觉模型所用命名密钥；留空用默认密钥",
+        "type": ["string", "null"], "title": "识别密钥", "format": "keys",
+        "description": "留空用默认",
     },
     "auto_rotate": {
-        "type": ["boolean", "null"], "title": "自动旋转",
+        "type": ["boolean", "null"], "title": "自动转正",
         "default": True,
-        "description": "歪页按内容方向检测回正（空白页/低置信度不动）",
+        "description": "歪页自动回正",
     },
     "export_units": {
         "type": ["boolean", "null"], "title": "导出识别单元",
@@ -84,8 +84,8 @@ def _raw_templates() -> list[dict]:
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "skip_text_pdf": {"type": ["boolean", "null"], "title": "文本层PDF直读", "default": False,
-                                      "description": "历史合同扫描件建议关闭"},
+                    "skip_text_pdf": {"type": ["boolean", "null"], "title": "文本层直读", "default": False,
+                                      "description": "文本 PDF 跳过视觉识别"},
                 },
             },
         },
@@ -114,8 +114,8 @@ def _from_commocr(var: str, data: dict) -> dict:
     if data.get("model"):
         props["model"] = {"type": ["string", "null"], "title": "多模态模型", "default": data["model"]}
     if data.get("skip_text_pdf") is not None:
-        props["skip_text_pdf"] = {"type": ["boolean", "null"], "title": "文本层PDF直读",
-                                  "default": bool(data["skip_text_pdf"])}
+        props["skip_text_pdf"] = {"type": ["boolean", "null"], "title": "文本层直读",
+                                  "default": bool(data["skip_text_pdf"]), "description": "文本 PDF 跳过视觉识别"}
     return {
         "id": tid, "name": data["name"], "category": category, "source_id": data["source_id"],
         "prompt_template": data["prompt_template"], "fields": data["fields"],
