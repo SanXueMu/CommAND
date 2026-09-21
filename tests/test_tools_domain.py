@@ -506,11 +506,10 @@ def test_ocrdb_extract_records_month_order(ctx, tmp_path):
 
 
 def test_ocrdb_extract_records_range_month_disambiguation(ctx, tmp_path):
-    """AR：区间文件名（1993年9月-10月）月份消歧——凭证日期限定在区间内才算数。
+    """AR2：区间文件名（1993年9月-10月）月份列直接写范围串——"9至10月"。
 
-    - 日期月份落在区间 → 用日期（9/10 各归各位，跨格式 1993-10-5 亦可）
-    - 日期出界（OCR 把 10 误读成 1）或无日期 → 月份留空（年份照填），排序回落区间首月聚组
-    - 排序辅助键 _sk 不进导出产物
+    凭证日期识别率不足，逐条消歧不可靠；文件名范围即权威口径。
+    所有行同值；排序键取区间首月（同文件聚组、页序稳定）；_sk 不进导出产物。
     """
     import json
 
@@ -532,25 +531,23 @@ def test_ocrdb_extract_records_range_month_disambiguation(ctx, tmp_path):
     rng = "/蜀棱公司1993年9月-10月记账凭证.pdf"
     db = _mk_db("r.ocr_results.db", [
         (rng, 1, {"日期": "1993年9月15日", "金额": "a"}),
-        (rng, 2, {"日期": "1993年1月5日", "金额": "misread"}),  # OCR 误读 10→1：出界留空
-        (rng, 3, {"金额": "nodate"}),                           # 无日期：留空
-        (rng, 4, {"日期": "1993-10-5", "金额": "b"}),           # 数字体日期：归 10
+        (rng, 2, {"日期": "1993年1月5日", "金额": "misread"}),
+        (rng, 3, {"金额": "nodate"}),
+        (rng, 4, {"日期": "1993-10-5", "金额": "b"}),
     ])
     out = load_tool("tools/ocrdb/extract_units").run(
         {"file": db, "mode": "records"}, ctx, lambda e: None)
-    rows = {r["金额"]: r for r in out["records"]}
-    assert rows["a"]["月份"] == "9" and rows["a"]["年份"] == "1993"
-    assert rows["b"]["月份"] == "10" and rows["b"]["年份"] == "1993"
-    assert rows["misread"]["月份"] == "" and rows["misread"]["年份"] == "1993"
-    assert rows["nodate"]["月份"] == "" and rows["nodate"]["年份"] == "1993"
-    # 空月份行回落区间首月做排序键 → 与同文件聚组且保持页序（不被踢到全表末尾）
+    # 区间文件：全部行月份=范围串（日期字段不参与判定）
+    for r in out["records"]:
+        assert r["月份"] == "9至10月" and r["年份"] == "1993"
+    # 同文件聚组且保持页序
     order = [r["金额"] for r in out["records"]]
     assert order == ["a", "misread", "nodate", "b"], order
     assert all("_sk" not in r for r in out["records"])
 
 
 def test_ocrdb_extract_records_cross_year_range(ctx, tmp_path):
-    """AR：跨年区间（1993年11月-1994年1月）——次年 1 月行年份/月份都取自凭证日期。"""
+    """AR2：跨年区间（1993年11月-1994年1月）——月份列写 "11至1月"，年份取文件名年。"""
     import json
 
     from command_shared import ocr_storage
@@ -567,7 +564,7 @@ def test_ocrdb_extract_records_cross_year_range(ctx, tmp_path):
     conn.close()
     out = load_tool("tools/ocrdb/extract_units").run(
         {"file": str(p), "mode": "records"}, ctx, lambda e: None)
-    assert out["records"][0]["年份"] == "1994" and out["records"][0]["月份"] == "1"
+    assert out["records"][0]["年份"] == "1993" and out["records"][0]["月份"] == "11至1月"
 
 
 def test_ocrdb_extract_records_single_month_filename_authoritative(ctx, tmp_path):
