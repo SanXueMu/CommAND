@@ -39,13 +39,13 @@ def _format_cell(value) -> str:
 
 
 def _year_month_from_source(source_path: str) -> tuple[str, str, str]:
-    """AO/AR：从原件文件名提取（年份, 首月, 尾月）三元组纯数字串。
+    """AO/AR：从原件文件名提取（年份, 首月, 尾月）三元组，月份两位补零。
 
-    - 单月：2002年3月记账凭证_1_.pdf → ("2002", "3", "")
-    - 区间：1993年9月-10月记账凭证.pdf → ("1993", "9", "10")；2001年4-12月 → ("2001", "4", "12")
-    区间文件名的月份列按 AR2 直接写范围串（"9至10月"）——凭证日期识别率不足，
-    逐条消歧不可靠；文件名范围即用户认定的权威口径。
-    拆两列是为 Excel 数值排序正确（「2002年10月」按文本序会排在「2002年2月」之前）。
+    - 单月：2002年3月记账凭证_1_.pdf → ("2002", "03", "")
+    - 区间：1993年9月-10月记账凭证.pdf → ("1993", "09", "10")；2001年4-12月 → ("2001", "04", "12")
+    AR2：区间文件名的月份列写范围串（"09-10"）。AR3 两位补零（"06-08"）——
+    文本升序排序时 "11-12" 不再跑到 "06-08" 前；补零串在导出端按前导零规则
+    保留文本单元格（不数值化），排序语义稳定。
     提不到时三元组皆空。
     """
     import re
@@ -54,9 +54,9 @@ def _year_month_from_source(source_path: str) -> tuple[str, str, str]:
     m = re.search(
         r"(\d{4})年\s*(\d{1,2})\s*月?\s*[-—~至到]\s*(?:\d{4}年\s*)?(\d{1,2})\s*月", name)
     if m:
-        return (m.group(1), str(int(m.group(2))), str(int(m.group(3))))
+        return (m.group(1), f"{int(m.group(2)):02d}", f"{int(m.group(3)):02d}")
     m = re.search(r"(\d{4})年(\d{1,2})月", name)
-    return (m.group(1), str(int(m.group(2))), "") if m else ("", "", "")
+    return (m.group(1), f"{int(m.group(2)):02d}", "") if m else ("", "", "")
 
 
 def _year_month_key(record: dict) -> tuple[int, int]:
@@ -120,13 +120,14 @@ def run(input: dict, ctx, emit) -> dict:
                     year, month, month_end = _year_month_from_source(source_path)
                     record["年份"] = year
                     if not month_end:
-                        # 单月（或无名）文件名：现行为不变——文件名权威
+                        # 单月（或无名）文件名：文件名权威，两位补零（"03"）
                         record["月份"] = month
                     else:
-                        # AR2：区间文件名——月份列直接写范围串（"9至10月"）。
-                        # 凭证日期识别率不足，逐条消歧会产生大量空值；
-                        # 文件名范围即权威口径。排序键取首月（同文件聚组、页序稳定）
-                        record["月份"] = f"{month}至{month_end}月"
+                        # AR2/AR3：区间文件名——月份列写补零范围串（"06-08"）。
+                        # 凭证日期识别率不足，逐条消歧不可靠；文件名范围即权威口径。
+                        # 两位补零保证文本升序排序正确（"11-12" 不再跑到 "06-08" 前）。
+                        # 排序键取首月（同文件聚组、页序稳定）
+                        record["月份"] = f"{month}-{month_end}"
                         record["_sk"] = (int(year), int(month))
                     records.append(record)
         # AO2：行序按（年份, 月份）数字序（原按 source_path 字典序会把 10 月排在 1 月前）；

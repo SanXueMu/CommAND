@@ -467,9 +467,9 @@ def test_ocrdb_extract_records_merge_multi_db(ctx, tmp_path):
     assert out["records"][0]["来源文件"] == "2002年3月记账凭证_1_.pdf"
     assert out["records"][-1]["来源文件"] == "2002年4月记账凭证_1_.pdf"
     # AO：年份/月份拆两列纯数字串（来源仍是文件名；Excel 数值排序正确）
-    assert out["records"][0]["年份"] == "2002" and out["records"][0]["月份"] == "3"
-    assert out["records"][2]["年份"] == "2002" and out["records"][2]["月份"] == "3"
-    assert out["records"][-1]["年份"] == "2002" and out["records"][-1]["月份"] == "4"
+    assert out["records"][0]["年份"] == "2002" and out["records"][0]["月份"] == "03"
+    assert out["records"][2]["年份"] == "2002" and out["records"][2]["月份"] == "03"
+    assert out["records"][-1]["年份"] == "2002" and out["records"][-1]["月份"] == "04"
 
 
 def test_ocrdb_extract_records_month_order(ctx, tmp_path):
@@ -496,7 +496,7 @@ def test_ocrdb_extract_records_month_order(ctx, tmp_path):
     out = load_tool("tools/ocrdb/extract_units").run(
         {"file": [oct_db, feb_db], "mode": "records"}, ctx, lambda e: None)
     months = [r["月份"] for r in out["records"]]
-    assert months == ["2", "10"], f"行序应按月份数字序: {months}"
+    assert months == ["02", "10"], f"行序应按月份数字序: {months}"
     assert [r["年份"] for r in out["records"]] == ["2002", "2002"]
     # 无年月模式的来源：两列留空且排最后
     other = _mk_db("other.ocr_results.db", "/无年月标记.pdf")
@@ -506,7 +506,7 @@ def test_ocrdb_extract_records_month_order(ctx, tmp_path):
 
 
 def test_ocrdb_extract_records_range_month_disambiguation(ctx, tmp_path):
-    """AR2：区间文件名（1993年9月-10月）月份列直接写范围串——"9至10月"。
+    """AR2：区间文件名（1993年9月-10月）月份列直接写补零范围串——"09-10"。
 
     凭证日期识别率不足，逐条消歧不可靠；文件名范围即权威口径。
     所有行同值；排序键取区间首月（同文件聚组、页序稳定）；_sk 不进导出产物。
@@ -539,7 +539,7 @@ def test_ocrdb_extract_records_range_month_disambiguation(ctx, tmp_path):
         {"file": db, "mode": "records"}, ctx, lambda e: None)
     # 区间文件：全部行月份=范围串（日期字段不参与判定）
     for r in out["records"]:
-        assert r["月份"] == "9至10月" and r["年份"] == "1993"
+        assert r["月份"] == "09-10" and r["年份"] == "1993"
     # 同文件聚组且保持页序
     order = [r["金额"] for r in out["records"]]
     assert order == ["a", "misread", "nodate", "b"], order
@@ -547,7 +547,7 @@ def test_ocrdb_extract_records_range_month_disambiguation(ctx, tmp_path):
 
 
 def test_ocrdb_extract_records_cross_year_range(ctx, tmp_path):
-    """AR2：跨年区间（1993年11月-1994年1月）——月份列写 "11至1月"，年份取文件名年。"""
+    """AR2：跨年区间（1993年11月-1994年1月）——月份列写 "11-01"，年份取文件名年。"""
     import json
 
     from command_shared import ocr_storage
@@ -564,7 +564,7 @@ def test_ocrdb_extract_records_cross_year_range(ctx, tmp_path):
     conn.close()
     out = load_tool("tools/ocrdb/extract_units").run(
         {"file": str(p), "mode": "records"}, ctx, lambda e: None)
-    assert out["records"][0]["年份"] == "1993" and out["records"][0]["月份"] == "11至1月"
+    assert out["records"][0]["年份"] == "1993" and out["records"][0]["月份"] == "11-01"
 
 
 def test_ocrdb_extract_records_single_month_filename_authoritative(ctx, tmp_path):
@@ -585,4 +585,4 @@ def test_ocrdb_extract_records_single_month_filename_authoritative(ctx, tmp_path
     conn.close()
     out = load_tool("tools/ocrdb/extract_units").run(
         {"file": str(p), "mode": "records"}, ctx, lambda e: None)
-    assert out["records"][0]["年份"] == "2002" and out["records"][0]["月份"] == "3"
+    assert out["records"][0]["年份"] == "2002" and out["records"][0]["月份"] == "03"
