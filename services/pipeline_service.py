@@ -13,6 +13,7 @@ from core.pipeline import resolve_input
 from services.dispatch_service import DispatchService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
+from services.run_recovery_service import RunRecoveryService
 from services.run_step_coordinator import RunStepCoordinator
 from services.subrun_cascade_coordinator import SubrunCascadeCoordinator
 from services.subrun_coordinator import SubrunCoordinator
@@ -72,6 +73,10 @@ class PipelineService:
         self._lifecycle = lifecycle_service or RunLifecycleService(
             pipeline_repo=pipeline_repo, dispatch_service=dispatch_service,
             run_event_repo=run_event_repo)
+        self._recovery = RunRecoveryService(
+            pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
+            submit=self._submit, spawn_subrun=self._spawn_subrun,
+            finish_and_cascade=self._finish_and_cascade, resume=self.resume_run)
         self._step_coordinator = RunStepCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit, spawn_subrun=self._spawn_subrun,
@@ -241,74 +246,7 @@ class PipelineService:
         return self._lifecycle.recover_stale()
 
     def resume_run(self, run_id: str) -> dict[str, Any]:
-        """恢复即查询（重放）：定位首个未成功步骤分派；已 succeeded 步骤永不重发。"""
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        if not self._pipeline_repo.cas_run_status(run_id, ("paused",), "running"):
-            if run["status"] == "running":
-                return {"run_id": run_id, "status": "running"}  # 幂等
-            raise TaskConflictError(f"run 状态不可恢复: {run['status']}")
-        self._audit(run_id, None, "resume_requested")
-
-        definition = self._pipeline_repo.get_definition(run["pipeline_id"])
-        steps = definition["steps"]
-        history = self._pipeline_repo.outputs_by_step(run_id)
-        latest = self._pipeline_repo.latest_task_by_step(run_id)
-        dispatched: dict[str, Any] | None = None
-
-        skipped = self._run_events.skipped_steps(run_id) if self._run_events else set()
-        subruns = self._pipeline_repo.get_subruns(run_id)  # C1：pipeline 步的状态载体是子 run
-        for n, step in enumerate(steps):
-            if "pipeline" in step:
-                sub = subruns.get(n)
-                if sub is None:
-                    try:
-                        prev_output = history.get(n - 1)
-                        self._spawn_subrun(run_id, n, step, run, prev_output, history)
-                        dispatched = {"handle": None}
-                    except (ToolUserError, ToolNotFoundError) as exc:
-                        self._finish_and_cascade(run_id, "failed", error={
-                            "kind": "user", "message": f"恢复时第 {n} 步子流无法启动: {exc}"})
-                    break
-                if sub["status"] == "succeeded":
-                    continue  # 子流已成功，等同已完成步
-                if sub["status"] == "paused":
-                    self.resume_run(sub["id"])  # 父复活则暂停的子流一并续跑
-                    break
-                break  # running（等级联回调）或终态失败（父已被级联收口）
-            t = latest.get(n)
-            if t is None:
-                if n in skipped:
-                    continue  # D2：该步曾 when 跳过，重放时继续跳
-                prev_output = history.get(n - 1)
-                try:
-                    resolved = resolve_input(step["input"], run["input"], prev_output, history)
-                    dispatched = self._submit(definition, run_id, n, resolved)
-                except (ToolUserError, ToolNotFoundError) as exc:
-                    self._pipeline_repo.finish_run(run_id, "failed", error={
-                        "kind": "user", "message": f"恢复时第 {n} 步无法入队: {exc}"})
-                break
-            if t["status"] in ("queued", "running"):
-                break  # 暂停期间仍有活任务，等它终态触发 advance
-            if t["status"] == "succeeded":
-                if n == len(steps) - 1:
-                    self._finish_and_cascade(run_id, "succeeded")
-                continue
-            # cancelled / interrupted / failed*：以留档 input 从断点重发本步
-            try:
-                resolved = dict(t["input"])
-                dispatched = self._submit(definition, run_id, n, resolved)
-            except ToolNotFoundError as exc:
-                self._pipeline_repo.finish_run(run_id, "failed", error={
-                    "kind": "user", "message": f"恢复时第 {n} 步工具不可用: {exc}"})
-                break
-            break
-
-        self._audit(run_id, None, "resumed",
-                    detail={"dispatched": dispatched["handle"] if dispatched else None})
-        return {"run_id": run_id, "status": "running",
-                "dispatched": dispatched["handle"] if dispatched else None}
+        return self._recovery.resume_run(run_id)
 
     def abort_run(self, run_id: str) -> dict[str, Any]:
         return self._lifecycle.abort(run_id)
