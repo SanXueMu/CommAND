@@ -12,6 +12,7 @@ from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError,
 from core.pipeline import resolve_input
 from services.dispatch_service import DispatchService
 from services.batch_rerun_service import BatchRerunService
+from services.run_artifact_service import RunArtifactService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
@@ -31,9 +32,6 @@ logger = logging.getLogger("command.pipeline")
 
 # 删除运行中的 run 时：中止后等待活跃任务收口的秒数（超时仍删，pending 回报）
 DELETE_ABORT_WAIT_S = 10.0
-# 可打包下载的产物后缀（文档类；排除 .json/.db 等中间态文件）
-ARTIFACT_SUFFIXES = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".md", ".csv", ".zip"}
-
 # 能力不可用（模型未开通/无权限/额度）且**没有**可降级等价流时的可操作提示：
 # 把 run 标为 paused，用户换好密钥后点「继续」即可重试原流。
 _UNAVAILABLE_HINT = (
@@ -85,6 +83,8 @@ class PipelineService:
             cancel=self._dispatch.cancel, submit=self._submit)
         self._queries = RunQueryService(
             pipeline_repo=pipeline_repo, task_repo=task_repo, run_event_repo=run_event_repo)
+        self._artifacts = RunArtifactService(
+            pipeline_repo, task_repo, data_dir, self._run_tree_ids, self.list_runs)
         self._step_coordinator = RunStepCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit, spawn_subrun=self._spawn_subrun,
@@ -452,91 +452,14 @@ class PipelineService:
             logger.exception("决定性错误清理产物失败 run=%s", run_id)
 
     def collect_run_artifacts(self, run_id: str, scope: str = "final") -> list[dict[str, Any]]:
-        """收集某 run 的产物文件（供批量打包下载）。
-
-        scope=final 只取**最后一步**的产物（用户要的成果）；all 取每一步（含中间临时产物）。
-        判定方式：该步 output 里指向 data_dir 内**真实存在**的文件路径（`path`/`layered_file`/
-        `render_file` … 任意键），排除 `*_name` 这类纯名称键。
-        """
-        if self._pipeline_repo.get_run(run_id) is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        outputs = self._pipeline_repo.outputs_by_step(run_id)
-        if scope == "final" and outputs:
-            outputs = {max(outputs): outputs[max(outputs)]}
-        root = self._data_dir.resolve() if self._data_dir is not None else None
-        found: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for step in sorted(outputs):
-            out = outputs[step]
-            if not isinstance(out, dict):
-                continue
-            for key, value in out.items():
-                if not isinstance(value, str) or not value or key.endswith("_name") or key == "name":
-                    continue
-                if Path(value).suffix.lower() not in ARTIFACT_SUFFIXES:
-                    continue
-                try:
-                    candidate = Path(value)
-                    if not candidate.is_absolute() or not candidate.is_file():
-                        continue
-                    resolved = candidate.resolve()
-                except OSError:
-                    continue
-                if root is not None and root not in resolved.parents:
-                    continue
-                if str(resolved) in seen:
-                    continue
-                seen.add(str(resolved))
-                # 显示名：`xxx_file` 配 `xxx_name`（如 layered_file/layered_name），否则回落 output.name
-                base = key[:-5] if key.endswith("_file") else key
-                name = out.get(f"{base}_name") or out.get("name") or resolved.name
-                found.append({"step": step, "key": key, "name": str(name),
-                              "path": str(resolved), "size": resolved.stat().st_size})
-        return found
+        return self._artifacts.collect(run_id, scope)
 
     def run_artifact_usage(self, run_id: str) -> dict[str, int]:
-        """单个 run（含子 run）的产物占用：`{files, bytes, dirs}`（只读，不删任何东西）。"""
-        empty = {"files": 0, "bytes": 0, "dirs": 0}
-        if self._data_dir is None:
-            return empty
-        root = (self._data_dir / "outputs").resolve()
-        files = bytes_found = dirs = 0
-        for rid in self._run_tree_ids(run_id):
-            for task in self._task_repo.list_by_pipeline_run(rid):
-                target = (root / str(task["handle"])).resolve()
-                if root not in target.parents or not target.is_dir():
-                    continue
-                dirs += 1
-                for path in target.rglob("*"):
-                    if path.is_file():
-                        files += 1
-                        try:
-                            bytes_found += path.stat().st_size
-                        except OSError:
-                            pass
-        return {"files": files, "bytes": bytes_found, "dirs": dirs}
+        return self._artifacts.usage(run_id)
 
     def usage_report(self, run_ids: list[str] | None = None, pipeline_id: str | None = None,
                      limit: int = 50) -> dict[str, Any]:
-        """产物占用报告（任务列表展示占用 / 清理前预演）：逐 run 明细 + 合计。"""
-        if run_ids:
-            targets = list(dict.fromkeys(str(r) for r in run_ids))
-        else:
-            targets = [r["id"] for r in self.list_runs(pipeline_id=pipeline_id, limit=limit)["runs"]]
-        rows: list[dict[str, Any]] = []
-        missing: list[str] = []
-        total = {"files": 0, "bytes": 0, "dirs": 0}
-        for run_id in targets:
-            run = self._pipeline_repo.get_run(run_id)
-            if run is None:
-                missing.append(run_id)
-                continue
-            usage = self.run_artifact_usage(run_id)
-            rows.append({"run_id": run_id, "pipeline_id": run["pipeline_id"], "status": run["status"],
-                         "created_at": str(run.get("created_at") or ""), **usage})
-            for key in total:
-                total[key] += usage[key]
-        return {"runs": rows, "total": total, "missing": missing}
+        return self._artifacts.usage_report(run_ids, pipeline_id, limit)
 
     def _purge_artifacts(self, handles: list[str]) -> dict[str, int]:
         """删除任务产物目录 `data/outputs/<handle>/`（最终产物与中间临时产物一并清）。"""
