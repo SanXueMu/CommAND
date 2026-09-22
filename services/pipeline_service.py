@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
-import time
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +14,7 @@ from services.run_artifact_service import RunArtifactService
 from services.run_submission_service import RunSubmissionService
 from services.run_completion_service import RunCompletionService
 from services.run_deletion_service import RunDeletionService
+from services.artifact_cleanup_service import ArtifactCleanupService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
@@ -33,15 +32,6 @@ from store.tool_repo import ToolRepo
 
 logger = logging.getLogger("command.pipeline")
 
-# 删除运行中的 run 时：中止后等待活跃任务收口的秒数（超时仍删，pending 回报）
-DELETE_ABORT_WAIT_S = 10.0
-# 能力不可用（模型未开通/无权限/额度）且**没有**可降级等价流时的可操作提示：
-# 把 run 标为 paused，用户换好密钥后点「继续」即可重试原流。
-_UNAVAILABLE_HINT = (
-    "该密钥/模型当前不可用（未开通、无权限或额度问题）：请在「APIKey管理」确认密钥已开通该模型，"
-    "换好密钥后点「继续」重试；若该密钥确实没有该模型权限，请改用其它处理方式"
-    "（例如把图片转为 PDF 后用「版式翻译」）"
-)
 
 
 class PipelineService:
@@ -71,6 +61,7 @@ class PipelineService:
         self._dispatch = dispatch_service
         self._run_events = run_event_repo
         self._data_dir = Path(data_dir) if data_dir is not None else None
+        self._cleanup = ArtifactCleanupService(pipeline_repo, self._data_dir)
         self._key_repo = key_repo
         self._definitions = definition_service or PipelineDefinitionService(
             pipeline_repo=pipeline_repo, tool_repo=tool_repo, key_repo=key_repo)
@@ -106,8 +97,7 @@ class PipelineService:
             self._subrun_cascade.cascade)
         self._deletion = RunDeletionService(
             pipeline_repo, task_repo, self.abort_run, self._run_tree_ids,
-            self._purge_artifacts,
-            lambda tree_ids: purge_ocr_dbs(self._pipeline_repo, self._data_dir, tree_ids))
+            self._purge_artifacts, self._cleanup.purge_ocr_dbs)
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -338,76 +328,8 @@ class PipelineService:
         return self._artifacts.usage_report(run_ids, pipeline_id, limit)
 
     def _purge_artifacts(self, handles: list[str]) -> dict[str, int]:
-        """删除任务产物目录 `data/outputs/<handle>/`（最终产物与中间临时产物一并清）。"""
-        empty = {"files_removed": 0, "bytes_freed": 0, "dirs_removed": 0}
-        if self._data_dir is None or not handles:
-            return empty
-        root = (self._data_dir / "outputs")
-        if not root.is_dir():
-            return empty
-        root = root.resolve()
-        files_removed = bytes_freed = dirs_removed = 0
-        for handle in handles:
-            target = (root / str(handle)).resolve()
-            if root not in target.parents or not target.is_dir():  # 防越界与符号链接逃逸
-                continue
-            for path in target.rglob("*"):
-                if path.is_file():
-                    try:
-                        bytes_freed += path.stat().st_size
-                    except OSError:
-                        pass
-                    files_removed += 1
-            shutil.rmtree(target, ignore_errors=True)
-            dirs_removed += 1
-        return {"files_removed": files_removed, "bytes_freed": bytes_freed,
-                "dirs_removed": dirs_removed}
-
-
-def _iter_output_strings(value: Any):
-    """递归取出 output 里全部字符串值（dict 键值/列表元素）。"""
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for v in value.values():
-            yield from _iter_output_strings(v)
-    elif isinstance(value, (list, tuple)):
-        for v in value:
-            yield from _iter_output_strings(v)
+        return self._cleanup.purge_artifacts(handles)
 
 
 def purge_ocr_dbs(repo: PipelineRepo, data_dir: Path | None, tree_ids: list[str]) -> dict:
-    """AD1：清理 run 树的 OCR 结果库（*.ocr_results.db 及其 .raw.json 留痕）。
-
-    只动 data_dir 内、后缀匹配的文件；被树外 run 的任务输出引用的库跳过（dbs_shared 回报），
-    防止用户显式同名库被连带误删。
-    """
-    empty = {"dbs_removed": 0, "dbs_shared": []}
-    if data_dir is None or not tree_ids:
-        return empty
-    root = data_dir.resolve()
-    candidates: set[str] = set()
-    for rid in tree_ids:
-        for output in (repo.outputs_by_step(rid) or {}).values():
-            for text in _iter_output_strings(output):
-                if text.endswith(".ocr_results.db") or text.endswith(".ocr_results.db.raw.json"):
-                    candidates.add(text)
-    removed = 0
-    shared: list[str] = []
-    for raw_path in sorted(candidates):
-        path = Path(raw_path)
-        try:
-            resolved = path.resolve()
-        except OSError:
-            continue
-        if root != resolved and root not in resolved.parents:
-            continue  # data 目录之外不动
-        if repo.db_referenced_outside(str(path), tree_ids):
-            shared.append(str(path))
-            continue
-        try:
-            resolved.unlink()
-            removed += 1
-        except OSError:
-            pass
-    return {"dbs_removed": removed, "dbs_shared": shared}
+    return ArtifactCleanupService(repo, data_dir).purge_ocr_dbs(tree_ids)
