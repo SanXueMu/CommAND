@@ -31,13 +31,15 @@ command/
 ├── config.py                  # L1 配置：frozen dataclass + .env 覆盖
 ├── deps.py                    # L2 装配：lru_cache 单例工厂，只装配不使用
 ├── api/                       # L3 路由：system / tools / tasks / pipelines + schemas
-├── services/                  # L4 编排：registry / dispatch / pipeline
+├── services/                  # L4 编排：registry / dispatch / pipeline / definition
 ├── core/                      # L5 调度域：protocol / runner / scheduler / pipeline / errors
 ├── store/                     # L6 PostgreSQL：db + migrations + 三仓储
 ├── models/                    # 数据模型集中（TaskView / ToolView / EventView）
 ├── tools/                     # 小工具落位区（每目录一工具，见 tools/README.md）
 └── tests/                     # 镜像 core/ 结构，Fake 客户端零外部依赖
 ```
+
+当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`PipelineService` 暂时保留运行编排与生命周期代理，后续继续拆分 run 推进、子流级联和重跑服务。外部 API 与 PostgreSQL 结构保持不变。
 
 ## 工具协议 v1 摘要
 
