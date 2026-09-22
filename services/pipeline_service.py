@@ -14,6 +14,7 @@ from services.dispatch_service import DispatchService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_step_coordinator import RunStepCoordinator
+from services.subrun_cascade_coordinator import SubrunCascadeCoordinator
 from services.subrun_coordinator import SubrunCoordinator
 from store.db import Db
 from store.key_repo import KeyRepo
@@ -78,6 +79,9 @@ class PipelineService:
         self._subruns = SubrunCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit)
+        self._subrun_cascade = SubrunCascadeCoordinator(
+            pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
+            finish_and_cascade=self._finish_and_cascade, advance=self.advance)
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -216,22 +220,7 @@ class PipelineService:
                             detail={"from_run": run_id, "fallback_flow": fallback_flow})
             except Exception:  # noqa: BLE001 —— 降级失败不掩盖原 run 的失败原因
                 logger.exception("失败降级启动失败 run=%s fallback=%s", run_id, fallback_flow)
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None or run["parent_run_id"] is None:
-            return
-        parent_run_id, step_index = run["parent_run_id"], run["parent_step_index"]
-        self._audit(parent_run_id, None, "subrun_finished",
-                    detail={"step_index": step_index, "subrun_id": run_id, "status": status})
-        if status != "succeeded":
-            self._finish_and_cascade(parent_run_id, status, error=error or {
-                "kind": "system", "message": f"子流失败（步 {step_index}）"})
-            return
-        outputs = self._pipeline_repo.outputs_by_step(run_id)
-        last_output = outputs[max(outputs)] if outputs else None
-        synthetic = {"pipeline_run": parent_run_id, "step_index": step_index,
-                     "status": "succeeded", "output": last_output, "error": None,
-                     "handle": None, "attempt": 1, "input": run["input"]}
-        self.advance(synthetic)
+        self._subrun_cascade.cascade(run_id, status, error)
 
     def advance(self, task: dict[str, Any]) -> None:
         self._step_coordinator.advance(task)
