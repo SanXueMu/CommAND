@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "kind": "workflow",
+  "id": "ocr.extract-document",
+  "version": 1,
+  "status": "active",
+  "title": "Extract document with a template",
+  "capability_pipeline_ref": {
+    "kind": "capability_pipeline",
+    "id": "ocr.extract-by-template",
+    "version": 1
+  },
+  "input_schema": {
+    "type": "object",
+    "required": ["file", "template_id"],
+    "properties": {
+      "file": {"type": "object"},
+      "template_id": {"type": "string", "minLength": 1}
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "result_kind": "ocr_result_dataset",
+    "optional_artifacts": ["records.xlsx"]
+  }
+}
