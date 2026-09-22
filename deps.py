@@ -73,6 +73,12 @@ def get_protocol_sync_service():
     return ProtocolSyncService(db=get_db(), repo=get_protocol_repo(), site_repo=get_site_repo())
 
 
+def get_registration_service():
+    from services.registration_service import RegistrationService
+
+    return RegistrationService(site_repo=get_site_repo(), db=get_db())
+
+
 @lru_cache(maxsize=1)
 def get_registry_service() -> RegistryService:
     return RegistryService(db=get_db(), tools_dir=get_config().tools_dir, tool_repo=get_tool_repo())

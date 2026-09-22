@@ -13,7 +13,7 @@ def create_app():
     logger = logging.getLogger(__name__)
 
     import deps
-    from api import data_router, files_router, keys_router, meta_router, ocr_records_router, ocr_templates_router, ocr_view_router, pipelines_router, protocol_router, system_router, tasks_router, tools_router, translate_router
+    from api import data_router, files_router, keys_router, meta_router, ocr_records_router, ocr_templates_router, ocr_view_router, pipelines_router, protocol_router, registration_router, system_router, tasks_router, tools_router, translate_router
     from store.site_seed import BUILTIN_SITE_VIEWS
 
     @asynccontextmanager
@@ -50,6 +50,7 @@ def create_app():
     app.include_router(ocr_view_router.router, prefix="/api")
     app.include_router(translate_router.router, prefix="/api")
     app.include_router(protocol_router.router, prefix="/api")
+    app.include_router(registration_router.router, prefix="/api")
     return app
 
 
