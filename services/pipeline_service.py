@@ -13,6 +13,7 @@ from core.pipeline import resolve_input
 from services.dispatch_service import DispatchService
 from services.batch_rerun_service import BatchRerunService
 from services.run_artifact_service import RunArtifactService
+from services.run_submission_service import RunSubmissionService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
@@ -85,6 +86,9 @@ class PipelineService:
             pipeline_repo=pipeline_repo, task_repo=task_repo, run_event_repo=run_event_repo)
         self._artifacts = RunArtifactService(
             pipeline_repo, task_repo, data_dir, self._run_tree_ids, self.list_runs)
+        self._submission = RunSubmissionService(
+            pipeline_repo, self.get, self._validate_key_name, self._audit, self._submit,
+            self._spawn_subrun, self._pipeline_repo.finish_run)
         self._step_coordinator = RunStepCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit, spawn_subrun=self._spawn_subrun,
@@ -118,28 +122,7 @@ class PipelineService:
     def run(self, pipeline_id: str, input: dict[str, Any],
             batch_id: str | None = None,
             fallback_of: str | None = None) -> dict[str, Any]:
-        self._validate_key_name(input)
-        definition = self.get(pipeline_id)
-        run_id = self._pipeline_repo.create_run(pipeline_id, input, batch_id=batch_id,
-                                                fallback_of=fallback_of)
-        self._audit(run_id, None, "created", detail={"pipeline_id": pipeline_id})
-        first = definition["steps"][0]
-        try:
-            if "pipeline" in first:  # C1：工作流首步即子流 → 直接创建子 run
-                self._spawn_subrun(run_id, 0, first, {"input": input}, None, {})
-            else:
-                resolved = resolve_input(first["input"], input, None, {})
-                submitted = self._submit(definition, run_id, 0, resolved)
-        except ToolUserError as exc:
-            self._pipeline_repo.finish_run(run_id, "failed", error={
-                "kind": "user", "message": str(exc)})
-            raise
-        return {
-            "run_id": run_id,
-            "status": "running",
-            "pipeline_id": pipeline_id,
-            "first_handle": submitted["handle"] if "pipeline" not in first else None,
-        }
+        return self._submission.start(pipeline_id, input, batch_id, fallback_of)
 
     def _submit(self, definition: dict[str, Any], run_id: str, step_index: int,
                 resolved_input: dict[str, Any]) -> dict[str, Any]:
