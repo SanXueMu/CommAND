@@ -14,6 +14,7 @@ from services.dispatch_service import DispatchService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
+from services.run_query_service import RunQueryService
 from services.run_step_coordinator import RunStepCoordinator
 from services.step_rerun_service import StepRerunService
 from services.subrun_cascade_coordinator import SubrunCascadeCoordinator
@@ -81,6 +82,8 @@ class PipelineService:
         self._step_rerun = StepRerunService(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             cancel=self._dispatch.cancel, submit=self._submit)
+        self._queries = RunQueryService(
+            pipeline_repo=pipeline_repo, task_repo=task_repo, run_event_repo=run_event_repo)
         self._step_coordinator = RunStepCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit, spawn_subrun=self._spawn_subrun,
@@ -403,181 +406,26 @@ class PipelineService:
                 "done_files": done}
 
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
-        """steps 快照：每步最新任务 + 定义工具名（工作区/任务中心的考证视图）。"""
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        definition = self._pipeline_repo.get_definition(run["pipeline_id"])
-        latest = self._pipeline_repo.latest_task_by_step(run_id)
-        skipped = self._run_events.skipped_steps(run_id) if self._run_events else set()
-        subruns = self._pipeline_repo.get_subruns(run_id)
-        steps = []
-        for n, step in enumerate(definition["steps"]):
-            t = latest.get(n)
-            entry: dict[str, Any] = {
-                "step_index": n,
-                "tool": step.get("tool"),
-                "pipeline": step.get("pipeline"),
-                "latest": t,
-                "skipped": n in skipped,  # D2：when 跳步标记（审计留痕的可视化来源）
-            }
-            if "pipeline" in step and n in subruns:
-                sub = subruns[n]  # C1：子流步展示子 run 状态（StepTrack 下钻入口）
-                entry["subrun"] = {"run_id": sub["id"], "status": sub["status"],
-                                   "pipeline_id": sub["pipeline_id"]}
-            steps.append(entry)
-        # Y2：详情直出 summary（进度含跳步、0 记录警示同列表口径）
-        return {"run": run, "steps": steps, "summary": self._run_summary(run)}
+        return self._queries.run_snapshot(run_id)
 
     def list_run_events(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
-        if self._pipeline_repo.get_run(run_id) is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        if self._run_events is None:
-            return []
-        return self._run_events.list(run_id, limit)
+        return self._queries.list_run_events(run_id, limit)
 
     def get_run_tasks(self, run_id: str) -> list[dict[str, Any]]:
-        if self._pipeline_repo.get_run(run_id) is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        return self._task_repo.list_by_pipeline_run(run_id)
+        return self._queries.get_run_tasks(run_id)
 
     def list_runs(self, pipeline_id: str | None = None, limit: int = 50,
                   offset: int = 0, batch_id: str | None = None) -> dict[str, Any]:
-        """job 粒度运行列表 + 每 run 摘要（产物/用量/统计）——翻译工作台任务区数据面。
-
-        摘要走**批量轻投影**（3 条聚合查询覆盖整页），不再逐 run 拉整段 tasks 载荷。
-        """
-        runs = self._pipeline_repo.list_runs(pipeline_id=pipeline_id, limit=limit, offset=offset,
-                                             batch_id=batch_id)
-        for run in runs:
-            run["summary"] = self._summaries([run])[run["id"]]
-        return {"runs": runs, "total": self._pipeline_repo.count_runs(pipeline_id)}
+        return self._queries.list_runs(pipeline_id, limit, offset, batch_id)
 
     def _run_summary(self, run: dict[str, Any]) -> dict[str, Any]:
-        """单 run 摘要（详情等单 run 场景用）。"""
-        return self._summaries([run])[run["id"]]
+        return self._queries._run_summary(run)
 
     def detail_summary(self, run_id: str) -> dict[str, Any] | None:
-        """AI1b：详情端点摘要——detail 此前不返回 summary，抽屉里 latest_note
-        （「已识别 12/42 页」）渲染位恒空。"""
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            return None
-        return self._run_summary(run)
+        return self._queries.detail_summary(run_id)
 
     def _summaries(self, runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        """批量摘要：状态/产物/用量一次取齐，逐 run 装配（契约与旧的逐 run 版一致）。"""
-        run_ids = [r["id"] for r in runs]
-        statuses = self._pipeline_repo.light_step_statuses(run_ids)
-        outputs = self._pipeline_repo.light_step_outputs(run_ids)
-        totals = self._pipeline_repo.steps_total_by_pipeline(
-            [r.get("pipeline_id") or "" for r in runs])
-        skipped: dict[str, list[dict[str, Any]]] = (
-            self._run_events.skipped_steps_bulk(run_ids)
-            if self._run_events is not None else {})
-        titles: dict[str, dict[str, str]] = {
-            d["id"]: {k: v.get("title") or k
-                      for k, v in (d.get("input_schema") or {}).get("properties", {}).items()}
-            for d in self._pipeline_repo.list_definitions()
-        }
-        # AB2：running 的 run 附最新工具进度消息（「已识别 12/42 页」），列表/浮窗直读
-        progress_notes = (
-            self._run_events.latest_progress_bulk(
-                [r["id"] for r in runs if r.get("status") in ("running", "queued")])
-            if self._run_events is not None else {})
-        out: dict[str, dict[str, Any]] = {}
-        for r in runs:
-            summary = self._assemble_summary(
-                statuses.get(r["id"], {}), outputs.get(r["id"], {}),
-                totals.get(r.get("pipeline_id") or ""),
-                skipped.get(r["id"], []),
-                titles.get(r.get("pipeline_id") or ""))
-            note = progress_notes.get(r["id"])
-            if note:
-                summary["latest_note"] = note
-            out[r["id"]] = summary
-        return out
-
-    @staticmethod
-    def _assemble_summary(step_statuses: dict[int, str], step_outputs: dict[int, dict[str, Any]],
-                          steps_total: int | None,
-                          skipped: list[dict[str, Any]] | None = None,
-                          param_titles: dict[str, str] | None = None) -> dict[str, Any]:
-        artifacts: list[dict[str, Any]] = []
-        translate: dict[str, Any] | None = None
-        verify: dict[str, Any] | None = None
-        for out in step_outputs.values():
-            if not isinstance(out, dict):
-                continue
-            if out.get("path"):
-                artifacts.append({"name": out.get("name"), "path": out.get("path")})
-            if out.get("layered_file"):
-                artifacts.append({"name": out.get("layered_name") or "可搜索.pdf",
-                                  "path": out.get("layered_file")})
-            if out.get("usage_by_model") is not None or out.get("usage") is not None:
-                translate = out
-            if out.get("statuses_len") is not None or out.get("review_count") is not None:
-                verify = out
-        summary: dict[str, Any] = {
-            "artifacts": artifacts,
-            "steps_total": steps_total,
-            # Y1：when 跳过的步无 task 行，单独并入分母口径（2/3 误导的根因）
-            "steps_done": sum(1 for s in step_statuses.values() if s in ("succeeded", "skipped"))
-                          + len(skipped or []),
-        }
-        if translate is not None or verify is not None:
-            counts = verify or translate or {}
-            statuses_len = counts.get("statuses_len")
-            review = counts.get("review_count")
-            if review is None:
-                review = (translate or {}).get("review_count") or 0
-            summary.update({
-                "usage": (translate or {}).get("usage"),
-                "usage_by_model": (translate or {}).get("usage_by_model"),
-                "calls": (translate or {}).get("calls"),
-                "cache_hits": (translate or {}).get("cache_hits"),
-                "review_count": review,
-                "ok_count": max(statuses_len - review, 0) if statuses_len is not None else None,
-            })
-        # X4：识别部分页失败（未达熔断线时 run 落 succeeded）——列表要能看见并重试
-        failed_pages = sum(o.get("failed_pages") or 0
-                           for o in step_outputs.values() if isinstance(o, dict))
-        if failed_pages:
-            summary["failed_pages"] = failed_pages
-        # AA3：勾稽/hook 告警数（校验不平、宽松修复等）——缺行/金额错一眼可见
-        review_notes_counts = [o.get("review_notes_count") for o in step_outputs.values()
-                               if isinstance(o, dict) and o.get("review_notes_count")]
-        if review_notes_counts:
-            summary["review_notes_count"] = sum(review_notes_counts)
-        # Y4：识别完成但 0 记录——列表警示「成功但空库」
-        records_counts = [o.get("records_count") for o in step_outputs.values()
-                          if isinstance(o, dict) and o.get("records_count") is not None]
-        if records_counts:
-            summary["records_count"] = records_counts[-1]
-        # Y2：跳步明细（人话原因）
-        if skipped:
-            summary["steps_skipped"] = [
-                {"step_index": sk.get("step_index"),
-                 "reason": PipelineService._skip_reason(sk.get("when") or {}, param_titles or {})}
-                for sk in skipped]
-        return summary
-
-    @staticmethod
-    def _skip_reason(when: dict[str, Any], titles: dict[str, str]) -> str:
-        """把 when 条件翻译成人话（Y2）：input.export_units=True → 未开启：导出识别单元。"""
-        parts: list[str] = []
-        for key, expected in when.items():
-            title = titles.get(key[6:]) if key.startswith("input.") else None
-            name = title or key
-            if expected == "@exists":
-                parts.append(f"「{name}」无值（该步需要它）")
-            elif expected is True:
-                parts.append(f"未开启「{name}」")
-            elif expected is False:
-                parts.append(f"「{name}」需关闭")
-            else:
-                parts.append(f"「{name}」需为 {expected}")
-        return "；".join(parts) or "条件未满足"
+        return self._queries._summaries(runs)
 
     def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:
         """删除任务（含审计事件）；`purge_files` 连带删除其全部产物目录（结果与临时结果随任务绑定）。
