@@ -45,10 +45,12 @@ def get_site() -> dict:
         {k: v for k, v in view.items() if v is not None and k not in ("sort",)}
         for view in deps.get_site_repo().list()
     ]
+    # 线格式兼容字段：口径 = 当前发布 core（旧硬编码 "2" 与三层版本口径不一致，已对齐）
+    release = deps.get_protocol_repo().latest_release()
     return {
         "site": {
             "name": "CommAND",
-            "protocolVersion": "2",
+            "protocolVersion": str(release["core"]) if release else "1",
             "views": views,
         }
     }
