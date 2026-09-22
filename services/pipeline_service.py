@@ -14,6 +14,7 @@ from services.dispatch_service import DispatchService
 from services.batch_rerun_service import BatchRerunService
 from services.run_artifact_service import RunArtifactService
 from services.run_submission_service import RunSubmissionService
+from services.run_completion_service import RunCompletionService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
@@ -99,6 +100,9 @@ class PipelineService:
         self._subrun_cascade = SubrunCascadeCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             finish_and_cascade=self._finish_and_cascade, advance=self.advance)
+        self._completion = RunCompletionService(
+            pipeline_repo, self._audit, self._purge_decisive, self.run,
+            self._subrun_cascade.cascade)
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -146,77 +150,15 @@ class PipelineService:
 
     def _fallback_flow_for(self, run: dict[str, Any] | None, status: str,
                            error: dict[str, Any] | None) -> str | None:
-        """失败降级判定：**能力不可用**（模型未开通/无权限）且该流声明了 on_failure.fallback_flow。
-
-        只对顶层 run 生效、且降级 run 自身不再降级（fallback_of 非空），避免链式/循环降级。
-        """
-        if run is None or status != "failed" or not error:
-            return None
-        if str(error.get("kind") or "") != "unavailable":
-            return None
-        if run.get("parent_run_id") or run.get("fallback_of"):
-            return None
-        definition = self._pipeline_repo.get_definition(str(run.get("pipeline_id"))) or {}
-        flow = (definition.get("on_failure") or {}).get("fallback_flow")
-        return flow if isinstance(flow, str) and flow else None
+        return self._completion.fallback_flow_for(run, status, error)
 
     def _should_pause_instead(self, run: dict[str, Any] | None, status: str,
                               error: dict[str, Any] | None) -> bool:
-        """能力不可用且该流**没有**可降级的等价流 → 把 run 标为 paused（而非 failed）。
-
-        这样用户换好密钥后点「继续」即可**重试原流**；否则会留下一条红色失败记录，
-        而且（若降级到 skip 流）文件会被永久标记为「不翻译」、再也无法重试。
-        只对顶层 run 生效（子 run 仍走失败级联）。
-        """
-        if run is None or status != "failed" or not error:
-            return False
-        if str(error.get("kind") or "") != "unavailable":
-            return False
-        return run.get("parent_run_id") is None and not run.get("fallback_of")
+        return self._completion.should_pause_instead(run, status, error)
 
     def _finish_and_cascade(self, run_id: str, status: str,
                             error: dict[str, Any] | None = None) -> None:
-        """07 级联收口：run 终态化；子 run 成功→合成任务喂父 advance（推进父下一步）；
-        子 run 失败→父同状态收口（部件失败=整流失败）。
-
-        另外承担「失败降级」：能力不可用且声明了 fallback_flow → 原 run 留 failed 并注明，
-        同时**新起一条降级 run**（同 input/batch_id，记 fallback_of），交付物由降级 run 产出。
-        """
-        run = self._pipeline_repo.get_run(run_id)
-        fallback_flow = self._fallback_flow_for(run, status, error)
-        if fallback_flow:
-            error = dict(error or {})
-            error["message"] = (f"{error.get('message', '')}"
-                               f"（能力不可用，已自动改用「{fallback_flow}」重跑）")
-            error["fallback_flow"] = fallback_flow
-        if not fallback_flow and self._should_pause_instead(run, status, error):
-            error = dict(error or {})
-            error["message"] = f"{error.get('message', '')}（能力不可用，已暂停：{_UNAVAILABLE_HINT}）"
-            error["hint"] = _UNAVAILABLE_HINT
-            error["paused_unavailable"] = True
-            self._pipeline_repo.finish_run(run_id, "paused", error=error)
-            return
-        self._pipeline_repo.finish_run(run_id, status, error=error)
-        self._purge_decisive(run_id, status, error, fallback_flow is not None)
-        if fallback_flow and run is not None:
-            try:
-                fb_input = dict(run.get("input") or {})
-                # 降级目标若声明了 reason（如「暂不翻译」流），把降级原因写进去：
-                # 否则记录只显示工具默认文案（「本轮不处理」），看不出为何被跳过
-                fb_def = self._pipeline_repo.get_definition(fallback_flow) or {}
-                if "reason" in ((fb_def.get("input_schema") or {}).get("properties") or {}):
-                    fb_input["reason"] = (
-                        f"上游「{run.get('pipeline_id')}」能力不可用（{(error or {}).get('message', '')}），"
-                        f"已自动降级为不翻译留档；如需翻译请修复密钥/模型后重跑")
-                created = self.run(fallback_flow, fb_input,
-                                   batch_id=run.get("batch_id"), fallback_of=run_id)
-                self._audit(run_id, None, "run_fallback",
-                            detail={"to_run": created["run_id"], "fallback_flow": fallback_flow})
-                self._audit(created["run_id"], None, "run_fallback",
-                            detail={"from_run": run_id, "fallback_flow": fallback_flow})
-            except Exception:  # noqa: BLE001 —— 降级失败不掩盖原 run 的失败原因
-                logger.exception("失败降级启动失败 run=%s fallback=%s", run_id, fallback_flow)
-        self._subrun_cascade.cascade(run_id, status, error)
+        self._completion.finish_and_cascade(run_id, status, error)
 
     def advance(self, task: dict[str, Any]) -> None:
         self._step_coordinator.advance(task)
