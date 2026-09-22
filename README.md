@@ -39,7 +39,7 @@ command/
 └── tests/                     # 镜像 core/ 结构，Fake 客户端零外部依赖
 ```
 
-当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`RunLifecycleService` 负责暂停、启动恢复收口和中止；`RunStepCoordinator` 负责任务终态判断、when 跳步和下一步派发；`PipelineService` 暂时保留收口、子流和重跑逻辑及兼容代理。外部 API 与 PostgreSQL 结构保持不变。
+当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`RunLifecycleService` 负责暂停、启动恢复收口和中止；`RunStepCoordinator` 负责任务终态判断、when 跳步和下一步派发；`SubrunCoordinator` 负责子流实例创建和首步派发；`PipelineService` 暂时保留收口和重跑逻辑及兼容代理。外部 API 与 PostgreSQL 结构保持不变。
 
 ## 工具协议 v1 摘要
 

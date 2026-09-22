@@ -14,6 +14,7 @@ from services.dispatch_service import DispatchService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_step_coordinator import RunStepCoordinator
+from services.subrun_coordinator import SubrunCoordinator
 from store.db import Db
 from store.key_repo import KeyRepo
 from store.pipeline_repo import PipelineRepo
@@ -74,6 +75,9 @@ class PipelineService:
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit, spawn_subrun=self._spawn_subrun,
             finish_and_cascade=self._finish_and_cascade)
+        self._subruns = SubrunCoordinator(
+            pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
+            submit=self._submit)
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -138,29 +142,7 @@ class PipelineService:
     def _spawn_subrun(self, parent_run_id: str, step_index: int, step: dict[str, Any],
                       run: dict[str, Any], prev_output: Any,
                       history: dict[int, Any]) -> dict[str, Any]:
-        """C1：workflow 遇 pipeline 步 → 创建子 run 并派发其首步。
-        07 设计：子 run 实体化（parent 两列）；同父步活跃子 run 唯一（008 唯一索引防撞）。"""
-        flow_id = step["pipeline"]
-        sub_definition = self._pipeline_repo.get_definition(flow_id)
-        if sub_definition is None or sub_definition.get("type") != "flow":
-            self._pipeline_repo.finish_run_forced(parent_run_id, "failed", error={
-                "kind": "user", "message": f"第 {step_index} 步引用的流不可用: {flow_id}"})
-            raise ToolUserError(f"第 {step_index} 步引用的流不可用: {flow_id}")
-        try:
-            resolved = resolve_input(step["input"], run["input"], prev_output, history)
-        except ToolUserError as exc:
-            self._pipeline_repo.finish_run_forced(parent_run_id, "failed", error={
-                "kind": "user", "message": f"第 {step_index} 步流输入解析失败: {exc}"})
-            raise
-        sub_run_id = self._pipeline_repo.create_run(
-            flow_id, resolved, parent_run_id=parent_run_id, parent_step_index=step_index)
-        self._audit(parent_run_id, None, "subrun_created",
-                    detail={"step_index": step_index, "subrun_id": sub_run_id,
-                            "pipeline_id": flow_id})
-        sub_first = sub_definition["steps"][0]
-        sub_resolved = resolve_input(sub_first["input"], resolved, None, {})
-        submitted = self._submit(sub_definition, sub_run_id, 0, sub_resolved)
-        return {"subrun_id": sub_run_id, "handle": submitted["handle"]}
+        return self._subruns.spawn(parent_run_id, step_index, step, run, prev_output, history)
 
     def _fallback_flow_for(self, run: dict[str, Any] | None, status: str,
                            error: dict[str, Any] | None) -> str | None:
