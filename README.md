@@ -36,8 +36,20 @@ command/
 ├── store/                     # L6 PostgreSQL：db + migrations + 三仓储
 ├── models/                    # 数据模型集中（TaskView / ToolView / EventView）
 ├── tools/                     # 小工具落位区（每目录一工具，见 tools/README.md）
+├── java/                      # Java 17/Spring Boot 平台（迁移期与 Python 并存）
+│   ├── command-boot/          # 启动模块
+│   ├── command-contract/      # 与框架无关的协议类型
+│   ├── command-definition/    # 四类定义加载与校验
+│   ├── command-tool-catalog/  # 工具目录边界
+│   ├── command-workflow/      # 用户工作流
+│   ├── command-run/           # 运行与任务生命周期
+│   ├── command-runtime/       # Worker/Runtime Adapter
+│   ├── command-api/           # HTTP API
+│   └── command-persistence/   # JDBC/Flyway 唯一数据库边界
 └── tests/                     # 镜像 core/ 结构，Fake 客户端零外部依赖
 ```
+
+Java 平台目前仅为可编译骨架，使用 Java 17 和 Spring Boot 3.5.7；尚未连接 PostgreSQL 或执行 Flyway。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
 
 当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`RunLifecycleService` 负责暂停、启动恢复收口和中止；`RunRecoveryService` 负责暂停 run 的断点重放；`RunQueryService` 负责运行快照、事件、任务和摘要查询；`RunArtifactService` 负责产物收集和占用报表；`ArtifactCleanupService` 负责产物目录和 OCR 结果库的安全清理；`RunSubmissionService` 负责运行创建、fallback 关联和首步派发；`RunCompletionService` 负责终态收口、能力不可用暂停、fallback 选择和父子级联触发；`RunDeletionService` 负责运行中止等待、运行树删除和同文件失败尝试清理；`StepRerunService` 负责单步骤断点重跑；`BatchRerunService` 负责批次失败项筛选、去重和批量调度；`RunStepCoordinator` 负责任务终态判断、when 跳步和下一步派发；`SubrunCoordinator` 负责子流实例创建和首步派发；`SubrunCascadeCoordinator` 负责父子 run 完成后的结果传递和失败级联；`PipelineService` 暂时保留决定性清理触发及兼容代理。外部 API 与 PostgreSQL 结构保持不变。
 
