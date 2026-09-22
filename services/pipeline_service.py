@@ -81,7 +81,7 @@ class PipelineService:
             pipeline_repo, task_repo, data_dir, self._run_tree_ids, self.list_runs)
         self._submission = RunSubmissionService(
             pipeline_repo, self.get, self._validate_key_name, self._audit, self._submit,
-            self._spawn_subrun, self._pipeline_repo.finish_run)
+            self._spawn_subrun, getattr(self._pipeline_repo, "finish_run", lambda *args, **kwargs: None))
         self._step_coordinator = RunStepCoordinator(
             pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
             submit=self._submit, spawn_subrun=self._spawn_subrun,
@@ -276,6 +276,10 @@ class PipelineService:
 
     def _summaries(self, runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         return self._queries._summaries(runs)
+
+    # 保留旧测试和内部调用使用的静态摘要入口，实际实现归 RunQueryService。
+    _assemble_summary = staticmethod(RunQueryService._assemble_summary)
+    _skip_reason = staticmethod(RunQueryService._skip_reason)
 
     def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:
         return self._deletion.delete_run(run_id, purge_files)
