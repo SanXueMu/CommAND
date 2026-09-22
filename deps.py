@@ -13,6 +13,7 @@ from store.event_repo import EventRepo
 from store.key_repo import KeyRepo
 from store.site_repo import SiteRepo
 from store.pipeline_repo import PipelineRepo
+from store.protocol_repo import ProtocolRepo
 from store.run_event_repo import RunEventRepo
 from store.task_repo import TaskRepo
 from store.tool_repo import ToolRepo
@@ -59,6 +60,17 @@ def get_key_repo() -> KeyRepo:
 
 def get_site_repo() -> SiteRepo:
     return SiteRepo(get_db())
+
+
+def get_protocol_repo() -> ProtocolRepo:
+    return ProtocolRepo(get_db())
+
+
+@lru_cache(maxsize=1)
+def get_protocol_sync_service():
+    from services.protocol_sync_service import ProtocolSyncService
+
+    return ProtocolSyncService(db=get_db(), repo=get_protocol_repo(), site_repo=get_site_repo())
 
 
 @lru_cache(maxsize=1)

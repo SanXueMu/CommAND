@@ -26,6 +26,19 @@ def list_tool_categories() -> dict:
     return {"categories": CATEGORIES}
 
 
+@router.get("/protocol")
+def get_protocol() -> dict:
+    """会员协议声明（Core/Extension 分层口径）：CommWEB 探测协商的数据源。
+
+    无发布行（理论不可达——lifespan 幂等登记）时回落内置口径。"""
+    release = deps.get_protocol_repo().latest_release()
+    if release:
+        return {"core": release["core"], "extensions": release["extensions"]}
+    from services.protocol_sync_service import CURRENT_CORE, CURRENT_EXTENSIONS
+
+    return {"core": CURRENT_CORE, "extensions": CURRENT_EXTENSIONS}
+
+
 @router.get("/site")
 def get_site() -> dict:
     views = [

@@ -13,7 +13,7 @@ def create_app():
     logger = logging.getLogger(__name__)
 
     import deps
-    from api import data_router, files_router, keys_router, meta_router, ocr_records_router, ocr_templates_router, ocr_view_router, pipelines_router, system_router, tasks_router, tools_router, translate_router
+    from api import data_router, files_router, keys_router, meta_router, ocr_records_router, ocr_templates_router, ocr_view_router, pipelines_router, protocol_router, system_router, tasks_router, tools_router, translate_router
     from store.site_seed import BUILTIN_SITE_VIEWS
 
     @asynccontextmanager
@@ -23,6 +23,8 @@ def create_app():
         db.apply_migrations()
         # 纯壳准则：站点声明是数据——启动/热部署即幂等 seed 进 PG，经 /meta/site 下发
         deps.get_site_repo().seed(BUILTIN_SITE_VIEWS)
+        # 协议控制面：幂等登记当前协议发布（发布历史只追加）
+        deps.get_protocol_sync_service().ensure_current_release()
         # AF2：进程重启即收口上次残留的 running run（无人推进的死任务 → interrupted 可重跑）
         recovered = deps.get_pipeline_service().recover_stale_runs()
         if recovered:
@@ -47,6 +49,7 @@ def create_app():
     app.include_router(ocr_records_router.router, prefix="/api")
     app.include_router(ocr_view_router.router, prefix="/api")
     app.include_router(translate_router.router, prefix="/api")
+    app.include_router(protocol_router.router, prefix="/api")
     return app
 
 
