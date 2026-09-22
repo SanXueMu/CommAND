@@ -15,6 +15,7 @@ from services.batch_rerun_service import BatchRerunService
 from services.run_artifact_service import RunArtifactService
 from services.run_submission_service import RunSubmissionService
 from services.run_completion_service import RunCompletionService
+from services.run_deletion_service import RunDeletionService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
@@ -103,6 +104,10 @@ class PipelineService:
         self._completion = RunCompletionService(
             pipeline_repo, self._audit, self._purge_decisive, self.run,
             self._subrun_cascade.cascade)
+        self._deletion = RunDeletionService(
+            pipeline_repo, task_repo, self.abort_run, self._run_tree_ids,
+            self._purge_artifacts,
+            lambda tree_ids: purge_ocr_dbs(self._pipeline_repo, self._data_dir, tree_ids))
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -283,61 +288,7 @@ class PipelineService:
         return self._queries._summaries(runs)
 
     def delete_run(self, run_id: str, purge_files: bool = True) -> dict[str, Any]:
-        """删除任务（含审计事件）；`purge_files` 连带删除其全部产物目录（结果与临时结果随任务绑定）。
-
-        AD1：OCR 结果库（data/ocr/*.ocr_results.db 及其 .raw.json 留痕）不在 outputs 目录，
-        需单独收集清理；被树外其它 run 引用的库跳过（防显式同名库误删）。
-
-        AF1：purge_files=true 时 ①树内 tasks 整删（不再解绑留孤儿引用）②**同原件文件的
-        全部失败态 run（含任务清单窗口外的旧尝试）一并删除**——成功 run 不动（有交付物），
-        rerunnable 计数随之归零。purge_files=false 保持解绑审计口径。
-
-        运行中/暂停 → 先自动中止（cancelled 立即落库）并等待活跃任务收口（≤DELETE_ABORT_WAIT_S），
-        超时仍继续删除，pending 列表回报给调用方（避免与 worker 竞态）。
-        """
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        aborted = False
-        pending: list[str] = []
-        if run["status"] in ("running", "paused"):
-            self.abort_run(run_id)
-            aborted = True
-            deadline = time.monotonic() + DELETE_ABORT_WAIT_S
-            while time.monotonic() < deadline:
-                pending = self._pipeline_repo.active_task_handles(run_id)
-                if not pending:
-                    break
-                time.sleep(0.5)
-        tree_ids = self._run_tree_ids(run_id)
-        handles = [t["handle"] for rid in tree_ids
-                   for t in self._task_repo.list_by_pipeline_run(rid)]
-        purged = self._purge_artifacts(handles) if purge_files else {
-            "files_removed": 0, "bytes_freed": 0, "dirs_removed": 0}
-        ocr_purged = purge_ocr_dbs(self._pipeline_repo, self._data_dir, tree_ids) \
-            if purge_files else {"dbs_removed": 0, "dbs_shared": []}
-        self._pipeline_repo.delete_run(run_id, drop_tasks=purge_files)
-
-        removed_failed: list[dict] = []
-        if purge_files:  # AF1：同文件失败尝试连带清理
-            file_key = str((run.get("input") or {}).get("file") or "")
-            if file_key:
-                doomed = self._pipeline_repo.failed_runs_by_file(file_key, exclude_ids=tree_ids)
-                for stale in doomed:
-                    stale_tree = self._run_tree_ids(stale["id"])
-                    stale_handles = [t["handle"] for rid in stale_tree
-                                     for t in self._task_repo.list_by_pipeline_run(rid)]
-                    stale_purged = self._purge_artifacts(stale_handles)
-                    purged["files_removed"] += stale_purged.get("files_removed", 0)
-                    purged["bytes_freed"] += stale_purged.get("bytes_freed", 0)
-                    stale_ocr = purge_ocr_dbs(self._pipeline_repo, self._data_dir, stale_tree)
-                    ocr_purged["dbs_removed"] += stale_ocr.get("dbs_removed", 0)
-                    ocr_purged["dbs_shared"].extend(stale_ocr.get("dbs_shared", []))
-                    self._pipeline_repo.delete_run(stale["id"], drop_tasks=True)
-                    removed_failed.append(stale)
-        return {"id": run_id, "status": "deleted", "aborted": aborted,
-                "pending_tasks": pending, "purge_files": purge_files, **purged, **ocr_purged,
-                "removed_failed_attempts": removed_failed}
+        return self._deletion.delete_run(run_id, purge_files)
 
     def _run_tree_ids(self, run_id: str) -> list[str]:
         """run 及其全部子 run（workflow 的 pipeline 步产物也随父任务绑定）。"""
