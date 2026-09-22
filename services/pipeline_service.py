@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError, ToolUserError
-from core.pipeline import evaluate_when, resolve_input
+from core.pipeline import resolve_input
 from services.dispatch_service import DispatchService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
+from services.run_step_coordinator import RunStepCoordinator
 from store.db import Db
 from store.key_repo import KeyRepo
 from store.pipeline_repo import PipelineRepo
@@ -22,7 +23,6 @@ from store.tool_repo import ToolRepo
 
 logger = logging.getLogger("command.pipeline")
 
-FAILURE_STATUSES = {"failed", "failed_review", "cancelled", "interrupted"}
 # 删除运行中的 run 时：中止后等待活跃任务收口的秒数（超时仍删，pending 回报）
 DELETE_ABORT_WAIT_S = 10.0
 # 可打包下载的产物后缀（文档类；排除 .json/.db 等中间态文件）
@@ -70,6 +70,10 @@ class PipelineService:
         self._lifecycle = lifecycle_service or RunLifecycleService(
             pipeline_repo=pipeline_repo, dispatch_service=dispatch_service,
             run_event_repo=run_event_repo)
+        self._step_coordinator = RunStepCoordinator(
+            pipeline_repo=pipeline_repo, run_event_repo=run_event_repo,
+            submit=self._submit, spawn_subrun=self._spawn_subrun,
+            finish_and_cascade=self._finish_and_cascade)
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -248,78 +252,7 @@ class PipelineService:
         self.advance(synthetic)
 
     def advance(self, task: dict[str, Any]) -> None:
-        """scheduler 终态钩子：succeeded → 推进下步；失败终态 → run 收口。幂等。"""
-        run_id = task.get("pipeline_run")
-        if not run_id:
-            return
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            return
-        if run["status"] == "paused":
-            # 派发门：跑完当前节点后停在边界（progress 指针 + 审计），等待 resume
-            if task["status"] == "succeeded":
-                self._pipeline_repo.set_run_progress(run_id, task["step_index"] + 1)
-                self._audit(run_id, task["handle"], "paused_at_boundary",
-                            detail={"next_index": task["step_index"] + 1})
-            return
-        if run["status"] != "running":
-            return
-        if task["status"] == "paused":
-            # 任务级暂停（工具抛 ToolPauseError）：run 停在该步、**不**级联收口；
-            # resume 时该步以留档 input 重新派发（见 resume_run 的 cancelled/failed 分支）。
-            self._audit(run_id, task["handle"], "step_paused",
-                        detail={"step_index": task["step_index"], "error": task.get("error")})
-            self._pipeline_repo.cas_run_status(run_id, ("running",), "paused")
-            return
-        if task["status"] in FAILURE_STATUSES:
-            self._audit(run_id, task["handle"], "step_failed",
-                        detail={"step_index": task["step_index"], "status": task["status"]})
-            self._finish_and_cascade(run_id, task["status"], error=task.get("error"))
-            return
-        if task["status"] != "succeeded":
-            return
-        self._audit(run_id, task["handle"], "step_completed",
-                    detail={"step_index": task["step_index"]})
-
-        definition = self._pipeline_repo.get_definition(run["pipeline_id"])
-        steps = definition["steps"]
-        history = self._pipeline_repo.outputs_by_step(run_id)
-        next_index = task["step_index"] + 1
-        prev_output = task["output"]  # prev 语义：最近一个已执行步的输出（skipped 无输出）
-
-        # D2：when 不满足 → 跳步留痕并继续向后探测（全部跳完即收口）
-        while next_index < len(steps):
-            step = steps[next_index]
-            if "when" in step and not evaluate_when(step["when"], run["input"], prev_output, history):
-                self._audit(run_id, None, "step_skipped",
-                            detail={"step_index": next_index, "when": step["when"]})
-                next_index += 1
-                continue
-            break
-        if next_index >= len(steps):
-            self._finish_and_cascade(run_id, "succeeded")
-            return
-
-        step = steps[next_index]
-        if "pipeline" in step:  # C1：workflow 的子流步 → 创建子 run（级联由 _finish_and_cascade 闭环）
-            try:
-                self._spawn_subrun(run_id, next_index, step, run, prev_output, history)
-            except ToolUserError:
-                pass  # spawn 内部已收口父 run
-            return
-        try:
-            resolved = resolve_input(step["input"], run["input"], prev_output, history)
-            self._submit(definition, run_id, next_index, resolved)
-        except ToolUserError as exc:
-            self._finish_and_cascade(run_id, "failed", error={
-                "kind": "user",
-                "message": f"第 {next_index} 步无法入队: {exc}",
-            })
-        except ToolNotFoundError as exc:
-            self._finish_and_cascade(run_id, "failed", error={
-                "kind": "user",
-                "message": f"第 {next_index} 步工具不可用: {exc}",
-            })
+        self._step_coordinator.advance(task)
 
     # ---- 流的全控制三原语（方案 §5） -----------------------------------
 
