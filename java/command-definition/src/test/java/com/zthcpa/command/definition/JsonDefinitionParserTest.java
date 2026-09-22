@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class JsonDefinitionParserTest {
@@ -30,6 +31,26 @@ class JsonDefinitionParserTest {
         assertEquals(DefinitionKind.WORKFLOW, definition.key().kind());
         assertEquals("ocr.extract-document", definition.key().id());
         assertEquals("OCR document", definition.content().get("title"));
+        assertEquals(64, definition.checksum().length());
+    }
+
+    @Test
+    void checksumDoesNotDependOnObjectFieldOrder() {
+        DefinitionDocument first = parser.parse(input("""
+                {"kind":"workflow","id":"ocr.extract-document","version":1,
+                 "schema_version":1,"status":"active","title":"OCR"}
+                """), "first.json");
+        DefinitionDocument reordered = parser.parse(input("""
+                {"title":"OCR","status":"active","schema_version":1,
+                 "version":1,"id":"ocr.extract-document","kind":"workflow"}
+                """), "second.json");
+        DefinitionDocument changed = parser.parse(input("""
+                {"kind":"workflow","id":"ocr.extract-document","version":1,
+                 "schema_version":1,"status":"active","title":"Changed"}
+                """), "changed.json");
+
+        assertEquals(first.checksum(), reordered.checksum());
+        assertNotEquals(first.checksum(), changed.checksum());
     }
 
     @Test

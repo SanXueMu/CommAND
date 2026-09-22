@@ -8,6 +8,7 @@ public record DefinitionDocument(
         int schemaVersion,
         DefinitionStatus status,
         Map<String, Object> content,
+        String checksum,
         String source
 ) {
     public DefinitionDocument {
@@ -17,6 +18,9 @@ public record DefinitionDocument(
             throw new IllegalArgumentException("Schema version must be positive");
         }
         content = Map.copyOf(Objects.requireNonNull(content, "content"));
+        if (checksum == null || !checksum.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Definition checksum must be a lowercase SHA-256 hex value");
+        }
         if (source == null || source.isBlank()) {
             throw new IllegalArgumentException("Definition source must not be blank");
         }

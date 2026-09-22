@@ -37,6 +37,7 @@ class DefinitionSetValidatorTest {
                 1,
                 status,
                 Map.of("version", version),
+                "0".repeat(64),
                 "test"
         );
     }

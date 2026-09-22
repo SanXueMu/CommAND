@@ -10,7 +10,10 @@ import com.zthcpa.command.contract.DefinitionStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 
@@ -42,12 +45,27 @@ public final class JsonDefinitionParser {
                     root.get("schema_version").intValue(),
                     DefinitionStatus.fromValue(root.get("status").textValue()),
                     content,
+                    checksum(content),
                     source
             );
         } catch (DefinitionValidationException exception) {
             throw exception;
         } catch (IllegalArgumentException | IOException exception) {
             throw new DefinitionValidationException(List.of(source + ": " + exception.getMessage()));
+        }
+    }
+
+    private String checksum(Map<String, Object> content) throws IOException {
+        try {
+            ObjectMapper canonicalMapper = objectMapper.copy();
+            canonicalMapper.configure(
+                    com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS,
+                    true
+            );
+            byte[] canonicalJson = canonicalMapper.writeValueAsBytes(content);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonicalJson));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
         }
     }
 
