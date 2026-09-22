@@ -17,5 +17,10 @@
             <groupId>com.zthcpa.command</groupId>
             <artifactId>command-definition</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
