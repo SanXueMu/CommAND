@@ -31,7 +31,7 @@ command/
 ├── config.py                  # L1 配置：frozen dataclass + .env 覆盖
 ├── deps.py                    # L2 装配：lru_cache 单例工厂，只装配不使用
 ├── api/                       # L3 路由：system / tools / tasks / pipelines + schemas
-├── services/                  # L4 编排：registry / dispatch / pipeline / definition / lifecycle / recovery / query / rerun / subrun
+├── services/                  # L4 编排：registry / dispatch / pipeline / definition / lifecycle / recovery / query / rerun / batch / subrun
 ├── core/                      # L5 调度域：protocol / runner / scheduler / pipeline / errors
 ├── store/                     # L6 PostgreSQL：db + migrations + 三仓储
 ├── models/                    # 数据模型集中（TaskView / ToolView / EventView）
@@ -39,7 +39,7 @@ command/
 └── tests/                     # 镜像 core/ 结构，Fake 客户端零外部依赖
 ```
 
-当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`RunLifecycleService` 负责暂停、启动恢复收口和中止；`RunRecoveryService` 负责暂停 run 的断点重放；`RunQueryService` 负责运行快照、事件、任务和摘要查询；`StepRerunService` 负责单步骤断点重跑；`RunStepCoordinator` 负责任务终态判断、when 跳步和下一步派发；`SubrunCoordinator` 负责子流实例创建和首步派发；`SubrunCascadeCoordinator` 负责父子 run 完成后的结果传递和失败级联；`PipelineService` 暂时保留 fallback、根 run 收口、整流重跑和批量重跑逻辑及兼容代理。外部 API 与 PostgreSQL 结构保持不变。
+当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`RunLifecycleService` 负责暂停、启动恢复收口和中止；`RunRecoveryService` 负责暂停 run 的断点重放；`RunQueryService` 负责运行快照、事件、任务和摘要查询；`StepRerunService` 负责单步骤断点重跑；`BatchRerunService` 负责批次失败项筛选、去重和批量调度；`RunStepCoordinator` 负责任务终态判断、when 跳步和下一步派发；`SubrunCoordinator` 负责子流实例创建和首步派发；`SubrunCascadeCoordinator` 负责父子 run 完成后的结果传递和失败级联；`PipelineService` 暂时保留 fallback、根 run 收口和整流重跑逻辑及兼容代理。外部 API 与 PostgreSQL 结构保持不变。
 
 ## 工具协议 v1 摘要
 

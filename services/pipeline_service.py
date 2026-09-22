@@ -11,6 +11,7 @@ from typing import Any
 from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError, ToolUserError
 from core.pipeline import resolve_input
 from services.dispatch_service import DispatchService
+from services.batch_rerun_service import BatchRerunService
 from services.pipeline_definition_service import PipelineDefinitionService
 from services.run_lifecycle_service import RunLifecycleService
 from services.run_recovery_service import RunRecoveryService
@@ -311,99 +312,28 @@ class PipelineService:
         return {"run_id": new_run_id, "rerun_of": run_id, "status": "running",
                 "first_handle": first_handle}
 
-    # 可批量重跑的状态：真失败态（paused 走「继续」/resume，不在此列）
-    RERUNNABLE_STATUSES = ("failed", "failed_review", "cancelled", "interrupted")
+    RERUNNABLE_STATUSES = BatchRerunService.RERUNNABLE_STATUSES
+
+    def _batch_rerun_service(self) -> BatchRerunService:
+        # 每次取当前 rerun_run，保留轻量测试和调用方替换入口的兼容性。
+        return BatchRerunService(self._pipeline_repo, self.rerun_run)
 
     @staticmethod
     def _dedupe_by_file(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """同一文件只留**最新**一条（入参按 created_at 倒序）：防止「越重跑越多」。
-
-        每次失败的重跑都会新产生一条 failed run，若不去重，下一次点「重跑失败项」会把
-        历史失败与新失败一起重跑，数量指数增长（2026-09-14 用户反馈）。
-        """
-        seen: dict[str, dict[str, Any]] = {}
-        for run in runs:
-            key = str((run.get("input") or {}).get("file") or run.get("id"))
-            seen.setdefault(key, run)
-        return list(seen.values())
+        return BatchRerunService.dedupe_by_file(runs)
 
     def rerun_runs(self, run_ids: list[str]) -> dict[str, Any]:
-        """批量重跑（批次失败项一键重跑）：逐条复用 rerun_run（原 run 留档、新 run 继承批次）。
-
-        **同一文件只重跑最新一条**（其余记 skipped），单条失败不拖垮整批。
-        """
-        rerun: list[dict[str, Any]] = []
-        skipped: list[dict[str, str]] = []
-        fetched: dict[str, dict[str, Any]] = {}
-        for run_id in run_ids:
-            run = self._pipeline_repo.get_run(run_id)
-            if run is not None:
-                fetched[run_id] = run
-        ordered = sorted(fetched.values(), key=lambda r: str(r.get("created_at") or ""),
-                         reverse=True)
-        keep = {r["id"] for r in self._dedupe_by_file(ordered)}
-        for run_id in run_ids:
-            run = fetched.get(run_id)
-            if run is None:
-                skipped.append({"run_id": run_id, "reason": "任务不存在"})
-                continue
-            if str(run.get("status")) not in self.RERUNNABLE_STATUSES:
-                skipped.append({"run_id": run_id,
-                                "reason": f"状态不可重跑（{run.get('status')}）"})
-                continue
-            if run_id not in keep:
-                skipped.append({"run_id": run_id, "reason": "同一文件已有更新的失败任务，已跳过"})
-                continue
-            try:
-                created = self.rerun_run(run_id)
-                rerun.append({"from": run_id, "to": created["run_id"]})
-            except Exception as exc:  # noqa: BLE001 —— 单条失败不影响整批
-                skipped.append({"run_id": run_id, "reason": f"{type(exc).__name__}: {exc}"})
-        return {"count": len(rerun), "rerun": rerun, "skipped": skipped}
+        return self._batch_rerun_service().rerun_runs(run_ids)
 
     def failed_runs_of_batch(self, batch_id: str, limit: int = 500) -> list[str]:
-        """批次内可重跑的 run id：失败态（paused 走继续）且**同一文件只取最新一条**。"""
-        runs = self._pipeline_repo.list_runs(batch_id=batch_id, limit=limit)
-        failed = [r for r in runs if str(r.get("status")) in self.RERUNNABLE_STATUSES]
-        return [r["id"] for r in self._dedupe_by_file(failed)]
+        return self._batch_rerun_service().failed_runs_of_batch(batch_id, limit)
 
     def best_runs_of_batch(self, batch_id: str) -> list[dict[str, Any]]:
-        """批次内每个文件的最优 run（成功优先/同级最新）——**不受分页窗口限制**，批次导出用。"""
-        return self._pipeline_repo.best_runs_by_batch(batch_id)
+        return self._batch_rerun_service().best_runs_of_batch(batch_id)
 
     def rerunnable_runs(self, batch_id: str | None = None, flow_ids: list[str] | None = None,
                         limit: int = 1000) -> dict[str, Any]:
-        """可重跑清单（**全批次口径**，不受任务清单「只加载最新 N 条」限制）。
-
-        判据 = 「**从未成功过**」且「最新一次是失败态」的文件：
-        - 已成功过的文件即便后来某次重跑失败，也不需要再跑（交付物已在），否则计数会被
-          历史失败的尝试虚高（2026-09-14 用户实测：界面 42，真实待处理 10）。
-        - paused 不在内（那是「继续」的语义）。
-        返回 {count, run_ids, files:[{file,name,run_id,status,error}], done_files:[已有成功译文的文件]}。
-        """
-        runs = self._pipeline_repo.list_runs(batch_id=batch_id, limit=limit)
-        if flow_ids:
-            wanted = set(flow_ids)
-            runs = [r for r in runs if r.get("pipeline_id") in wanted]
-        grouped: dict[str, list[dict[str, Any]]] = {}
-        for run in runs:  # created_at DESC（最新在前）
-            key = str((run.get("input") or {}).get("file") or run["id"])
-            grouped.setdefault(key, []).append(run)
-        files: list[dict[str, Any]] = []
-        done: list[str] = []
-        for key, history in grouped.items():
-            if any(r.get("status") == "succeeded" for r in history):
-                done.append(key)   # 已有成功译文：前端据此把「重跑」置灰（与是否还有失败尝试无关）
-                continue
-            latest = history[0]
-            if str(latest.get("status")) not in self.RERUNNABLE_STATUSES:
-                continue
-            files.append({
-                "file": key, "name": Path(key).name, "run_id": latest["id"],
-                "status": latest.get("status"), "error": (latest.get("error") or {}).get("message"),
-            })
-        return {"count": len(files), "run_ids": [f["run_id"] for f in files], "files": files,
-                "done_files": done}
+        return self._batch_rerun_service().rerunnable_runs(batch_id, flow_ids, limit)
 
     def run_snapshot(self, run_id: str) -> dict[str, Any]:
         return self._queries.run_snapshot(run_id)
