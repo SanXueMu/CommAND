@@ -57,6 +57,11 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.zthcpa.command</groupId>
+                <artifactId>command-run</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>3.5.7</version>
