@@ -12,6 +12,7 @@ from core.errors import TaskConflictError, TaskNotFoundError, ToolNotFoundError,
 from core.pipeline import evaluate_when, resolve_input
 from services.dispatch_service import DispatchService
 from services.pipeline_definition_service import PipelineDefinitionService
+from services.run_lifecycle_service import RunLifecycleService
 from store.db import Db
 from store.key_repo import KeyRepo
 from store.pipeline_repo import PipelineRepo
@@ -22,7 +23,6 @@ from store.tool_repo import ToolRepo
 logger = logging.getLogger("command.pipeline")
 
 FAILURE_STATUSES = {"failed", "failed_review", "cancelled", "interrupted"}
-RUN_TERMINAL = {"succeeded", "failed", "failed_review", "cancelled", "interrupted"}
 # 删除运行中的 run 时：中止后等待活跃任务收口的秒数（超时仍删，pending 回报）
 DELETE_ABORT_WAIT_S = 10.0
 # 可打包下载的产物后缀（文档类；排除 .json/.db 等中间态文件）
@@ -55,6 +55,7 @@ class PipelineService:
         data_dir: Path | None = None,
         key_repo: KeyRepo | None = None,
         definition_service: PipelineDefinitionService | None = None,
+        lifecycle_service: RunLifecycleService | None = None,
     ) -> None:
         self._db = db
         self._pipeline_repo = pipeline_repo
@@ -66,6 +67,9 @@ class PipelineService:
         self._key_repo = key_repo
         self._definitions = definition_service or PipelineDefinitionService(
             pipeline_repo=pipeline_repo, tool_repo=tool_repo, key_repo=key_repo)
+        self._lifecycle = lifecycle_service or RunLifecycleService(
+            pipeline_repo=pipeline_repo, dispatch_service=dispatch_service,
+            run_event_repo=run_event_repo)
 
     def register(self, pipeline_id: str, name: str, steps: list[dict[str, Any]],
                  doc_md: str | None = None, input_schema: dict[str, Any] | None = None,
@@ -320,16 +324,7 @@ class PipelineService:
     # ---- 流的全控制三原语（方案 §5） -----------------------------------
 
     def pause_run(self, run_id: str) -> dict[str, Any]:
-        """温和暂停：标记意图，当前节点跑完后停在边界；若已在边界则立即生效。"""
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        if run["status"] in RUN_TERMINAL:
-            raise TaskConflictError(f"run 已终态，无法暂停: {run['status']}")
-        if self._pipeline_repo.cas_run_status(run_id, ("running",), "paused"):
-            self._audit(run_id, None, "pause_requested", detail={"from": "running"})
-            return {"run_id": run_id, "status": "paused"}
-        return {"run_id": run_id, "status": "paused"}  # 已是 paused，幂等
+        return self._lifecycle.pause(run_id)
 
     def recover_stale_runs(self) -> list[str]:
         """AF2：启动收口——进程重启后库内仍 running 的 run 已无人推进，统一标 interrupted。
@@ -339,15 +334,7 @@ class PipelineService:
         库里的 running 必然是上次进程死亡留下的。事件留痕、可重跑（interrupted 在
         RERUNNABLE_STATUSES 内）；paused 不动（那是「可继续」语义，与进程无关）。
         """
-        recovered: list[str] = []
-        for run_id in self._pipeline_repo.running_run_ids():
-            self._pipeline_repo.finish_run_forced(
-                run_id, "interrupted",
-                error={"message": "进程重启中断，可重跑", "kind": "transient"})
-            self._audit(run_id, None, "run_recovered",
-                        {"reason": "process_restart", "status": "interrupted"})
-            recovered.append(run_id)
-        return recovered
+        return self._lifecycle.recover_stale()
 
     def resume_run(self, run_id: str) -> dict[str, Any]:
         """恢复即查询（重放）：定位首个未成功步骤分派；已 succeeded 步骤永不重发。"""
@@ -420,44 +407,10 @@ class PipelineService:
                 "dispatched": dispatched["handle"] if dispatched else None}
 
     def abort_run(self, run_id: str) -> dict[str, Any]:
-        """立即中止：活跃任务全部发起取消，run 强制收口为 cancelled；成果留档可查。
-        C1：递归中止活跃子 run（07——父终止=整树终止）。"""
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        if not self._pipeline_repo.cas_run_status(
-                run_id, ("running", "paused"), "cancelled"):
-            raise TaskConflictError(f"run 已终态: {run['status']}")
-        self._audit(run_id, None, "abort_requested")
-        for handle in self._pipeline_repo.active_task_handles(run_id):
-            try:
-                self._dispatch.cancel(handle)
-            except Exception:  # noqa: BLE001 取消尽力而为，收口为准
-                pass
-        for sub in self._pipeline_repo.get_subruns(run_id).values():
-            if sub["status"] in ("running", "paused"):
-                try:
-                    self.abort_run(sub["id"])  # 递归：子树整体终止
-                except TaskConflictError:
-                    pass
-        self._audit(run_id, None, "run_aborted")
-        return {"run_id": run_id, "status": "cancelled"}
+        return self._lifecycle.abort(run_id)
 
     def abort_step(self, run_id: str, step_index: int) -> dict[str, Any]:
-        """节点中止：queued/running 任务发起取消；run 状态不变（等收口或人工 rerun）。"""
-        run = self._pipeline_repo.get_run(run_id)
-        if run is None:
-            raise TaskNotFoundError(f"管线运行不存在: {run_id}")
-        latest = self._pipeline_repo.latest_task_by_step(run_id)
-        task = latest.get(step_index)
-        if task is None:
-            raise TaskNotFoundError(f"第 {step_index} 步尚无任务")
-        if task["status"] not in ("queued", "running"):
-            raise TaskConflictError(f"第 {step_index} 步不可中止（已 {task['status']}）")
-        result = self._dispatch.cancel(task["handle"])
-        self._audit(run_id, task["handle"], "step_abort",
-                    detail={"step_index": step_index, "result": result.get("status")})
-        return {"run_id": run_id, "step_index": step_index, **result}
+        return self._lifecycle.abort_step(run_id, step_index)
 
     def rerun_step(self, run_id: str, step_index: int,
                    override: dict[str, Any] | None = None) -> dict[str, Any]:
