@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "capability_pipeline",
+  "id": "ocr.extract-by-template",
+  "version": 1,
+  "status": "active",
+  "title": "Extract pages with a resolved template",
+  "steps": [
+    {
+      "id": "inspect",
+      "definition_ref": {"kind": "tool", "id": "file.inspect", "version": 1}
+    },
+    {
+      "id": "extract",
+      "definition_ref": {"kind": "tool", "id": "ocr.page.extract", "version": 1}
+    },
+    {
+      "id": "persist",
+      "definition_ref": {"kind": "tool", "id": "ocr.result.persist", "version": 1}
+    }
+  ]
+}

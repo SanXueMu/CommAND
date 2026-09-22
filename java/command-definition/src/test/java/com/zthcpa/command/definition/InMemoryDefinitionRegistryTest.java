@@ -41,6 +41,27 @@ class InMemoryDefinitionRegistryTest {
         );
     }
 
+    @Test
+    void rejectsMissingNonToolReference() {
+        DefinitionDocument workflow = new DefinitionDocument(
+                new DefinitionKey(DefinitionKind.WORKFLOW, "missing-ref", 1),
+                1,
+                DefinitionStatus.ACTIVE,
+                Map.of("capability_pipeline_ref", Map.of(
+                        "kind", "capability_pipeline",
+                        "id", "missing",
+                        "version", 1
+                )),
+                "0".repeat(64),
+                "test"
+        );
+
+        assertThrows(
+                DefinitionValidationException.class,
+                () -> new InMemoryDefinitionRegistry(List.of(workflow), new DefinitionSetValidator())
+        );
+    }
+
     private DefinitionDocument definition(int version, DefinitionStatus status) {
         return new DefinitionDocument(
                 new DefinitionKey(DefinitionKind.WORKFLOW, "ocr.extract-document", version),

@@ -20,7 +20,16 @@ public final class InMemoryDefinitionRegistry implements DefinitionRegistry {
             List<DefinitionDocument> definitions,
             DefinitionSetValidator validator
     ) {
+        this(definitions, validator, new DefinitionReferenceValidator());
+    }
+
+    public InMemoryDefinitionRegistry(
+            List<DefinitionDocument> definitions,
+            DefinitionSetValidator validator,
+            DefinitionReferenceValidator referenceValidator
+    ) {
         validator.validate(definitions);
+        referenceValidator.validate(definitions);
         Map<DefinitionKey, DefinitionDocument> definitionsByKey = new LinkedHashMap<>();
         Map<ActiveKey, DefinitionDocument> activeDefinitions = new LinkedHashMap<>();
         for (DefinitionDocument definition : definitions) {

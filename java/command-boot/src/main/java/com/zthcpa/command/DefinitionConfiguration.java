@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionRegistry;
 import com.zthcpa.command.definition.ClasspathDefinitionLoader;
 import com.zthcpa.command.definition.DefinitionSetValidator;
+import com.zthcpa.command.definition.DefinitionReferenceValidator;
 import com.zthcpa.command.definition.InMemoryDefinitionRegistry;
 import com.zthcpa.command.definition.JsonDefinitionParser;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +20,10 @@ public class DefinitionConfiguration {
                 "definitions/index.txt",
                 parser
         );
-        return new InMemoryDefinitionRegistry(loader.load(), new DefinitionSetValidator());
+        return new InMemoryDefinitionRegistry(
+                loader.load(),
+                new DefinitionSetValidator(),
+                new DefinitionReferenceValidator()
+        );
     }
 }
