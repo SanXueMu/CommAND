@@ -14,7 +14,7 @@ public final class FlywayLocalOpsRunner {
     public static void main(String[] args) {
         String url = env("COMMAND_DB_URL", "jdbc:postgresql://localhost:5432/command_dev");
         String user = env("COMMAND_DB_USER", "command_dev");
-        String password = env("COMMAND_DB_PASSWORD", "root");
+        String password = requiredEnv("COMMAND_DB_PASSWORD");
         String command = args.length > 0 ? args[0] : "info";
 
         Flyway flyway = Flyway.configure()
@@ -39,6 +39,14 @@ public final class FlywayLocalOpsRunner {
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return (value == null || value.isBlank()) ? fallback : value;
+    }
+
+    private static String requiredEnv(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must be provided");
+        }
+        return value;
     }
 
     private FlywayLocalOpsRunner() {

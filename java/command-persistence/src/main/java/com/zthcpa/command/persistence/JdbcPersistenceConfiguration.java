@@ -1,6 +1,7 @@
 package com.zthcpa.command.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zthcpa.command.contract.DefinitionRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Conditional;
