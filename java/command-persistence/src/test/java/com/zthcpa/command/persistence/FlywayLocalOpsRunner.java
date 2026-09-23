@@ -15,11 +15,15 @@ public final class FlywayLocalOpsRunner {
         String url = env("COMMAND_DB_URL", "jdbc:postgresql://localhost:5432/command_dev");
         String user = env("COMMAND_DB_USER", "command_dev");
         String password = requiredEnv("COMMAND_DB_PASSWORD");
+        String location = env("COMMAND_FLYWAY_LOCATION", "classpath:db/migration");
+        String schema = env("COMMAND_FLYWAY_SCHEMA", "public");
         String command = args.length > 0 ? args[0] : "info";
 
         Flyway flyway = Flyway.configure()
                 .dataSource(url, user, password)
-                .locations("classpath:db/migration")
+                .locations(location)
+                .schemas(schema)
+                .defaultSchema(schema)
                 .baselineVersion("22")
                 .baselineDescription("command_existing_python_schema")
                 .baselineOnMigrate(false)

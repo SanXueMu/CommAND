@@ -1,0 +1,10 @@
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+    clean-disabled: true
+    locations: classpath:db/clean-migration
+    schemas: command_runtime
+    default-schema: command_runtime
