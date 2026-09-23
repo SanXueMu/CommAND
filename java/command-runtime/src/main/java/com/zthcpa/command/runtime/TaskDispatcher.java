@@ -87,12 +87,14 @@ public final class TaskDispatcher {
         if (task == null) {
             return false;
         }
-        WorkerJob job;
+        WorkerJob job = null;
+        JobPolling polling = null;
         try {
             job = worker.createJob(task.toolId(), new WorkerJobRequest(
                     task.toolId(), task.taskId(), task.attempt(), task.input()
             ));
-            WorkerJob finalJob = awaitTerminal(task.taskId(), workerId, job);
+            polling = new JobPolling(job);
+            WorkerJob finalJob = awaitTerminal(task.taskId(), workerId, polling);
             switch (finalJob.status()) {
                 case "succeeded" -> tasks.succeed(task.taskId(), workerId, finalJob.output());
                 case "cancelled" -> {
@@ -105,6 +107,13 @@ public final class TaskDispatcher {
             }
             return true;
         } catch (WorkerRuntimeException exception) {
+            if (job != null && (polling == null || !polling.cancelSent)) {
+                try {
+                    worker.cancelJob(job.jobId());
+                } catch (WorkerRuntimeException cancelException) {
+                    exception.addSuppressed(cancelException);
+                }
+            }
             tasks.fail(task.taskId(), workerId, Map.of(
                     "code", "WORKER_RUNTIME_ERROR", "message", exception.getMessage()
             ));
@@ -112,20 +121,19 @@ public final class TaskDispatcher {
         }
     }
 
-    private WorkerJob awaitTerminal(String taskId, String workerId, WorkerJob created) {
+    private WorkerJob awaitTerminal(String taskId, String workerId, JobPolling polling) {
         long cursor = 0;
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
         long lastHeartbeat = nanoTime.getAsLong();
-        WorkerJob current = created;
-        boolean cancellationRequested = false;
+        WorkerJob current = polling.created;
         while (true) {
             cursor = relayEvents(taskId, current.jobId(), cursor);
-            if (!cancellationRequested && tasks.isCancellationRequested(taskId, workerId)) {
+            if (!polling.cancelSent && tasks.isCancellationRequested(taskId, workerId)) {
                 worker.cancelJob(current.jobId());
-                cancellationRequested = true;
+                polling.cancelSent = true;
             }
             long now = nanoTime.getAsLong();
-            if (!cancellationRequested && now - lastHeartbeat >= heartbeatInterval.toNanos()) {
+            if (!polling.cancelSent && now - lastHeartbeat >= heartbeatInterval.toNanos()) {
                 if (!tasks.heartbeat(taskId, workerId)) {
                     throw new WorkerRuntimeException("Task worker ownership lost: " + taskId);
                 }
@@ -178,5 +186,14 @@ public final class TaskDispatcher {
     @FunctionalInterface
     interface Sleeper {
         void sleep(long millis) throws InterruptedException;
+    }
+
+    private static final class JobPolling {
+        private final WorkerJob created;
+        private boolean cancelSent;
+
+        private JobPolling(WorkerJob created) {
+            this.created = created;
+        }
     }
 }

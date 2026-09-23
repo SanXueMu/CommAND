@@ -72,6 +72,7 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 `TaskDispatcher` 已支持长任务 Worker job：对 `queued/running` 做有界轮询，按 `afterSequence` 单调游标转发事件，重复 sequence 不重复写入，并在终态后执行一次最终事件 drain；`job-poll-interval` 与 `job-timeout` 可配置。
 当平台先将当前 worker 持有的 task 标记为 `cancelled` 时，dispatcher 会调用 Worker `cancelJob`；Worker 终态返回后不会重复写平台取消收口。Worker 自发返回 `cancelled` 仍走正常平台 `cancel()` CAS。
 长任务轮询期间，dispatcher 按 `heartbeat-interval` 调用 clean task heartbeat；heartbeat CAS 返回 false 表示 worker ownership 丢失，立即停止 Worker 轮询并进入 runtime failure。默认 heartbeat interval 为 `30s`，且必须短于 `job-timeout`。
+Worker job 创建成功后的超时、ownership 丢失、轮询中断、未知状态或 HTTP 失败会执行 best-effort `cancelJob`，避免留下孤儿任务；清理失败作为 suppressed exception 保留，不覆盖原始 runtime error。平台取消已发送时不重复 cancel。
 `CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；当前不自动创建后台线程、不在应用启动时抢任务，后台循环需通过后续显式配置接入。
 `CleanSchedulerLoop` 已提供可控后台生命周期：显式 `start()` 后按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。当前仍不由 Spring 自动启动，Worker 地址、identity、并发度和轮询策略待配置后接入。
 Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只有 database profile 且显式开启后才创建 HTTP Worker、JDBC task port、dispatcher 和后台 loop；`worker-id`、`worker-base-url`、`poll-interval`、`worker-timeout` 在 Bean 创建时校验。

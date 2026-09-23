@@ -135,6 +135,37 @@ class TaskDispatcherTest {
         assertTrue(tasks.actions.contains("fail"));
     }
 
+    @Test
+    void cancelsWorkerJobAfterTimeout() {
+        FakeTasks tasks = new FakeTasks();
+        TimeoutWorker worker = new TimeoutWorker(false);
+        AtomicLong ticks = new AtomicLong();
+
+        WorkerRuntimeException exception = assertThrows(WorkerRuntimeException.class, () -> new TaskDispatcher(
+                tasks, worker, Duration.ofMillis(1), Duration.ofNanos(30), Duration.ofNanos(10),
+                millis -> { }, () -> ticks.addAndGet(20)
+        ).dispatchNext("worker-a"));
+
+        assertTrue(exception.getMessage().contains("timed out"));
+        assertEquals(1, worker.cancelCalls);
+    }
+
+    @Test
+    void preservesPrimaryFailureWhenWorkerCleanupFails() {
+        FakeTasks tasks = new FakeTasks();
+        TimeoutWorker worker = new TimeoutWorker(true);
+        AtomicLong ticks = new AtomicLong();
+
+        WorkerRuntimeException exception = assertThrows(WorkerRuntimeException.class, () -> new TaskDispatcher(
+                tasks, worker, Duration.ofMillis(1), Duration.ofNanos(30), Duration.ofNanos(10),
+                millis -> { }, () -> ticks.addAndGet(20)
+        ).dispatchNext("worker-a"));
+
+        assertTrue(exception.getMessage().contains("timed out"));
+        assertEquals(1, exception.getSuppressed().length);
+        assertEquals("cancel failed", exception.getSuppressed()[0].getMessage());
+    }
+
     private static final class FakeTasks implements TaskExecutionPort {
         private TaskExecution task = new TaskExecution("task-1", "text.llm.translate", 1,
                 Map.of("text", "hello"), null);
@@ -280,6 +311,38 @@ class TaskDispatcherTest {
         @Override
         public void cancelJob(String jobId) {
             cancelled = true;
+        }
+    }
+
+    private static final class TimeoutWorker implements WorkerRuntime {
+        private final boolean failCancel;
+        private int cancelCalls;
+
+        private TimeoutWorker(boolean failCancel) {
+            this.failCancel = failCancel;
+        }
+
+        @Override
+        public WorkerJob createJob(String toolId, WorkerJobRequest request) {
+            return new WorkerJob("job-1", "running", null, null);
+        }
+
+        @Override
+        public WorkerJob getJob(String jobId) {
+            return new WorkerJob(jobId, "running", null, null);
+        }
+
+        @Override
+        public List<WorkerEvent> listEvents(String jobId, long afterSequence) {
+            return List.of();
+        }
+
+        @Override
+        public void cancelJob(String jobId) {
+            cancelCalls++;
+            if (failCancel) {
+                throw new WorkerRuntimeException("cancel failed");
+            }
         }
     }
 }
