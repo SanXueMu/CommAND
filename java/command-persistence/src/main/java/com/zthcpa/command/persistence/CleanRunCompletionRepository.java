@@ -93,6 +93,44 @@ public final class CleanRunCompletionRepository {
         return Boolean.TRUE.equals(completed);
     }
 
+    public boolean failTask(
+            String taskId,
+            String workerId,
+            TaskStatus failureStatus,
+            Map<String, Object> error
+    ) {
+        require(taskId, "Task id");
+        require(workerId, "Worker id");
+        if (failureStatus != TaskStatus.FAILED && failureStatus != TaskStatus.FAILED_REVIEW) {
+            throw new IllegalArgumentException("Failure status must be FAILED or FAILED_REVIEW");
+        }
+
+        Boolean failed = transaction.execute(status -> {
+            String stepId = jdbc.query(COMPLETE_TASK, new MapSqlParameterSource()
+                            .addValue("taskId", taskId)
+                            .addValue("workerId", workerId)
+                            .addValue("taskStatus", failureStatus.name().toLowerCase())
+                            .addValue("output", PostgresJson.write(mapper, Map.of()))
+                            .addValue("error", PostgresJson.write(mapper, error == null ? Map.of() : error)),
+                    resultSet -> resultSet.next() ? resultSet.getString("step_id") : null);
+            if (stepId == null) {
+                return false;
+            }
+            String runId = jdbc.queryForObject(FIND_RUN_ID, Map.of("stepId", stepId), String.class);
+            jdbc.update(COMPLETE_STEP, new MapSqlParameterSource()
+                    .addValue("stepId", stepId)
+                    .addValue("stepStatus", failureStatus == TaskStatus.FAILED_REVIEW ? "failed" : "failed"));
+            jdbc.update(COMPLETE_RUN, new MapSqlParameterSource()
+                    .addValue("runId", runId)
+                    .addValue("runStatus", failureStatus == TaskStatus.FAILED_REVIEW ? "failed_review" : "failed")
+                    .addValue("error", PostgresJson.write(mapper, error == null ? Map.of() : error)));
+            insertTaskEvent(taskId, failureStatus, error);
+            insertRunEvent(runId, stepId, toRunStatus(failureStatus), error);
+            return true;
+        });
+        return Boolean.TRUE.equals(failed);
+    }
+
     private void insertTaskEvent(String taskId, TaskStatus status, Map<String, Object> error) {
         jdbc.update("""
                 INSERT INTO command_runtime.task_events (task_id, kind, detail)
