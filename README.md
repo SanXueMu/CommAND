@@ -57,6 +57,7 @@ Clean schema 已在本地 `command_dev.command_runtime` 验证：独立 Flyway V
 Clean `task_executions` 已支持 `SKIP LOCKED` 认领、worker 心跳校验、terminal 完成和 attempt 递增回队；worker 不匹配或终态任务不能继续更新。
 Clean `run_events/task_events` 已支持 PostgreSQL 生成事件 ID、JSON detail 追加和 `afterId` 增量查询，后续 SSE 直接消费新事件表。
 Clean 任务完成收口已在单事务内更新 `task_executions`、`run_steps`、`runs` 并追加两类事件；worker CAS 保证重复完成不重复推进或写事件。
+Clean 多步骤推进已独立为 `CleanStepCoordinatorRepository`：成功步骤原子创建下一 `run_step/task_execution` 并保持 run running；最后一步才收口 run succeeded。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 

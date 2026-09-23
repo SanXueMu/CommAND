@@ -51,6 +51,15 @@ public class JdbcPersistenceConfiguration {
     }
 
     @Bean
+    CleanStepCoordinatorRepository cleanStepCoordinatorRepository(
+            NamedParameterJdbcTemplate jdbc,
+            ObjectMapper mapper,
+            DataSource dataSource
+    ) {
+        return new CleanStepCoordinatorRepository(jdbc, mapper, dataSource);
+    }
+
+    @Bean
     CleanRunSubmissionRepository cleanRunSubmissionRepository(
             NamedParameterJdbcTemplate jdbc,
             ObjectMapper mapper,
