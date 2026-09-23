@@ -42,6 +42,15 @@ public class JdbcPersistenceConfiguration {
     }
 
     @Bean
+    CleanRunCompletionRepository cleanRunCompletionRepository(
+            NamedParameterJdbcTemplate jdbc,
+            ObjectMapper mapper,
+            DataSource dataSource
+    ) {
+        return new CleanRunCompletionRepository(jdbc, mapper, dataSource);
+    }
+
+    @Bean
     CleanRunSubmissionRepository cleanRunSubmissionRepository(
             NamedParameterJdbcTemplate jdbc,
             ObjectMapper mapper,
