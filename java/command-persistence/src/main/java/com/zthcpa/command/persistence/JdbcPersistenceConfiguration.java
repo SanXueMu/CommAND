@@ -77,6 +77,14 @@ public class JdbcPersistenceConfiguration {
     }
 
     @Bean
+    CleanArtifactRepository cleanArtifactRepository(
+            NamedParameterJdbcTemplate jdbc,
+            ObjectMapper mapper
+    ) {
+        return new JdbcCleanArtifactRepository(jdbc, mapper);
+    }
+
+    @Bean
     CleanRunSubmissionRepository cleanRunSubmissionRepository(
             NamedParameterJdbcTemplate jdbc,
             ObjectMapper mapper,

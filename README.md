@@ -66,6 +66,7 @@ Coordinator 通过当前 step index 消费冻结的 `PipelineRunSubmissionPlan`�
 恢复只针对 `interrupted`：保留历史执行记录，创建递增 attempt 的 queued retry；`cancelled`、`failed` 和成功运行不会被恢复。
 恢复达到 `max_attempts` 时保持 interrupted，不再创建 retry；恢复事务锁定 run/step/task，重复或并发恢复不会重复创建 attempt。
 Clean 运行查询只读取新 `runs/run_steps/task_executions/run_events`，详情返回每个 step 的最新 task attempt，事件支持 `afterId` 增量读取。
+Clean artifact 只登记外部对象存储索引，不把文件字节写入数据库；支持按 run/step 查询、artifact ID 幂等登记和外键级联清理。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 
