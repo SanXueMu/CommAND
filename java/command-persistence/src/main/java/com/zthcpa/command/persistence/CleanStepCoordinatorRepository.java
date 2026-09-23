@@ -2,6 +2,7 @@ package com.zthcpa.command.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.run.TaskStatus;
+import com.zthcpa.command.run.PipelineRunSubmissionPlan;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -59,6 +60,63 @@ public final class CleanStepCoordinatorRepository {
             return true;
         });
         return Boolean.TRUE.equals(completed);
+    }
+
+    public boolean completeAndAdvance(
+            String taskId,
+            String workerId,
+            Map<String, Object> output,
+            PipelineRunSubmissionPlan plan
+    ) {
+        require(taskId, "Task id");
+        require(workerId, "Worker id");
+        if (plan == null) {
+            throw new IllegalArgumentException("Pipeline submission plan must not be null");
+        }
+
+        Boolean completed = transaction.execute(status -> {
+            String stepId = jdbc.query(COMPLETE_TASK, parameters(taskId, workerId, output, null),
+                    resultSet -> resultSet.next() ? resultSet.getString("step_id") : null);
+            if (stepId == null) {
+                return false;
+            }
+            Map<String, Object> current = jdbc.queryForMap(FIND_STEP, Map.of("stepId", stepId));
+            String runId = current.get("run_id").toString();
+            if (!runId.equals(plan.runId())) {
+                throw new IllegalArgumentException("Frozen submission plan belongs to another run");
+            }
+            int currentIndex = ((Number) current.get("step_index")).intValue();
+            jdbc.update(COMPLETE_STEP, Map.of("stepId", stepId));
+            insertTaskEvent(taskId, "task.succeeded", output == null ? Map.of() : output);
+
+            CleanNextStepPlan nextStep = nextStep(plan, currentIndex);
+            if (nextStep == null) {
+                jdbc.update(COMPLETE_RUN, Map.of("runId", runId));
+                insertRunEvent(runId, stepId, "run.succeeded", Map.of());
+            } else {
+                insertNextStep(runId, nextStep);
+                insertRunEvent(runId, stepId, "step.advanced", Map.of("next_step_id", nextStep.stepId()));
+            }
+            return true;
+        });
+        return Boolean.TRUE.equals(completed);
+    }
+
+    private CleanNextStepPlan nextStep(PipelineRunSubmissionPlan plan, int currentIndex) {
+        int nextIndex = currentIndex + 1;
+        if (nextIndex >= plan.execution().steps().size()) {
+            return null;
+        }
+        var step = plan.execution().steps().get(nextIndex);
+        return new CleanNextStepPlan(
+                plan.runId() + ":step:" + nextIndex,
+                nextIndex,
+                step.id(),
+                step.tool(),
+                step.input(),
+                plan.taskIds().get(nextIndex),
+                step.maxAttempts()
+        );
     }
 
     private void insertNextStep(String runId, CleanNextStepPlan nextStep) {
@@ -119,6 +177,12 @@ public final class CleanStepCoordinatorRepository {
 
     private static final String FIND_RUN_ID = """
             SELECT run_id FROM command_runtime.run_steps WHERE id = :stepId
+            """;
+
+    private static final String FIND_STEP = """
+            SELECT run_id, step_index
+            FROM command_runtime.run_steps
+            WHERE id = :stepId
             """;
 
     private static final String COMPLETE_STEP = """

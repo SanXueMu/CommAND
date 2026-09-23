@@ -3,6 +3,10 @@ package com.zthcpa.command.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.run.TaskStatus;
+import com.zthcpa.command.run.PipelineRunSubmissionPlan;
+import com.zthcpa.command.run.PipelineExecutionPlan;
+import com.zthcpa.command.contract.DefinitionKey;
+import com.zthcpa.command.contract.DefinitionKind;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
@@ -26,16 +30,30 @@ public final class CleanStepCoordinatorLocalOpsRunner {
         var coordinator = new CleanStepCoordinatorRepository(jdbc, mapper, dataSource);
         var taskRepository = new JdbcCleanTaskRepository(jdbc, mapper);
         var completion = new CleanRunCompletionRepository(jdbc, mapper, dataSource);
+        var submissionPlan = new PipelineRunSubmissionPlan(
+                RUN_ID,
+                new DefinitionKey(DefinitionKind.WORKFLOW, "test.workflow", 1),
+                Map.of(),
+                java.util.List.of(new com.zthcpa.command.contract.DefinitionDocument(
+                        new DefinitionKey(DefinitionKind.CAPABILITY_PIPELINE, "test.pipeline", 1),
+                        1, com.zthcpa.command.contract.DefinitionStatus.ACTIVE,
+                        Map.of("title", "test"), "0".repeat(64), "selftest"
+                )),
+                new PipelineExecutionPlan(
+                        new DefinitionKey(DefinitionKind.CAPABILITY_PIPELINE, "test.pipeline", 1),
+                        java.util.List.of(
+                                new PipelineExecutionPlan.StepPlan(0, "first", new DefinitionKey(
+                                        DefinitionKind.TOOL, "first", 1), Map.of(), 1),
+                                new PipelineExecutionPlan.StepPlan(1, "second", new DefinitionKey(
+                                        DefinitionKind.TOOL, "second", 1), Map.of("from", "frozen-plan"), 1)
+                        )
+                ),
+                java.util.List.of(TASK_ONE, TASK_TWO)
+        );
         try {
             createFixture(jdbc);
             require(coordinator.completeAndAdvance(
-                    TASK_ONE, "worker-a", TaskStatus.SUCCEEDED,
-                    Map.of("stage", 1), null,
-                    new CleanNextStepPlan(
-                            STEP_TWO, 1, "second-tool", new DefinitionKey(
-                                    com.zthcpa.command.contract.DefinitionKind.TOOL, "second-tool", 1
-                            ), Map.of("from", "step-1"), TASK_TWO, 1
-                    )
+                    TASK_ONE, "worker-a", Map.of("stage", 1), submissionPlan
             ), "first step must advance");
             String running = jdbc.getJdbcTemplate().queryForObject(
                     "SELECT status FROM command_runtime.runs WHERE id = ?", String.class, RUN_ID);
