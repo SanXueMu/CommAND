@@ -78,7 +78,8 @@ public class CleanSchedulerConfiguration {
                 tasks,
                 worker,
                 requirePositive(properties.getJobPollInterval(), "jobPollInterval"),
-                requirePositive(properties.getJobTimeout(), "jobTimeout")
+                requirePositive(properties.getJobTimeout(), "jobTimeout"),
+                requirePositive(properties.getHeartbeatInterval(), "heartbeatInterval")
         );
     }
 

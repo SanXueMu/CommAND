@@ -13,6 +13,7 @@ public class CleanSchedulerProperties {
     private Duration workerTimeout = Duration.ofSeconds(30);
     private Duration jobPollInterval = Duration.ofMillis(250);
     private Duration jobTimeout = Duration.ofMinutes(30);
+    private Duration heartbeatInterval = Duration.ofSeconds(30);
 
     public boolean isEnabled() {
         return enabled;
@@ -68,5 +69,13 @@ public class CleanSchedulerProperties {
 
     public void setJobTimeout(Duration jobTimeout) {
         this.jobTimeout = jobTimeout;
+    }
+
+    public Duration getHeartbeatInterval() {
+        return heartbeatInterval;
+    }
+
+    public void setHeartbeatInterval(Duration heartbeatInterval) {
+        this.heartbeatInterval = heartbeatInterval;
     }
 }

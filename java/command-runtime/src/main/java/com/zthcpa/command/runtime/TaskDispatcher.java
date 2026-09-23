@@ -8,16 +8,18 @@ import java.util.function.LongSupplier;
 public final class TaskDispatcher {
     private static final Duration DEFAULT_POLL_INTERVAL = Duration.ofMillis(250);
     private static final Duration DEFAULT_JOB_TIMEOUT = Duration.ofMinutes(30);
+    private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
 
     private final TaskExecutionPort tasks;
     private final WorkerRuntime worker;
     private final Duration pollInterval;
     private final Duration jobTimeout;
+    private final Duration heartbeatInterval;
     private final Sleeper sleeper;
     private final LongSupplier nanoTime;
 
     public TaskDispatcher(TaskExecutionPort tasks, WorkerRuntime worker) {
-        this(tasks, worker, DEFAULT_POLL_INTERVAL, DEFAULT_JOB_TIMEOUT);
+        this(tasks, worker, DEFAULT_POLL_INTERVAL, DEFAULT_JOB_TIMEOUT, DEFAULT_HEARTBEAT_INTERVAL);
     }
 
     public TaskDispatcher(
@@ -26,7 +28,17 @@ public final class TaskDispatcher {
             Duration pollInterval,
             Duration jobTimeout
     ) {
-        this(tasks, worker, pollInterval, jobTimeout, Thread::sleep, System::nanoTime);
+        this(tasks, worker, pollInterval, jobTimeout, DEFAULT_HEARTBEAT_INTERVAL, Thread::sleep, System::nanoTime);
+    }
+
+    public TaskDispatcher(
+            TaskExecutionPort tasks,
+            WorkerRuntime worker,
+            Duration pollInterval,
+            Duration jobTimeout,
+            Duration heartbeatInterval
+    ) {
+        this(tasks, worker, pollInterval, jobTimeout, heartbeatInterval, Thread::sleep, System::nanoTime);
     }
 
     TaskDispatcher(
@@ -34,6 +46,18 @@ public final class TaskDispatcher {
             WorkerRuntime worker,
             Duration pollInterval,
             Duration jobTimeout,
+            Sleeper sleeper,
+            LongSupplier nanoTime
+    ) {
+        this(tasks, worker, pollInterval, jobTimeout, DEFAULT_HEARTBEAT_INTERVAL, sleeper, nanoTime);
+    }
+
+    TaskDispatcher(
+            TaskExecutionPort tasks,
+            WorkerRuntime worker,
+            Duration pollInterval,
+            Duration jobTimeout,
+            Duration heartbeatInterval,
             Sleeper sleeper,
             LongSupplier nanoTime
     ) {
@@ -45,8 +69,15 @@ public final class TaskDispatcher {
         if (jobTimeout == null || jobTimeout.isNegative() || jobTimeout.isZero()) {
             throw new IllegalArgumentException("jobTimeout must be positive");
         }
+        if (heartbeatInterval == null || heartbeatInterval.isNegative() || heartbeatInterval.isZero()) {
+            throw new IllegalArgumentException("heartbeatInterval must be positive");
+        }
+        if (heartbeatInterval.compareTo(jobTimeout) >= 0) {
+            throw new IllegalArgumentException("heartbeatInterval must be shorter than jobTimeout");
+        }
         this.pollInterval = pollInterval;
         this.jobTimeout = jobTimeout;
+        this.heartbeatInterval = heartbeatInterval;
         this.sleeper = sleeper;
         this.nanoTime = nanoTime;
     }
@@ -84,6 +115,7 @@ public final class TaskDispatcher {
     private WorkerJob awaitTerminal(String taskId, String workerId, WorkerJob created) {
         long cursor = 0;
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
+        long lastHeartbeat = nanoTime.getAsLong();
         WorkerJob current = created;
         boolean cancellationRequested = false;
         while (true) {
@@ -91,6 +123,13 @@ public final class TaskDispatcher {
             if (!cancellationRequested && tasks.isCancellationRequested(taskId, workerId)) {
                 worker.cancelJob(current.jobId());
                 cancellationRequested = true;
+            }
+            long now = nanoTime.getAsLong();
+            if (!cancellationRequested && now - lastHeartbeat >= heartbeatInterval.toNanos()) {
+                if (!tasks.heartbeat(taskId, workerId)) {
+                    throw new WorkerRuntimeException("Task worker ownership lost: " + taskId);
+                }
+                lastHeartbeat = now;
             }
             current = worker.getJob(current.jobId());
             if (isTerminal(current.status())) {

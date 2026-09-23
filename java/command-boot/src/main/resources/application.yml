@@ -15,3 +15,4 @@ command:
       worker-timeout: 30s
       job-poll-interval: 250ms
       job-timeout: 30m
+      heartbeat-interval: 30s

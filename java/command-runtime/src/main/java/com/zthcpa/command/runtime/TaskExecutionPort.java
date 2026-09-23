@@ -5,6 +5,10 @@ import java.util.Map;
 public interface TaskExecutionPort {
     TaskExecution claim(String workerId);
 
+    default boolean heartbeat(String taskId, String workerId) {
+        return true;
+    }
+
     default boolean isCancellationRequested(String taskId, String workerId) {
         return false;
     }

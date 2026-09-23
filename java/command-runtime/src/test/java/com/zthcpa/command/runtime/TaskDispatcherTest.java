@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,6 +60,7 @@ class TaskDispatcherTest {
                 worker,
                 Duration.ofMillis(1),
                 Duration.ofSeconds(1),
+                Duration.ofMillis(1),
                 millis -> { },
                 new AtomicInteger()::incrementAndGet
         );
@@ -75,7 +77,7 @@ class TaskDispatcherTest {
         CancelAwareWorker worker = new CancelAwareWorker();
 
         assertTrue(new TaskDispatcher(
-                tasks, worker, Duration.ofMillis(1), Duration.ofSeconds(1), millis -> { },
+                tasks, worker, Duration.ofMillis(1), Duration.ofSeconds(1), Duration.ofMillis(1), millis -> { },
                 new AtomicInteger()::incrementAndGet
         ).dispatchNext("worker-a"));
 
@@ -83,11 +85,63 @@ class TaskDispatcherTest {
         assertEquals(List.of("claim"), tasks.actions);
     }
 
+    @Test
+    void heartbeatsLongJobAtTheConfiguredInterval() {
+        FakeTasks tasks = new FakeTasks();
+        AtomicInteger ticks = new AtomicInteger();
+        LongRunningWorker worker = new LongRunningWorker();
+
+        assertTrue(new TaskDispatcher(
+                tasks, worker, Duration.ofMillis(1), Duration.ofSeconds(1), Duration.ofNanos(2),
+                millis -> { }, ticks::incrementAndGet
+        ).dispatchNext("worker-a"));
+
+        assertTrue(tasks.heartbeats > 0);
+    }
+
+    @Test
+    void stopsWhenHeartbeatOwnershipIsLost() {
+        FakeTasks tasks = new FakeTasks();
+        tasks.heartbeatResult = false;
+        AtomicInteger workerReads = new AtomicInteger();
+        WorkerRuntime worker = new WorkerRuntime() {
+            @Override
+            public WorkerJob createJob(String toolId, WorkerJobRequest request) {
+                return new WorkerJob("job-1", "running", null, null);
+            }
+
+            @Override
+            public WorkerJob getJob(String jobId) {
+                workerReads.incrementAndGet();
+                return new WorkerJob(jobId, "running", null, null);
+            }
+
+            @Override
+            public List<WorkerEvent> listEvents(String jobId, long afterSequence) {
+                return List.of();
+            }
+
+            @Override
+            public void cancelJob(String jobId) {
+            }
+        };
+        AtomicLong ticks = new AtomicLong();
+
+        assertThrows(WorkerRuntimeException.class, () -> new TaskDispatcher(
+                tasks, worker, Duration.ofMillis(1), Duration.ofSeconds(1), Duration.ofNanos(2),
+                millis -> { }, () -> ticks.addAndGet(10)
+        ).dispatchNext("worker-a"));
+        assertEquals(0, workerReads.get());
+        assertTrue(tasks.actions.contains("fail"));
+    }
+
     private static final class FakeTasks implements TaskExecutionPort {
         private TaskExecution task = new TaskExecution("task-1", "text.llm.translate", 1,
                 Map.of("text", "hello"), null);
         private final List<String> actions = new ArrayList<>();
         private boolean cancellationRequested;
+        private boolean heartbeatResult = true;
+        private int heartbeats;
 
         @Override
         public TaskExecution claim(String workerId) {
@@ -101,6 +155,12 @@ class TaskDispatcherTest {
         @Override
         public boolean isCancellationRequested(String taskId, String workerId) {
             return cancellationRequested;
+        }
+
+        @Override
+        public boolean heartbeat(String taskId, String workerId) {
+            heartbeats++;
+            return heartbeatResult;
         }
 
         @Override
