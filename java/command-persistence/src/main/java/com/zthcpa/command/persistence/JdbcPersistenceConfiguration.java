@@ -32,6 +32,11 @@ public class JdbcPersistenceConfiguration {
     }
 
     @Bean
+    CleanTaskRepository cleanTaskRepository(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper) {
+        return new JdbcCleanTaskRepository(jdbc, mapper);
+    }
+
+    @Bean
     CleanRunSubmissionRepository cleanRunSubmissionRepository(
             NamedParameterJdbcTemplate jdbc,
             ObjectMapper mapper,
