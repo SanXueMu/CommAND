@@ -114,9 +114,11 @@ public final class TaskDispatcher {
                     exception.addSuppressed(cancelException);
                 }
             }
-            tasks.fail(task.taskId(), workerId, Map.of(
-                    "code", "WORKER_RUNTIME_ERROR", "message", exception.getMessage()
-            ));
+            if (polling == null || !polling.ownershipLost) {
+                tasks.fail(task.taskId(), workerId, Map.of(
+                        "code", "WORKER_RUNTIME_ERROR", "message", exception.getMessage()
+                ));
+            }
             throw exception;
         }
     }
@@ -135,6 +137,7 @@ public final class TaskDispatcher {
             long now = nanoTime.getAsLong();
             if (!polling.cancelSent && now - lastHeartbeat >= heartbeatInterval.toNanos()) {
                 if (!tasks.heartbeat(taskId, workerId)) {
+                    polling.ownershipLost = true;
                     throw new WorkerRuntimeException("Task worker ownership lost: " + taskId);
                 }
                 lastHeartbeat = now;
@@ -191,6 +194,7 @@ public final class TaskDispatcher {
     private static final class JobPolling {
         private final WorkerJob created;
         private boolean cancelSent;
+        private boolean ownershipLost;
 
         private JobPolling(WorkerJob created) {
             this.created = created;

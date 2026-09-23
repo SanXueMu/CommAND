@@ -132,7 +132,7 @@ class TaskDispatcherTest {
                 millis -> { }, () -> ticks.addAndGet(10)
         ).dispatchNext("worker-a"));
         assertEquals(0, workerReads.get());
-        assertTrue(tasks.actions.contains("fail"));
+        assertFalse(tasks.actions.contains("fail"));
     }
 
     @Test
