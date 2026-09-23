@@ -42,6 +42,13 @@ public final class PostgresTaskSql {
             WHERE handle = :handle AND status = 'running'
             """;
 
+    public static final String FINISH = """
+            UPDATE tasks
+            SET status = :status, output = :output, error = :error,
+                finished_at = now()
+            WHERE handle = :handle
+            """;
+
     private PostgresTaskSql() {
     }
 }
