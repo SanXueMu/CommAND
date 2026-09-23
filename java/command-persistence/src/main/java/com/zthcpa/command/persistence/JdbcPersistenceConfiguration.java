@@ -2,6 +2,7 @@ package com.zthcpa.command.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionRepository;
+import com.zthcpa.command.contract.RunDefinitionSnapshotRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Conditional;
@@ -18,8 +19,16 @@ public class JdbcPersistenceConfiguration {
     }
 
     @Bean
-    RunRepository commandRunRepository(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper) {
-        return new JdbcRunRepository(jdbc, mapper);
+    DefinitionRepository commandDefinitionRepository(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper) {
+        return new JdbcDefinitionRepository(jdbc, mapper);
+    }
+
+    @Bean
+    RunDefinitionSnapshotRepository commandRunDefinitionSnapshotRepository(
+            NamedParameterJdbcTemplate jdbc,
+            ObjectMapper mapper
+    ) {
+        return new JdbcRunDefinitionSnapshotRepository(jdbc, mapper);
     }
 
     @Bean
