@@ -10,6 +10,7 @@ public final class CleanRecoveryLocalOpsRunner {
     public static void main(String[] args) {
         runCase("interrupted", "interrupted", true);
         runCase("cancelled", "cancelled", false);
+        runMaxAttemptCase();
     }
 
     private static void runCase(String suffix, String runStatus, boolean expectedRecovery) {
@@ -29,6 +30,7 @@ public final class CleanRecoveryLocalOpsRunner {
             System.out.println(suffix + " recovered=" + recovered);
             require(recovered == expectedRecovery, "unexpected recovery result");
             if (expectedRecovery) {
+                require(!repository.recoverInterruptedRun(runId), "recovery must be idempotent");
                 Map<String, Object> result = jdbc.getJdbcTemplate().queryForMap("""
                         SELECT
                           (SELECT status FROM command_runtime.runs WHERE id = ?) AS run_status,
@@ -44,6 +46,32 @@ public final class CleanRecoveryLocalOpsRunner {
                 require(((Number) result.get("task_count")).intValue() == 2, "retry task must be added");
                 require(((Number) result.get("run_events")).intValue() == 1, "recovery event expected");
             }
+        } finally {
+            jdbc.getJdbcTemplate().update("DELETE FROM command_runtime.runs WHERE id = ?", runId);
+        }
+    }
+
+    private static void runMaxAttemptCase() {
+        String runId = "clean-recovery-selftest-max-run";
+        String stepId = "clean-recovery-selftest-max-step";
+        String taskId = "clean-recovery-selftest-max-task";
+        PGSimpleDataSource dataSource = new PGSimpleDataSource();
+        dataSource.setURL("jdbc:postgresql://localhost:5432/command_dev");
+        dataSource.setUser("command_dev");
+        dataSource.setPassword(requiredEnv("COMMAND_DB_PASSWORD"));
+        var jdbc = new NamedParameterJdbcTemplate(dataSource);
+        var repository = new CleanRecoveryRepository(jdbc, new ObjectMapper(), dataSource);
+        try {
+            createFixture(jdbc, runId, stepId, taskId, "interrupted");
+            jdbc.getJdbcTemplate().update(
+                    "UPDATE command_runtime.task_executions SET attempt = max_attempts WHERE id = ?", taskId
+            );
+            require(!repository.recoverInterruptedRun(runId), "max attempt must not recover");
+            long taskCount = jdbc.getJdbcTemplate().queryForObject(
+                    "SELECT count(*) FROM command_runtime.task_executions WHERE step_id = ?", Long.class, stepId
+            );
+            require(taskCount == 1, "max attempt must not create retry");
+            System.out.println("max-attempt recovered=false, task_count=" + taskCount);
         } finally {
             jdbc.getJdbcTemplate().update("DELETE FROM command_runtime.runs WHERE id = ?", runId);
         }

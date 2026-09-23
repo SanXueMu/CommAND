@@ -12,4 +12,5 @@ class CleanRecoveryRepositoryTest {
         var repository = new CleanRecoveryRepository(null, new ObjectMapper(), new PGSimpleDataSource());
         assertThrows(IllegalArgumentException.class, () -> repository.recoverInterruptedRun(" "));
     }
+
 }
