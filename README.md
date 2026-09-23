@@ -53,6 +53,7 @@ Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验�
 
 运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正持久化前会先完成新架构的运行、步骤、任务表设计，不把旧 `pipelines`/`tasks` 表作为长期模型。
 Clean schema 已在本地 `command_dev.command_runtime` 验证：独立 Flyway V1 创建 `runs`、`run_steps`、`task_executions`、`run_events`、`task_events`、`artifacts`、`command_definitions`、`run_definition_snapshots`；不创建旧表。`public` 旧表仅为当前迁移参考，最终切换后清理。
+新运行提交已通过 clean schema 原子写入：一次事务创建 `runs`、定义快照、`run_steps` 和首个 `task_executions`；重复运行主键冲突时整体回滚，不产生半成品。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 
