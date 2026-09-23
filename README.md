@@ -51,6 +51,8 @@ command/
 
 Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期、Spring JDBC 持久化端口和 PostgreSQL adapter。Flyway 以 Python migration 001~022 为历史基线，Java 增量从 V23 开始；默认禁用。定义启动时以 classpath 资源作为种子，在存在 DataSource 时幂等写入 `command_definitions` 并从 PostgreSQL 读取校验；运行定义快照通过 `run_definition_snapshots` 以 insert-only 方式绑定不可变定义版本。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
 
+运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正写入 `pipeline_runs`/`tasks` 前，需要完成旧表外键与新 Workflow/Tool 定义事实源的兼容迁移，避免伪造旧 `pipelines`/`tools` 行。
+
 当前内部边界：`PipelineDefinitionService` 负责管线定义的校验、注册、查询、删除和密钥名校验；`RunLifecycleService` 负责暂停、启动恢复收口和中止；`RunRecoveryService` 负责暂停 run 的断点重放；`RunQueryService` 负责运行快照、事件、任务和摘要查询；`RunArtifactService` 负责产物收集和占用报表；`ArtifactCleanupService` 负责产物目录和 OCR 结果库的安全清理；`RunSubmissionService` 负责运行创建、fallback 关联和首步派发；`RunCompletionService` 负责终态收口、能力不可用暂停、fallback 选择和父子级联触发；`RunDeletionService` 负责运行中止等待、运行树删除和同文件失败尝试清理；`StepRerunService` 负责单步骤断点重跑；`BatchRerunService` 负责批次失败项筛选、去重和批量调度；`RunStepCoordinator` 负责任务终态判断、when 跳步和下一步派发；`SubrunCoordinator` 负责子流实例创建和首步派发；`SubrunCascadeCoordinator` 负责父子 run 完成后的结果传递和失败级联；`PipelineService` 暂时保留决定性清理触发及兼容代理。外部 API 与 PostgreSQL 结构保持不变。
 
 ## 工具协议 v1 摘要
