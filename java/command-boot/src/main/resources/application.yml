@@ -6,3 +6,10 @@ spring:
     out-of-order: false
     clean-disabled: true
     locations: classpath:db/migration
+
+command:
+  clean:
+    scheduler:
+      enabled: false
+      poll-interval: 1s
+      worker-timeout: 30s
