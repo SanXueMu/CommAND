@@ -73,6 +73,7 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 已建立 Hibernate/JPA 只读样板：`command_definitions` 使用 `@Immutable` Entity、复合主键和 Spring Data Repository，通过 `DefinitionQueryPort` 对外提供 active 定义查询；JDBC 仍是 insert-only 写入事实源。JPA 依赖在 `command-persistence` 中标记为 optional，默认 Boot 不启用 DataSource/JPA，避免无数据库启动路径被 ORM 自动配置接管。
 数据库模式通过 `mvn -Pdatabase` 和 Spring `database` profile 显式启用，`application-database.yml` 固定 `ddl-auto=validate`；本地 `command_dev.command_runtime` 已完成 Hibernate schema validation，默认 profile 仍保持无数据库启动。
 `JpaDefinitionQueryIntegrationTest` 已在真实 PostgreSQL 中验证 active definition 的写入准备、JPA 查询、JSONB→`DefinitionDocument` 转换和 fixture 清理；核心 `DefinitionRegistry` 暂继续使用完整 JDBC 定义集合，避免在读模型尚未覆盖全部状态/版本前切换事实读取路径。
+Java clean API 已提供 `POST /api/runs` 和 `GET /api/runs/{runId}`：提交接口只接收 Workflow、可选版本和用户输入，详情接口只返回运行/步骤/最新任务状态，不暴露定义快照、内部 task ID 或任务输入。数据库 profile 下已通过真实 PostgreSQL MockMvc 集成测试，重复运行数据自动清理。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 

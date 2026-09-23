@@ -21,11 +21,23 @@ public final class RunSubmissionPlanner {
     }
 
     public RunSubmissionPlan plan(String workflowId, Map<String, Object> input) {
+        return plan(workflowId, null, input);
+    }
+
+    public RunSubmissionPlan plan(String workflowId, Integer workflowVersion, Map<String, Object> input) {
         if (workflowId == null || workflowId.isBlank()) {
             throw new RunSubmissionException("Workflow id must not be blank");
         }
+        if (workflowVersion != null && workflowVersion < 1) {
+            throw new RunSubmissionException("Workflow version must be positive");
+        }
         Map<String, Object> runInput = Map.copyOf(Objects.requireNonNull(input, "input"));
-        DefinitionDocument workflow = definitions.getActive(DefinitionKind.WORKFLOW, workflowId);
+        DefinitionDocument workflow = workflowVersion == null
+                ? definitions.getActive(DefinitionKind.WORKFLOW, workflowId)
+                : definitions.get(new DefinitionKey(DefinitionKind.WORKFLOW, workflowId, workflowVersion));
+        if (workflow.status() != DefinitionStatus.ACTIVE) {
+            throw new RunSubmissionException("Workflow definition is not active: " + workflow.key());
+        }
         DefinitionKey pipelineKey = reference(workflow, "capability_pipeline_ref", DefinitionKind.CAPABILITY_PIPELINE);
         DefinitionDocument pipeline = definitions.get(pipelineKey);
 
@@ -55,7 +67,15 @@ public final class RunSubmissionPlanner {
     }
 
     public PipelineRunSubmissionPlan planPipeline(String workflowId, Map<String, Object> input) {
-        RunSubmissionPlan first = plan(workflowId, input);
+        return planPipeline(workflowId, null, input);
+    }
+
+    public PipelineRunSubmissionPlan planPipeline(
+            String workflowId,
+            Integer workflowVersion,
+            Map<String, Object> input
+    ) {
+        RunSubmissionPlan first = plan(workflowId, workflowVersion, input);
         DefinitionDocument pipeline = definitions.get(
                 reference(first.definitions().get(0), "capability_pipeline_ref", DefinitionKind.CAPABILITY_PIPELINE)
         );

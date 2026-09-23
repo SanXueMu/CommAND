@@ -5,13 +5,13 @@ import com.zthcpa.command.contract.DefinitionRepository;
 import com.zthcpa.command.contract.RunDefinitionSnapshotRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import javax.sql.DataSource;
 
 @Configuration
-@Conditional(DataSourcePresentCondition.class)
+@Profile("database")
 public class JdbcPersistenceConfiguration {
     @Bean
     NamedParameterJdbcTemplate commandJdbcTemplate(DataSource dataSource) {

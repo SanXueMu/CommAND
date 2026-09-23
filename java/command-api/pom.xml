@@ -10,8 +10,20 @@
     <artifactId>command-api</artifactId>
     <dependencies>
         <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.zthcpa.command</groupId>
             <artifactId>command-contract</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zthcpa.command</groupId>
+            <artifactId>command-run</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zthcpa.command</groupId>
+            <artifactId>command-persistence</artifactId>
         </dependency>
     </dependencies>
 </project>
