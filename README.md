@@ -70,6 +70,7 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 `command-runtime` 已提供 `HttpWorkerRuntime`：Java 通过 HTTP 创建/查询/取消 Worker job，并按 sequence 读取 Worker 事件；Worker 不访问平台数据库。
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。
 `TaskDispatcher` 已支持长任务 Worker job：对 `queued/running` 做有界轮询，按 `afterSequence` 单调游标转发事件，重复 sequence 不重复写入，并在终态后执行一次最终事件 drain；`job-poll-interval` 与 `job-timeout` 可配置。
+当平台先将当前 worker 持有的 task 标记为 `cancelled` 时，dispatcher 会调用 Worker `cancelJob`；Worker 终态返回后不会重复写平台取消收口。Worker 自发返回 `cancelled` 仍走正常平台 `cancel()` CAS。
 `CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；当前不自动创建后台线程、不在应用启动时抢任务，后台循环需通过后续显式配置接入。
 `CleanSchedulerLoop` 已提供可控后台生命周期：显式 `start()` 后按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。当前仍不由 Spring 自动启动，Worker 地址、identity、并发度和轮询策略待配置后接入。
 Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只有 database profile 且显式开启后才创建 HTTP Worker、JDBC task port、dispatcher 和后台 loop；`worker-id`、`worker-base-url`、`poll-interval`、`worker-timeout` 在 Bean 创建时校验。

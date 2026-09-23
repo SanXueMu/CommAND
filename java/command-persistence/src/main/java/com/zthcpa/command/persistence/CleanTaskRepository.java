@@ -8,6 +8,8 @@ import java.util.Optional;
 public interface CleanTaskRepository {
     Optional<CleanTaskRow> claimNext(String workerId);
 
+    boolean isCancellationRequested(String taskId, String workerId);
+
     boolean heartbeat(String taskId, String workerId);
 
     boolean finish(String taskId, String workerId, TaskStatus status,

@@ -68,10 +68,26 @@ class TaskDispatcherTest {
         assertEquals(List.of(0L, 1L, 2L, 2L), worker.eventCursors);
     }
 
+    @Test
+    void cancelsWorkerWhenPlatformCancellationWasRequested() {
+        FakeTasks tasks = new FakeTasks();
+        tasks.cancellationRequested = true;
+        CancelAwareWorker worker = new CancelAwareWorker();
+
+        assertTrue(new TaskDispatcher(
+                tasks, worker, Duration.ofMillis(1), Duration.ofSeconds(1), millis -> { },
+                new AtomicInteger()::incrementAndGet
+        ).dispatchNext("worker-a"));
+
+        assertTrue(worker.cancelled);
+        assertEquals(List.of("claim"), tasks.actions);
+    }
+
     private static final class FakeTasks implements TaskExecutionPort {
         private TaskExecution task = new TaskExecution("task-1", "text.llm.translate", 1,
                 Map.of("text", "hello"), null);
         private final List<String> actions = new ArrayList<>();
+        private boolean cancellationRequested;
 
         @Override
         public TaskExecution claim(String workerId) {
@@ -80,6 +96,11 @@ class TaskDispatcherTest {
                 task = new TaskExecution(task.taskId(), task.toolId(), task.attempt(), task.input(), workerId);
             }
             return task;
+        }
+
+        @Override
+        public boolean isCancellationRequested(String taskId, String workerId) {
+            return cancellationRequested;
         }
 
         @Override
@@ -175,6 +196,30 @@ class TaskDispatcherTest {
 
         @Override
         public void cancelJob(String jobId) {
+        }
+    }
+
+    private static final class CancelAwareWorker implements WorkerRuntime {
+        private boolean cancelled;
+
+        @Override
+        public WorkerJob createJob(String toolId, WorkerJobRequest request) {
+            return new WorkerJob("job-1", "running", null, null);
+        }
+
+        @Override
+        public WorkerJob getJob(String jobId) {
+            return new WorkerJob(jobId, cancelled ? "cancelled" : "running", null, null);
+        }
+
+        @Override
+        public List<WorkerEvent> listEvents(String jobId, long afterSequence) {
+            return List.of();
+        }
+
+        @Override
+        public void cancelJob(String jobId) {
+            cancelled = true;
         }
     }
 }

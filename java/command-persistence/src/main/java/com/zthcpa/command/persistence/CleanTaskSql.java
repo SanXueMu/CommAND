@@ -35,6 +35,14 @@ public final class CleanTaskSql {
             WHERE id = :taskId AND worker_id = :workerId AND status = 'running'
             """;
 
+    public static final String CANCELLATION_REQUESTED = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM command_runtime.task_executions
+                WHERE id = :taskId AND worker_id = :workerId AND status = 'cancelled'
+            )
+            """;
+
     public static final String FINISH = """
             UPDATE command_runtime.task_executions
             SET status = :status, output = CAST(:output AS jsonb),

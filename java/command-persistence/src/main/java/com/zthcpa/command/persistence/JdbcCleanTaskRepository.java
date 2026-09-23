@@ -25,6 +25,17 @@ public final class JdbcCleanTaskRepository implements CleanTaskRepository {
     }
 
     @Override
+    public boolean isCancellationRequested(String taskId, String workerId) {
+        require(taskId, "Task id");
+        require(workerId, "Worker id");
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                CleanTaskSql.CANCELLATION_REQUESTED,
+                Map.of("taskId", taskId, "workerId", workerId),
+                Boolean.class
+        ));
+    }
+
+    @Override
     public boolean heartbeat(String taskId, String workerId) {
         require(taskId, "Task id");
         require(workerId, "Worker id");

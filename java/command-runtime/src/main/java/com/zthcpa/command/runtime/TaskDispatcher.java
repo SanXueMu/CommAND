@@ -61,10 +61,14 @@ public final class TaskDispatcher {
             job = worker.createJob(task.toolId(), new WorkerJobRequest(
                     task.toolId(), task.taskId(), task.attempt(), task.input()
             ));
-            WorkerJob finalJob = awaitTerminal(task.taskId(), job);
+            WorkerJob finalJob = awaitTerminal(task.taskId(), workerId, job);
             switch (finalJob.status()) {
                 case "succeeded" -> tasks.succeed(task.taskId(), workerId, finalJob.output());
-                case "cancelled" -> tasks.cancel(task.taskId(), workerId, finalJob.error());
+                case "cancelled" -> {
+                    if (!tasks.isCancellationRequested(task.taskId(), workerId)) {
+                        tasks.cancel(task.taskId(), workerId, finalJob.error());
+                    }
+                }
                 case "failed", "failed_review" -> tasks.fail(task.taskId(), workerId, finalJob.error());
                 default -> throw new WorkerRuntimeException("Worker job did not reach terminal state: " + finalJob.status());
             }
@@ -77,12 +81,17 @@ public final class TaskDispatcher {
         }
     }
 
-    private WorkerJob awaitTerminal(String taskId, WorkerJob created) {
+    private WorkerJob awaitTerminal(String taskId, String workerId, WorkerJob created) {
         long cursor = 0;
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
         WorkerJob current = created;
+        boolean cancellationRequested = false;
         while (true) {
             cursor = relayEvents(taskId, current.jobId(), cursor);
+            if (!cancellationRequested && tasks.isCancellationRequested(taskId, workerId)) {
+                worker.cancelJob(current.jobId());
+                cancellationRequested = true;
+            }
             current = worker.getJob(current.jobId());
             if (isTerminal(current.status())) {
                 relayEvents(taskId, current.jobId(), cursor);

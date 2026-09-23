@@ -5,6 +5,10 @@ import java.util.Map;
 public interface TaskExecutionPort {
     TaskExecution claim(String workerId);
 
+    default boolean isCancellationRequested(String taskId, String workerId) {
+        return false;
+    }
+
     void recordWorkerEvent(String taskId, WorkerEvent event);
 
     void succeed(String taskId, String workerId, Map<String, Object> output);

@@ -29,6 +29,11 @@ public final class JdbcTaskExecutionPort implements TaskExecutionPort {
     }
 
     @Override
+    public boolean isCancellationRequested(String taskId, String workerId) {
+        return tasks.isCancellationRequested(taskId, workerId);
+    }
+
+    @Override
     public void recordWorkerEvent(String taskId, WorkerEvent event) {
         events.appendTaskEvent(taskId, "worker." + event.type(), event.data());
     }
