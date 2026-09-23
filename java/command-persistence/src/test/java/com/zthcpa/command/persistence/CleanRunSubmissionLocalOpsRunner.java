@@ -8,6 +8,8 @@ import com.zthcpa.command.definition.DefinitionSetValidator;
 import com.zthcpa.command.definition.InMemoryDefinitionRegistry;
 import com.zthcpa.command.definition.JsonDefinitionParser;
 import com.zthcpa.command.run.RunSubmissionPlan;
+import com.zthcpa.command.run.PipelineRunSubmissionPlan;
+import com.zthcpa.command.run.PipelineExecutionPlan;
 import com.zthcpa.command.run.RunSubmissionPlanner;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -38,47 +40,42 @@ public final class CleanRunSubmissionLocalOpsRunner {
         );
         AtomicInteger ids = new AtomicInteger();
         var planner = new RunSubmissionPlanner(registry, () -> RUN_ID + "-" + ids.incrementAndGet());
-        RunSubmissionPlan plan = planner.plan(
+            RunSubmissionPlan plan = planner.plan(
                 "ocr.extract-document",
                 Map.of("file", "clean-selftest.pdf", "template_id", "invoice")
-        );
+            );
+            var pipelineExecution = new com.zthcpa.command.run.PipelineExecutionPlanner(registry)
+                    .plan(new com.zthcpa.command.contract.DefinitionKey(
+                            com.zthcpa.command.contract.DefinitionKind.CAPABILITY_PIPELINE,
+                            "ocr.extract-by-template", 1
+                    ), Map.of("file", "clean-selftest.pdf", "template_id", "invoice"));
+            var taskIds = pipelineExecution.steps().stream()
+                    .map(step -> RUN_ID + "-task-" + step.index())
+                    .toList();
+            var pipelinePlan = new PipelineRunSubmissionPlan(
+                    RUN_ID, plan.workflow(), plan.input(), plan.definitions(), pipelineExecution, taskIds
+            );
 
         var jdbc = new NamedParameterJdbcTemplate(dataSource);
         var repository = new CleanRunSubmissionRepository(jdbc, mapper, dataSource);
         try {
-            repository.submit(new RunSubmissionPlan(
-                    RUN_ID,
-                    plan.workflow(),
-                    plan.input(),
-                    plan.definitions(),
-                    new RunSubmissionPlan.TaskPlan(
-                            RUN_ID + "-task", plan.firstTask().tool(),
-                            plan.firstTask().input(), 0, 1
-                    )
-            ));
+            repository.submit(pipelinePlan);
             Map<String, Object> counts = jdbc.getJdbcTemplate().queryForMap("""
                     SELECT
                       (SELECT count(*) FROM command_runtime.runs WHERE id = ?) AS runs,
                       (SELECT count(*) FROM command_runtime.run_definition_snapshots WHERE run_id = ?) AS snapshots,
                       (SELECT count(*) FROM command_runtime.run_steps WHERE run_id = ?) AS steps,
-                      (SELECT count(*) FROM command_runtime.task_executions WHERE id = ?) AS tasks
-                    """, RUN_ID, RUN_ID, RUN_ID, RUN_ID + "-task");
+                      (SELECT count(*) FROM command_runtime.task_executions t
+                       JOIN command_runtime.run_steps s ON s.id = t.step_id
+                       WHERE s.run_id = ?) AS tasks
+                    """, RUN_ID, RUN_ID, RUN_ID, RUN_ID);
             System.out.println(counts);
             if (!counts.equals(Map.of("runs", 1L, "snapshots", 2L, "steps", 1L, "tasks", 1L))) {
                 throw new IllegalStateException("Clean submission count check failed: " + counts);
             }
 
             try {
-                repository.submit(new RunSubmissionPlan(
-                        RUN_ID,
-                        plan.workflow(),
-                        plan.input(),
-                        plan.definitions(),
-                        new RunSubmissionPlan.TaskPlan(
-                                RUN_ID + "-duplicate-task", plan.firstTask().tool(),
-                                plan.firstTask().input(), 0, 1
-                        )
-                ));
+                repository.submit(pipelinePlan);
                 throw new IllegalStateException("Duplicate run unexpectedly succeeded");
             } catch (RuntimeException expected) {
                 System.out.println("duplicate run rolled back: " + expected.getClass().getSimpleName());

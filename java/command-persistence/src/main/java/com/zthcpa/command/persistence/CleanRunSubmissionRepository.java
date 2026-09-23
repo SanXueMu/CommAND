@@ -3,6 +3,7 @@ package com.zthcpa.command.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.run.RunSubmissionPlan;
+import com.zthcpa.command.run.PipelineRunSubmissionPlan;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -70,6 +71,34 @@ public final class CleanRunSubmissionRepository {
             String stepId = plan.runId() + ":step:" + plan.firstTask().stepIndex();
             jdbc.update(INSERT_STEP, stepParameters(plan, stepId));
             jdbc.update(INSERT_TASK, taskParameters(plan, stepId));
+        });
+    }
+
+    public void submit(PipelineRunSubmissionPlan plan) {
+        transaction.executeWithoutResult(status -> {
+            jdbc.update(INSERT_RUN, new MapSqlParameterSource()
+                    .addValue("runId", plan.runId())
+                    .addValue("workflowId", plan.workflow().id())
+                    .addValue("workflowVersion", plan.workflow().version())
+                    .addValue("input", PostgresJson.write(mapper, plan.input())));
+            for (DefinitionDocument definition : plan.definitions()) {
+                jdbc.update(INSERT_SNAPSHOT, snapshotParameters(plan.runId(), definition));
+            }
+            var first = plan.execution().steps().get(0);
+            String stepId = plan.runId() + ":step:" + first.index();
+            jdbc.update(INSERT_STEP, new MapSqlParameterSource()
+                    .addValue("stepId", stepId)
+                    .addValue("runId", plan.runId())
+                    .addValue("stepIndex", first.index())
+                    .addValue("stepKey", first.id())
+                    .addValue("definitionId", first.tool().id())
+                    .addValue("definitionVersion", first.tool().version())
+                    .addValue("input", PostgresJson.write(mapper, first.input())));
+            jdbc.update(INSERT_TASK, new MapSqlParameterSource()
+                    .addValue("taskId", plan.firstTaskId())
+                    .addValue("stepId", stepId)
+                    .addValue("maxAttempts", first.maxAttempts())
+                    .addValue("input", PostgresJson.write(mapper, first.input())));
         });
     }
 

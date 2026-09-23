@@ -54,6 +54,21 @@ public final class RunSubmissionPlanner {
         );
     }
 
+    public PipelineRunSubmissionPlan planPipeline(String workflowId, Map<String, Object> input) {
+        RunSubmissionPlan first = plan(workflowId, input);
+        DefinitionDocument pipeline = definitions.get(
+                reference(first.definitions().get(0), "capability_pipeline_ref", DefinitionKind.CAPABILITY_PIPELINE)
+        );
+        PipelineExecutionPlan execution = new PipelineExecutionPlanner(definitions)
+                .plan(pipeline.key(), input);
+        List<String> taskIds = execution.steps().stream()
+                .map(step -> idGenerator.get())
+                .toList();
+        return new PipelineRunSubmissionPlan(
+                first.runId(), first.workflow(), first.input(), first.definitions(), execution, taskIds
+        );
+    }
+
     private DefinitionKey reference(
             DefinitionDocument owner,
             String field,
