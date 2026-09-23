@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 
@@ -35,7 +37,8 @@ public class CommandDefinitionEntity {
     @Column(name = "document", nullable = false, columnDefinition = "jsonb")
     private String document;
 
-    @Column(name = "checksum", nullable = false)
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "checksum", nullable = false, columnDefinition = "char(64)")
     private String checksum;
 
     @Column(name = "owner", nullable = false)

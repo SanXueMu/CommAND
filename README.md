@@ -71,6 +71,7 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。
 `JdbcTaskExecutionPort` 已将 dispatcher 接入 clean persistence：认领同时把 queued step/task 原子切换为 running，返回冻结的 toolId、attempt 和输入；成功路径再由 clean completion 事务同步收口 step/run 并追加事件。普通定义、运行查询和 artifact 查询后续可评估 Hibernate/JPA，`SKIP LOCKED`、CAS、恢复和状态收口继续使用显式 JDBC。
 已建立 Hibernate/JPA 只读样板：`command_definitions` 使用 `@Immutable` Entity、复合主键和 Spring Data Repository，通过 `DefinitionQueryPort` 对外提供 active 定义查询；JDBC 仍是 insert-only 写入事实源。JPA 依赖在 `command-persistence` 中标记为 optional，默认 Boot 不启用 DataSource/JPA，避免无数据库启动路径被 ORM 自动配置接管。
+数据库模式通过 `mvn -Pdatabase` 和 Spring `database` profile 显式启用，`application-database.yml` 固定 `ddl-auto=validate`；本地 `command_dev.command_runtime` 已完成 Hibernate schema validation，默认 profile 仍保持无数据库启动。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 
