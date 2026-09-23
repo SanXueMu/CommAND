@@ -84,6 +84,15 @@ class RunApiIntegrationTest {
                 .andExpect(jsonPath("$.code", is("RUN_SUBMISSION_INVALID")));
     }
 
+    @Test
+    void exposesDisabledSchedulerStatusWithoutWorkerDetails() throws Exception {
+        mockMvc.perform(get("/api/system/scheduler"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.active").value(false))
+                .andExpect(jsonPath("$.workerBaseUrl").doesNotExist());
+    }
+
     @AfterEach
     void cleanup() {
         if (runId != null) {

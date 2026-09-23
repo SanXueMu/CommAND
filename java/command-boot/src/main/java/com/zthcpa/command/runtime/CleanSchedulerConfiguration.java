@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.persistence.CleanEventRepository;
 import com.zthcpa.command.persistence.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.CleanTaskRepository;
+import com.zthcpa.command.api.SchedulerStatusPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -102,6 +103,30 @@ public class CleanSchedulerConfiguration {
     )
     SchedulerMetrics cleanSchedulerMetrics() {
         return new SchedulerMetrics();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "enabled",
+            havingValue = "true"
+    )
+    SchedulerStatusPort schedulerStatus(SchedulerMetrics metrics, SchedulerActivation activation) {
+        return () -> toStatus(metrics.snapshot(activation.isActive()));
+    }
+
+    private static SchedulerStatusPort.Status toStatus(SchedulerMetrics.Snapshot snapshot) {
+        SchedulerMetrics.ErrorSnapshot error = snapshot.lastError();
+        return new SchedulerStatusPort.Status(
+                true,
+                snapshot.active(),
+                snapshot.polls(),
+                snapshot.dispatched(),
+                snapshot.idle(),
+                snapshot.errors(),
+                snapshot.lastPollAt(),
+                error == null ? null : new SchedulerStatusPort.ErrorStatus(error.type(), error.message())
+        );
     }
 
     @Bean(destroyMethod = "close")
