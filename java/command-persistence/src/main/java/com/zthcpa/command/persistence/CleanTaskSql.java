@@ -3,19 +3,29 @@ package com.zthcpa.command.persistence;
 public final class CleanTaskSql {
     public static final String CLAIM_NEXT = """
             WITH candidate AS (
-                SELECT id
-                FROM command_runtime.task_executions
-                WHERE status = 'queued'
-                ORDER BY created_at
+                SELECT t.id, t.step_id
+                FROM command_runtime.task_executions t
+                JOIN command_runtime.run_steps s ON s.id = t.step_id
+                WHERE t.status = 'queued' AND s.status = 'queued'
+                ORDER BY t.created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
+            )
+            , claimed_step AS (
+                UPDATE command_runtime.run_steps s
+                SET status = 'running', started_at = COALESCE(s.started_at, now())
+                FROM candidate
+                WHERE s.id = candidate.step_id
+                RETURNING s.id
             )
             UPDATE command_runtime.task_executions t
             SET status = 'running', worker_id = :workerId,
                 started_at = COALESCE(t.started_at, now()), heartbeat_at = now()
             FROM candidate
+            JOIN claimed_step ON claimed_step.id = candidate.step_id
             WHERE t.id = candidate.id
-            RETURNING t.id, t.step_id, t.attempt, t.max_attempts, t.worker_id,
+            RETURNING t.id, t.step_id, (SELECT step_key FROM command_runtime.run_steps WHERE id = t.step_id) AS tool_id,
+                      t.attempt, t.max_attempts, t.worker_id,
                       t.input, t.output, t.error, t.status
             """;
 

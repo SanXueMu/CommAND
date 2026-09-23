@@ -69,6 +69,7 @@ Clean 运行查询只读取新 `runs/run_steps/task_executions/run_events`，详
 Clean artifact 只登记外部对象存储索引，不把文件字节写入数据库；支持按 run/step 查询、artifact ID 幂等登记和外键级联清理。
 `command-runtime` 已提供 `HttpWorkerRuntime`：Java 通过 HTTP 创建/查询/取消 Worker job，并按 sequence 读取 Worker 事件；Worker 不访问平台数据库。
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。
+`JdbcTaskExecutionPort` 已将 dispatcher 接入 clean persistence：认领同时把 queued step/task 原子切换为 running，返回冻结的 toolId、attempt 和输入；成功路径再由 clean completion 事务同步收口 step/run 并追加事件。普通定义、运行查询和 artifact 查询后续可评估 Hibernate/JPA，`SKIP LOCKED`、CAS、恢复和状态收口继续使用显式 JDBC。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 

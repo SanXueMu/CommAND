@@ -19,6 +19,7 @@ final class PostgresCleanTaskRowMapper implements RowMapper<CleanTaskRow> {
         return new CleanTaskRow(
                 resultSet.getString("id"),
                 resultSet.getString("step_id"),
+                resultSet.getString("tool_id"),
                 resultSet.getInt("attempt"),
                 resultSet.getInt("max_attempts"),
                 resultSet.getString("worker_id"),

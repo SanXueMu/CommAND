@@ -7,6 +7,7 @@ import java.util.Map;
 public record CleanTaskRow(
         String id,
         String stepId,
+        String toolId,
         int attempt,
         int maxAttempts,
         String workerId,
