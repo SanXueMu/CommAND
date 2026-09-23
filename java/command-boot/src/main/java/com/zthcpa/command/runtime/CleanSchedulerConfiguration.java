@@ -72,7 +72,7 @@ public class CleanSchedulerConfiguration {
         return new TaskDispatcher(tasks, worker);
     }
 
-    @Bean(destroyMethod = "close")
+    @Bean(destroyMethod = "")
     @ConditionalOnProperty(
             prefix = "command.clean.scheduler",
             name = "enabled",
@@ -80,20 +80,31 @@ public class CleanSchedulerConfiguration {
     )
     CleanSchedulerLoop cleanSchedulerLoop(
             TaskDispatcher dispatcher,
-            CleanSchedulerProperties properties,
-            WorkerHealthChecker healthChecker
+            CleanSchedulerProperties properties
     ) {
-        healthChecker.verify();
         String workerId = requireText(properties.getWorkerId(), "workerId");
         CleanScheduler scheduler = new CleanScheduler(dispatcher);
-        CleanSchedulerLoop loop = new CleanSchedulerLoop(
+        return new CleanSchedulerLoop(
                 scheduler,
                 workerId,
                 requirePositive(properties.getPollInterval(), "pollInterval"),
                 exception -> log.error("Clean scheduler poll failed", exception)
         );
-        loop.start();
-        return loop;
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "enabled",
+            havingValue = "true"
+    )
+    SchedulerActivation schedulerActivation(
+            WorkerHealthChecker healthChecker,
+            CleanSchedulerLoop loop
+    ) {
+        SchedulerActivation activation = new SchedulerActivation(healthChecker, loop);
+        activation.activate();
+        return activation;
     }
 
     private static URI requireUri(String value) {
