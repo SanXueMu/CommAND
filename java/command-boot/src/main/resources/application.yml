@@ -16,3 +16,6 @@ command:
       job-poll-interval: 250ms
       job-timeout: 30m
       heartbeat-interval: 30s
+      recovery-enabled: false
+      stale-after: 5m
+      recovery-batch-size: 50

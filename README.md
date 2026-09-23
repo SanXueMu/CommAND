@@ -75,6 +75,7 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 Worker job 创建成功后的超时、ownership 丢失、轮询中断、未知状态或 HTTP 失败会执行 best-effort `cancelJob`，避免留下孤儿任务；清理失败作为 suppressed exception 保留，不覆盖原始 runtime error。平台取消已发送时不重复 cancel。
 若 heartbeat CAS 返回 false，dispatcher 认定旧 worker 已失去 task ownership：会清理 Worker job 并抛出 runtime error，但不会再用旧 worker 身份写 `failed` 终态，后续由 stale recovery/新的持有者处理。
 `CleanRecoveryRepository.recoverStaleTasks(staleBefore, limit)` 已支持并发安全的 stale running task 恢复：旧 execution 标记 `interrupted`，创建下一 attempt 的 queued execution，恢复 run/step 为 running，并写 recovery events；达到 max attempts 的任务不自动重试。当前已完成 repository 与本地 PostgreSQL 验证，尚未接入 scheduler 自动 recovery loop。
+`CleanRecoveryPoller` 提供独立的单次 recovery poll，使用可注入时钟计算 stale cutoff 并受 batch size 限制；配置位于 `command.clean.scheduler.recovery-enabled/stale-after/recovery-batch-size`，默认关闭。开启后只装配 poller，不启动线程或自动扫描，调用方需显式执行 `pollOnce()`。
 `CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；当前不自动创建后台线程、不在应用启动时抢任务，后台循环需通过后续显式配置接入。
 `CleanSchedulerLoop` 已提供可控后台生命周期：显式 `start()` 后按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。当前仍不由 Spring 自动启动，Worker 地址、identity、并发度和轮询策略待配置后接入。
 Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只有 database profile 且显式开启后才创建 HTTP Worker、JDBC task port、dispatcher 和后台 loop；`worker-id`、`worker-base-url`、`poll-interval`、`worker-timeout` 在 Bean 创建时校验。

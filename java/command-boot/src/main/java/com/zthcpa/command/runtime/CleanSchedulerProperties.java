@@ -14,6 +14,9 @@ public class CleanSchedulerProperties {
     private Duration jobPollInterval = Duration.ofMillis(250);
     private Duration jobTimeout = Duration.ofMinutes(30);
     private Duration heartbeatInterval = Duration.ofSeconds(30);
+    private boolean recoveryEnabled;
+    private Duration staleAfter = Duration.ofMinutes(5);
+    private int recoveryBatchSize = 50;
 
     public boolean isEnabled() {
         return enabled;
@@ -77,5 +80,29 @@ public class CleanSchedulerProperties {
 
     public void setHeartbeatInterval(Duration heartbeatInterval) {
         this.heartbeatInterval = heartbeatInterval;
+    }
+
+    public boolean isRecoveryEnabled() {
+        return recoveryEnabled;
+    }
+
+    public void setRecoveryEnabled(boolean recoveryEnabled) {
+        this.recoveryEnabled = recoveryEnabled;
+    }
+
+    public Duration getStaleAfter() {
+        return staleAfter;
+    }
+
+    public void setStaleAfter(Duration staleAfter) {
+        this.staleAfter = staleAfter;
+    }
+
+    public int getRecoveryBatchSize() {
+        return recoveryBatchSize;
+    }
+
+    public void setRecoveryBatchSize(int recoveryBatchSize) {
+        this.recoveryBatchSize = recoveryBatchSize;
     }
 }

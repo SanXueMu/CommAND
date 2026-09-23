@@ -1,6 +1,7 @@
 package com.zthcpa.command;
 
 import com.zthcpa.command.runtime.CleanSchedulerLoop;
+import com.zthcpa.command.runtime.CleanRecoveryPoller;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,5 +30,6 @@ class SchedulerDisabledDatabaseProfileTest {
     @Test
     void doesNotCreateSchedulerWhenDisabled() {
         assertFalse(context.getBeansOfType(CleanSchedulerLoop.class).containsKey("cleanSchedulerLoop"));
+        assertFalse(context.getBeansOfType(CleanRecoveryPoller.class).containsKey("cleanRecoveryPoller"));
     }
 }

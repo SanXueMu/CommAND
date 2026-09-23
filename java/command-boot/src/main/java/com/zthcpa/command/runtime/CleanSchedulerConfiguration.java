@@ -1,10 +1,14 @@
 package com.zthcpa.command.runtime;
 
+import com.zthcpa.command.api.SchedulerStatusPort;
+import com.zthcpa.command.persistence.CleanRecoveryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.persistence.CleanEventRepository;
 import com.zthcpa.command.persistence.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.CleanTaskRepository;
-import com.zthcpa.command.api.SchedulerStatusPort;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+
+import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,12 +18,32 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 import java.net.URI;
+import java.time.Clock;
 import java.time.Duration;
 
 @Configuration
 @Profile("database")
 @EnableConfigurationProperties(CleanSchedulerProperties.class)
 public class CleanSchedulerConfiguration {
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "recovery-enabled",
+            havingValue = "true"
+    )
+    CleanRecoveryPoller cleanRecoveryPoller(
+            CleanRecoveryRepository recovery,
+            CleanSchedulerProperties properties
+    ) {
+        return new CleanRecoveryPoller(
+                recovery::recoverStaleTasks,
+                Clock.systemUTC(),
+                requirePositive(properties.getStaleAfter(), "staleAfter"),
+                requireBatchSize(properties.getRecoveryBatchSize())
+        );
+    }
+
     private static final Logger log = LoggerFactory.getLogger(CleanSchedulerConfiguration.class);
 
     @Bean
@@ -170,6 +194,13 @@ public class CleanSchedulerConfiguration {
     private static Duration requirePositive(Duration value, String name) {
         if (value == null || value.isZero() || value.isNegative()) {
             throw new IllegalArgumentException(name + " must be positive");
+        }
+        return value;
+    }
+
+    private static int requireBatchSize(int value) {
+        if (value < 1 || value > 1000) {
+            throw new IllegalArgumentException("recoveryBatchSize must be between 1 and 1000");
         }
         return value;
     }
