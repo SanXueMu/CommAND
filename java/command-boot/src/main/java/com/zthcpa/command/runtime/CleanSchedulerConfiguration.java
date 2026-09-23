@@ -69,8 +69,17 @@ public class CleanSchedulerConfiguration {
             name = "enabled",
             havingValue = "true"
     )
-    TaskDispatcher cleanTaskDispatcher(JdbcTaskExecutionPort tasks, HttpWorkerRuntime worker) {
-        return new TaskDispatcher(tasks, worker);
+    TaskDispatcher cleanTaskDispatcher(
+            JdbcTaskExecutionPort tasks,
+            HttpWorkerRuntime worker,
+            CleanSchedulerProperties properties
+    ) {
+        return new TaskDispatcher(
+                tasks,
+                worker,
+                requirePositive(properties.getJobPollInterval(), "jobPollInterval"),
+                requirePositive(properties.getJobTimeout(), "jobTimeout")
+        );
     }
 
     @Bean(destroyMethod = "")

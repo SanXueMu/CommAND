@@ -13,3 +13,5 @@ command:
       enabled: false
       poll-interval: 1s
       worker-timeout: 30s
+      job-poll-interval: 250ms
+      job-timeout: 30m

@@ -11,6 +11,8 @@ public class CleanSchedulerProperties {
     private String workerBaseUrl;
     private Duration pollInterval = Duration.ofSeconds(1);
     private Duration workerTimeout = Duration.ofSeconds(30);
+    private Duration jobPollInterval = Duration.ofMillis(250);
+    private Duration jobTimeout = Duration.ofMinutes(30);
 
     public boolean isEnabled() {
         return enabled;
@@ -50,5 +52,21 @@ public class CleanSchedulerProperties {
 
     public void setWorkerTimeout(Duration workerTimeout) {
         this.workerTimeout = workerTimeout;
+    }
+
+    public Duration getJobPollInterval() {
+        return jobPollInterval;
+    }
+
+    public void setJobPollInterval(Duration jobPollInterval) {
+        this.jobPollInterval = jobPollInterval;
+    }
+
+    public Duration getJobTimeout() {
+        return jobTimeout;
+    }
+
+    public void setJobTimeout(Duration jobTimeout) {
+        this.jobTimeout = jobTimeout;
     }
 }

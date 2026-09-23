@@ -1,14 +1,54 @@
 package com.zthcpa.command.runtime;
 
 import java.util.List;
+import java.time.Duration;
+import java.util.Map;
+import java.util.function.LongSupplier;
 
 public final class TaskDispatcher {
+    private static final Duration DEFAULT_POLL_INTERVAL = Duration.ofMillis(250);
+    private static final Duration DEFAULT_JOB_TIMEOUT = Duration.ofMinutes(30);
+
     private final TaskExecutionPort tasks;
     private final WorkerRuntime worker;
+    private final Duration pollInterval;
+    private final Duration jobTimeout;
+    private final Sleeper sleeper;
+    private final LongSupplier nanoTime;
 
     public TaskDispatcher(TaskExecutionPort tasks, WorkerRuntime worker) {
+        this(tasks, worker, DEFAULT_POLL_INTERVAL, DEFAULT_JOB_TIMEOUT);
+    }
+
+    public TaskDispatcher(
+            TaskExecutionPort tasks,
+            WorkerRuntime worker,
+            Duration pollInterval,
+            Duration jobTimeout
+    ) {
+        this(tasks, worker, pollInterval, jobTimeout, Thread::sleep, System::nanoTime);
+    }
+
+    TaskDispatcher(
+            TaskExecutionPort tasks,
+            WorkerRuntime worker,
+            Duration pollInterval,
+            Duration jobTimeout,
+            Sleeper sleeper,
+            LongSupplier nanoTime
+    ) {
         this.tasks = tasks;
         this.worker = worker;
+        if (pollInterval == null || pollInterval.isNegative() || pollInterval.isZero()) {
+            throw new IllegalArgumentException("pollInterval must be positive");
+        }
+        if (jobTimeout == null || jobTimeout.isNegative() || jobTimeout.isZero()) {
+            throw new IllegalArgumentException("jobTimeout must be positive");
+        }
+        this.pollInterval = pollInterval;
+        this.jobTimeout = jobTimeout;
+        this.sleeper = sleeper;
+        this.nanoTime = nanoTime;
     }
 
     public boolean dispatchNext(String workerId) {
@@ -21,8 +61,7 @@ public final class TaskDispatcher {
             job = worker.createJob(task.toolId(), new WorkerJobRequest(
                     task.toolId(), task.taskId(), task.attempt(), task.input()
             ));
-            relayEvents(task.taskId(), job.jobId(), 0);
-            WorkerJob finalJob = worker.getJob(job.jobId());
+            WorkerJob finalJob = awaitTerminal(task.taskId(), job);
             switch (finalJob.status()) {
                 case "succeeded" -> tasks.succeed(task.taskId(), workerId, finalJob.output());
                 case "cancelled" -> tasks.cancel(task.taskId(), workerId, finalJob.error());
@@ -31,17 +70,65 @@ public final class TaskDispatcher {
             }
             return true;
         } catch (WorkerRuntimeException exception) {
-            tasks.fail(task.taskId(), workerId, java.util.Map.of(
+            tasks.fail(task.taskId(), workerId, Map.of(
                     "code", "WORKER_RUNTIME_ERROR", "message", exception.getMessage()
             ));
             throw exception;
         }
     }
 
-    private void relayEvents(String taskId, String jobId, long afterSequence) {
-        List<WorkerEvent> events = worker.listEvents(jobId, afterSequence);
-        for (WorkerEvent event : events) {
-            tasks.recordWorkerEvent(taskId, event);
+    private WorkerJob awaitTerminal(String taskId, WorkerJob created) {
+        long cursor = 0;
+        long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
+        WorkerJob current = created;
+        while (true) {
+            cursor = relayEvents(taskId, current.jobId(), cursor);
+            current = worker.getJob(current.jobId());
+            if (isTerminal(current.status())) {
+                relayEvents(taskId, current.jobId(), cursor);
+                return current;
+            }
+            if (!"queued".equals(current.status()) && !"running".equals(current.status())) {
+                throw new WorkerRuntimeException("Worker job returned unknown state: " + current.status());
+            }
+            if (nanoTime.getAsLong() >= deadline) {
+                throw new WorkerRuntimeException("Worker job timed out: " + current.jobId());
+            }
+            sleep();
         }
+    }
+
+    private long relayEvents(String taskId, String jobId, long afterSequence) {
+        List<WorkerEvent> events = worker.listEvents(jobId, afterSequence);
+        long cursor = afterSequence;
+        for (WorkerEvent event : events) {
+            if (event.sequence() <= cursor) {
+                continue;
+            }
+            tasks.recordWorkerEvent(taskId, event);
+            cursor = event.sequence();
+        }
+        return cursor;
+    }
+
+    private void sleep() {
+        try {
+            sleeper.sleep(pollInterval.toMillis());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new WorkerRuntimeException("Worker job polling interrupted", exception);
+        }
+    }
+
+    private static boolean isTerminal(String status) {
+        return "succeeded".equals(status)
+                || "failed".equals(status)
+                || "failed_review".equals(status)
+                || "cancelled".equals(status);
+    }
+
+    @FunctionalInterface
+    interface Sleeper {
+        void sleep(long millis) throws InterruptedException;
     }
 }

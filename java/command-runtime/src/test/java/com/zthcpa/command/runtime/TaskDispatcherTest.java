@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,6 +48,24 @@ class TaskDispatcherTest {
         tasks.task = null;
         assertFalse(new TaskDispatcher(tasks, new FakeWorker("succeeded")).dispatchNext("worker-a"));
         assertEquals(List.of("claim"), tasks.actions);
+    }
+
+    @Test
+    void pollsLongJobAndRelaysEachEventOnlyOnce() {
+        FakeTasks tasks = new FakeTasks();
+        LongRunningWorker worker = new LongRunningWorker();
+        TaskDispatcher dispatcher = new TaskDispatcher(
+                tasks,
+                worker,
+                Duration.ofMillis(1),
+                Duration.ofSeconds(1),
+                millis -> { },
+                new AtomicInteger()::incrementAndGet
+        );
+
+        assertTrue(dispatcher.dispatchNext("worker-a"));
+        assertEquals(List.of("claim", "event:progress", "event:progress", "success"), tasks.actions);
+        assertEquals(List.of(0L, 1L, 2L, 2L), worker.eventCursors);
     }
 
     private static final class FakeTasks implements TaskExecutionPort {
@@ -120,6 +140,41 @@ class TaskDispatcherTest {
         @Override
         public WorkerJob createJob(String toolId, WorkerJobRequest request) {
             throw new WorkerRuntimeException("worker unavailable");
+        }
+    }
+
+    private static final class LongRunningWorker implements WorkerRuntime {
+        private final List<Long> eventCursors = new ArrayList<>();
+        private int reads;
+
+        @Override
+        public WorkerJob createJob(String toolId, WorkerJobRequest request) {
+            return new WorkerJob("job-1", "queued", null, null);
+        }
+
+        @Override
+        public WorkerJob getJob(String jobId) {
+            reads++;
+            return new WorkerJob(jobId, reads < 3 ? "running" : "succeeded", Map.of("ok", true), null);
+        }
+
+        @Override
+        public List<WorkerEvent> listEvents(String jobId, long afterSequence) {
+            eventCursors.add(afterSequence);
+            if (afterSequence == 0) {
+                return List.of(new WorkerEvent(1, "progress", Map.of("percent", 10)));
+            }
+            if (afterSequence == 1) {
+                return List.of(
+                        new WorkerEvent(1, "progress", Map.of("percent", 10)),
+                        new WorkerEvent(2, "progress", Map.of("percent", 100))
+                );
+            }
+            return List.of();
+        }
+
+        @Override
+        public void cancelJob(String jobId) {
         }
     }
 }
