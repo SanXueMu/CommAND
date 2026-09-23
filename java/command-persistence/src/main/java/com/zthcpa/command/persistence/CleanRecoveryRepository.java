@@ -8,6 +8,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
 import java.util.Map;
+import java.time.Instant;
+import java.sql.Timestamp;
 
 public final class CleanRecoveryRepository {
     private final NamedParameterJdbcTemplate jdbc;
@@ -55,6 +57,62 @@ public final class CleanRecoveryRepository {
             return true;
         });
         return Boolean.TRUE.equals(recovered);
+    }
+
+    public int recoverStaleTasks(Instant staleBefore, int limit) {
+        if (staleBefore == null) {
+            throw new IllegalArgumentException("staleBefore must not be null");
+        }
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
+        Integer recovered = transaction.execute(status -> jdbc.query(
+                STALE_TASKS,
+                new MapSqlParameterSource()
+                        .addValue("staleBefore", Timestamp.from(staleBefore))
+                        .addValue("limit", limit),
+                resultSet -> {
+                    int count = 0;
+                    while (resultSet.next()) {
+                        count += recoverStaleTask(resultSet.getString("task_id"),
+                                resultSet.getString("step_id"),
+                                resultSet.getString("run_id"),
+                                resultSet.getInt("attempt"),
+                                resultSet.getInt("max_attempts"),
+                                resultSet.getString("input"));
+                    }
+                    return count;
+                }
+        ));
+        return recovered == null ? 0 : recovered;
+    }
+
+    private int recoverStaleTask(
+            String taskId,
+            String stepId,
+            String runId,
+            int attempt,
+            int maxAttempts,
+            String input
+    ) {
+        if (attempt >= maxAttempts) {
+            return 0;
+        }
+        jdbc.update(MARK_INTERRUPTED, Map.of("taskId", taskId));
+        jdbc.update(MARK_STEP_INTERRUPTED, Map.of("stepId", stepId));
+        jdbc.update(MARK_RUN_INTERRUPTED, Map.of("runId", runId));
+        jdbc.update(RESTORE_RUN, Map.of("runId", runId));
+        jdbc.update(RESTORE_STEP, Map.of("stepId", stepId));
+        String newTaskId = taskId + ":stale-retry:" + (attempt + 1);
+        jdbc.update(INSERT_RETRY, new MapSqlParameterSource()
+                .addValue("taskId", newTaskId)
+                .addValue("stepId", stepId)
+                .addValue("attempt", attempt + 1)
+                .addValue("maxAttempts", maxAttempts)
+                .addValue("input", input));
+        insertTaskEvent(newTaskId, "task.stale_recovered", Map.of("attempt", attempt + 1));
+        insertRunEvent(runId, stepId, "run.stale_recovered", Map.of("task_id", newTaskId));
+        return 1;
     }
 
     private void insertTaskEvent(String taskId, String kind, Map<String, Object> detail) {
@@ -128,5 +186,35 @@ public final class CleanRecoveryRepository {
             ) VALUES (
                 :taskId, :stepId, :attempt, :maxAttempts, CAST(:input AS jsonb), 'queued'
             )
+            """;
+
+    private static final String STALE_TASKS = """
+            SELECT t.id AS task_id, t.step_id, s.run_id, t.attempt, t.max_attempts, t.input::text AS input
+            FROM command_runtime.task_executions t
+            JOIN command_runtime.run_steps s ON s.id = t.step_id
+            JOIN command_runtime.runs r ON r.id = s.run_id
+            WHERE t.status = 'running' AND s.status = 'running' AND r.status = 'running'
+              AND t.heartbeat_at < :staleBefore
+            ORDER BY t.heartbeat_at, t.created_at
+            LIMIT :limit
+            FOR UPDATE OF t, s, r SKIP LOCKED
+            """;
+
+    private static final String MARK_INTERRUPTED = """
+            UPDATE command_runtime.task_executions
+            SET status = 'interrupted', finished_at = now()
+            WHERE id = :taskId AND status = 'running'
+            """;
+
+    private static final String MARK_STEP_INTERRUPTED = """
+            UPDATE command_runtime.run_steps
+            SET status = 'interrupted', finished_at = now()
+            WHERE id = :stepId AND status = 'running'
+            """;
+
+    private static final String MARK_RUN_INTERRUPTED = """
+            UPDATE command_runtime.runs
+            SET status = 'interrupted', finished_at = now()
+            WHERE id = :runId AND status = 'running'
             """;
 }

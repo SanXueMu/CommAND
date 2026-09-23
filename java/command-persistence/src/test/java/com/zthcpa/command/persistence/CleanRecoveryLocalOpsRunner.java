@@ -5,12 +5,55 @@ import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.util.Map;
+import java.time.Instant;
 
 public final class CleanRecoveryLocalOpsRunner {
     public static void main(String[] args) {
         runCase("interrupted", "interrupted", true);
         runCase("cancelled", "cancelled", false);
         runMaxAttemptCase();
+        runStaleTaskCase();
+    }
+
+    private static void runStaleTaskCase() {
+        String runId = "clean-recovery-selftest-stale-run";
+        String stepId = "clean-recovery-selftest-stale-step";
+        String taskId = "clean-recovery-selftest-stale-task";
+        PGSimpleDataSource dataSource = new PGSimpleDataSource();
+        dataSource.setURL("jdbc:postgresql://localhost:5432/command_dev");
+        dataSource.setUser("command_dev");
+        dataSource.setPassword(requiredEnv("COMMAND_DB_PASSWORD"));
+        var jdbc = new NamedParameterJdbcTemplate(dataSource);
+        var repository = new CleanRecoveryRepository(jdbc, new ObjectMapper(), dataSource);
+        try {
+            createFixture(jdbc, runId, stepId, taskId, "running");
+            jdbc.getJdbcTemplate().update("""
+                    UPDATE command_runtime.task_executions
+                    SET worker_id = 'stale-worker', heartbeat_at = now() - interval '10 minutes',
+                        started_at = now() - interval '10 minutes'
+                    WHERE id = ?
+                    """, taskId);
+            int recovered = repository.recoverStaleTasks(Instant.now().minusSeconds(60), 10);
+            require(recovered == 1, "one stale task must recover");
+            require(repository.recoverStaleTasks(Instant.now().minusSeconds(60), 10) == 0,
+                    "stale recovery must be idempotent");
+            Map<String, Object> result = jdbc.getJdbcTemplate().queryForMap("""
+                    SELECT
+                      (SELECT status FROM command_runtime.task_executions WHERE id = ?) AS old_status,
+                      (SELECT status FROM command_runtime.task_executions WHERE step_id = ? ORDER BY attempt DESC LIMIT 1) AS new_status,
+                      (SELECT max(attempt) FROM command_runtime.task_executions WHERE step_id = ?) AS max_attempt,
+                      (SELECT status FROM command_runtime.runs WHERE id = ?) AS run_status,
+                      (SELECT status FROM command_runtime.run_steps WHERE id = ?) AS step_status
+                    """, taskId, stepId, stepId, runId, stepId);
+            System.out.println("stale " + result);
+            require("interrupted".equals(result.get("old_status")), "old task must be interrupted");
+            require("queued".equals(result.get("new_status")), "retry task must be queued");
+            require(((Number) result.get("max_attempt")).intValue() == 2, "attempt must increment");
+            require("running".equals(result.get("run_status")), "run must be restored for retry claim");
+            require("running".equals(result.get("step_status")), "step must be restored for retry claim");
+        } finally {
+            jdbc.getJdbcTemplate().update("DELETE FROM command_runtime.runs WHERE id = ?", runId);
+        }
     }
 
     private static void runCase(String suffix, String runStatus, boolean expectedRecovery) {
