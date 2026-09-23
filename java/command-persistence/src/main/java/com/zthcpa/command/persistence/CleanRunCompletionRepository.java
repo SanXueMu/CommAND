@@ -131,6 +131,44 @@ public final class CleanRunCompletionRepository {
         return Boolean.TRUE.equals(failed);
     }
 
+    public boolean stopTask(
+            String taskId,
+            String workerId,
+            TaskStatus stopStatus,
+            Map<String, Object> detail
+    ) {
+        require(taskId, "Task id");
+        require(workerId, "Worker id");
+        if (stopStatus != TaskStatus.CANCELLED && stopStatus != TaskStatus.INTERRUPTED) {
+            throw new IllegalArgumentException("Stop status must be CANCELLED or INTERRUPTED");
+        }
+
+        Boolean stopped = transaction.execute(status -> {
+            String stepId = jdbc.query(COMPLETE_TASK, new MapSqlParameterSource()
+                            .addValue("taskId", taskId)
+                            .addValue("workerId", workerId)
+                            .addValue("taskStatus", stopStatus.name().toLowerCase())
+                            .addValue("output", PostgresJson.write(mapper, Map.of()))
+                            .addValue("error", PostgresJson.write(mapper, detail == null ? Map.of() : detail)),
+                    resultSet -> resultSet.next() ? resultSet.getString("step_id") : null);
+            if (stepId == null) {
+                return false;
+            }
+            String runId = jdbc.queryForObject(FIND_RUN_ID, Map.of("stepId", stepId), String.class);
+            jdbc.update(COMPLETE_STEP, new MapSqlParameterSource()
+                    .addValue("stepId", stepId)
+                    .addValue("stepStatus", stopStatus.name().toLowerCase()));
+            jdbc.update(COMPLETE_RUN, new MapSqlParameterSource()
+                    .addValue("runId", runId)
+                    .addValue("runStatus", stopStatus.name().toLowerCase())
+                    .addValue("error", PostgresJson.write(mapper, detail == null ? Map.of() : detail)));
+            insertTaskEvent(taskId, stopStatus, detail);
+            insertRunEvent(runId, stepId, toRunStatus(stopStatus), detail);
+            return true;
+        });
+        return Boolean.TRUE.equals(stopped);
+    }
+
     private void insertTaskEvent(String taskId, TaskStatus status, Map<String, Object> error) {
         jdbc.update("""
                 INSERT INTO command_runtime.task_events (task_id, kind, detail)

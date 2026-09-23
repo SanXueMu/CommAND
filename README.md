@@ -62,6 +62,7 @@ Clean 多步骤推进已独立为 `CleanStepCoordinatorRepository`：成功步�
 Clean 首次提交现在接收完整 Pipeline 计划：冻结全部定义和 task ID，但只落库首个 queued step/task，后续步骤由成功推进事务按顺序创建。
 Coordinator 通过当前 step index 消费冻结的 `PipelineRunSubmissionPlan`，校验 runId 归属，不在运行中重新解析定义。
 失败收口独立更新 task/step/run 并追加失败事件，不创建后续步骤；worker CAS 与重复失败均保持幂等。
+取消与中断使用不同终态：用户取消为 `cancelled`，进程/worker 中断为 `interrupted`；两者均通过新表原子收口，不创建后续步骤。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 
