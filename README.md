@@ -74,6 +74,7 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只有 database profile 且显式开启后才创建 HTTP Worker、JDBC task port、dispatcher 和后台 loop；`worker-id`、`worker-base-url`、`poll-interval`、`worker-timeout` 在 Bean 创建时校验。
 启用 scheduler 时会先执行 `GET {worker-base-url}/health`；只有 2xx 响应才启动后台 loop，非 2xx、连接失败、超时或中断会阻止应用完成 scheduler Bean 初始化。
 `SchedulerActivation` 统一管理 activate/deactivate/close；当前 Spring 启用配置在 Bean 初始化时执行一次 activate，未来动态恢复需创建新的 loop/activation 实例，不复用已停止的 executor。
+`SchedulerMetrics` 已记录 scheduler 自身的 poll/dispatched/idle/error 计数、最后轮询时间、最后错误摘要和 active 快照；计数线程安全且暂存内存，不引入 Micrometer/Actuator，也不记录任务输入输出。
 `JdbcTaskExecutionPort` 已将 dispatcher 接入 clean persistence：认领同时把 queued step/task 原子切换为 running，返回冻结的 toolId、attempt 和输入；成功路径再由 clean completion 事务同步收口 step/run 并追加事件。普通定义、运行查询和 artifact 查询后续可评估 Hibernate/JPA，`SKIP LOCKED`、CAS、恢复和状态收口继续使用显式 JDBC。
 已建立 Hibernate/JPA 只读样板：`command_definitions` 使用 `@Immutable` Entity、复合主键和 Spring Data Repository，通过 `DefinitionQueryPort` 对外提供 active 定义查询；JDBC 仍是 insert-only 写入事实源。JPA 依赖在 `command-persistence` 中标记为 optional，默认 Boot 不启用 DataSource/JPA，避免无数据库启动路径被 ORM 自动配置接管。
 数据库模式通过 `mvn -Pdatabase` 和 Spring `database` profile 显式启用，`application-database.yml` 固定 `ddl-auto=validate`；本地 `command_dev.command_runtime` 已完成 Hibernate schema validation，默认 profile 仍保持无数据库启动。

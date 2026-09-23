@@ -1,6 +1,7 @@
 package com.zthcpa.command.runtime;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -14,6 +15,7 @@ public final class CleanSchedulerLoop implements AutoCloseable {
     private final String workerId;
     private final Duration interval;
     private final Consumer<RuntimeException> errorHandler;
+    private final SchedulerMetrics metrics;
     private final ExecutorService executor;
     private final AtomicBoolean running = new AtomicBoolean();
     private final CountDownLatch stopped = new CountDownLatch(1);
@@ -23,6 +25,16 @@ public final class CleanSchedulerLoop implements AutoCloseable {
             String workerId,
             Duration interval,
             Consumer<RuntimeException> errorHandler
+    ) {
+        this(scheduler, workerId, interval, errorHandler, new SchedulerMetrics());
+    }
+
+    public CleanSchedulerLoop(
+            CleanScheduler scheduler,
+            String workerId,
+            Duration interval,
+            Consumer<RuntimeException> errorHandler,
+            SchedulerMetrics metrics
     ) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         if (workerId == null || workerId.isBlank()) {
@@ -34,6 +46,7 @@ public final class CleanSchedulerLoop implements AutoCloseable {
         this.workerId = workerId;
         this.interval = interval;
         this.errorHandler = Objects.requireNonNull(errorHandler, "errorHandler");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.executor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "command-clean-scheduler-" + workerId);
             thread.setDaemon(true);
@@ -69,8 +82,10 @@ public final class CleanSchedulerLoop implements AutoCloseable {
         try {
             while (running.get()) {
                 try {
-                    scheduler.pollOnce(workerId);
+                    CleanScheduler.PollResult result = scheduler.pollOnce(workerId);
+                    metrics.recordPoll(Instant.now(), result.dispatched());
                 } catch (RuntimeException exception) {
+                    metrics.recordError(Instant.now(), exception);
                     errorHandler.accept(exception);
                 }
                 if (!sleepInterval()) {
@@ -81,6 +96,10 @@ public final class CleanSchedulerLoop implements AutoCloseable {
             running.set(false);
             stopped.countDown();
         }
+    }
+
+    public SchedulerMetrics.Snapshot metrics() {
+        return metrics.snapshot(running.get());
     }
 
     private boolean sleepInterval() {

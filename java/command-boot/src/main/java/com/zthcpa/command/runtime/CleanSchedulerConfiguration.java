@@ -80,7 +80,8 @@ public class CleanSchedulerConfiguration {
     )
     CleanSchedulerLoop cleanSchedulerLoop(
             TaskDispatcher dispatcher,
-            CleanSchedulerProperties properties
+            CleanSchedulerProperties properties,
+            SchedulerMetrics metrics
     ) {
         String workerId = requireText(properties.getWorkerId(), "workerId");
         CleanScheduler scheduler = new CleanScheduler(dispatcher);
@@ -88,8 +89,19 @@ public class CleanSchedulerConfiguration {
                 scheduler,
                 workerId,
                 requirePositive(properties.getPollInterval(), "pollInterval"),
-                exception -> log.error("Clean scheduler poll failed", exception)
+                exception -> log.error("Clean scheduler poll failed", exception),
+                metrics
         );
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "enabled",
+            havingValue = "true"
+    )
+    SchedulerMetrics cleanSchedulerMetrics() {
+        return new SchedulerMetrics();
     }
 
     @Bean(destroyMethod = "close")
