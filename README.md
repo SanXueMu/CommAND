@@ -69,6 +69,7 @@ Clean 运行查询只读取新 `runs/run_steps/task_executions/run_events`，详
 Clean artifact 只登记外部对象存储索引，不把文件字节写入数据库；支持按 run/step 查询、artifact ID 幂等登记和外键级联清理。
 `command-runtime` 已提供 `HttpWorkerRuntime`：Java 通过 HTTP 创建/查询/取消 Worker job，并按 sequence 读取 Worker 事件；Worker 不访问平台数据库。
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。
+`CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；当前不自动创建后台线程、不在应用启动时抢任务，后台循环需通过后续显式配置接入。
 `JdbcTaskExecutionPort` 已将 dispatcher 接入 clean persistence：认领同时把 queued step/task 原子切换为 running，返回冻结的 toolId、attempt 和输入；成功路径再由 clean completion 事务同步收口 step/run 并追加事件。普通定义、运行查询和 artifact 查询后续可评估 Hibernate/JPA，`SKIP LOCKED`、CAS、恢复和状态收口继续使用显式 JDBC。
 已建立 Hibernate/JPA 只读样板：`command_definitions` 使用 `@Immutable` Entity、复合主键和 Spring Data Repository，通过 `DefinitionQueryPort` 对外提供 active 定义查询；JDBC 仍是 insert-only 写入事实源。JPA 依赖在 `command-persistence` 中标记为 optional，默认 Boot 不启用 DataSource/JPA，避免无数据库启动路径被 ORM 自动配置接管。
 数据库模式通过 `mvn -Pdatabase` 和 Spring `database` profile 显式启用，`application-database.yml` 固定 `ddl-auto=validate`；本地 `command_dev.command_runtime` 已完成 Hibernate schema validation，默认 profile 仍保持无数据库启动。
