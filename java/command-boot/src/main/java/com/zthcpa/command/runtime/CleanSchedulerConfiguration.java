@@ -12,7 +12,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
-import javax.sql.DataSource;
 import java.net.URI;
 import java.time.Duration;
 
@@ -32,6 +31,19 @@ public class CleanSchedulerConfiguration {
         return new HttpWorkerRuntime(
                 requireUri(properties.getWorkerBaseUrl()),
                 mapper,
+                requirePositive(properties.getWorkerTimeout(), "workerTimeout")
+        );
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "enabled",
+            havingValue = "true"
+    )
+    WorkerHealthChecker cleanWorkerHealthChecker(CleanSchedulerProperties properties) {
+        return new WorkerHealthChecker(
+                requireUri(properties.getWorkerBaseUrl()),
                 requirePositive(properties.getWorkerTimeout(), "workerTimeout")
         );
     }
@@ -68,8 +80,10 @@ public class CleanSchedulerConfiguration {
     )
     CleanSchedulerLoop cleanSchedulerLoop(
             TaskDispatcher dispatcher,
-            CleanSchedulerProperties properties
+            CleanSchedulerProperties properties,
+            WorkerHealthChecker healthChecker
     ) {
+        healthChecker.verify();
         String workerId = requireText(properties.getWorkerId(), "workerId");
         CleanScheduler scheduler = new CleanScheduler(dispatcher);
         CleanSchedulerLoop loop = new CleanSchedulerLoop(
