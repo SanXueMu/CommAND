@@ -1,6 +1,6 @@
 package com.zthcpa.command.api;
 
-import org.springframework.context.annotation.Profile;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static com.zthcpa.command.api.RunApiModels.RunEventResponse;
 
 @Service
-@Profile("database")
+@Conditional(DataSourcePresentCondition.class)
 public final class RunEventStreamService implements AutoCloseable {
     private static final long POLL_MILLIS = 250;
     private static final long TIMEOUT_MILLIS = 30 * 60 * 1000;

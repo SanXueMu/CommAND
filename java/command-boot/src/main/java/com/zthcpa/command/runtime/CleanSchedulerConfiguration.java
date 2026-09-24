@@ -12,17 +12,17 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 
 @Configuration
-@Profile("database")
+@ConditionalOnBean(DataSource.class)
 @EnableConfigurationProperties(CleanSchedulerProperties.class)
 public class CleanSchedulerConfiguration {
 

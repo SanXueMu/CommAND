@@ -1,7 +1,7 @@
 package com.zthcpa.command.api;
 
 import com.zthcpa.command.run.RunSubmissionException;
-import org.springframework.context.annotation.Profile;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,7 +23,7 @@ import static com.zthcpa.command.api.RunApiModels.SubmitRunRequest;
 import static com.zthcpa.command.api.RunApiModels.SubmitRunResponse;
 
 @RestController
-@Profile("database")
+@Conditional(DataSourcePresentCondition.class)
 @RequestMapping("/api/runs")
 public final class RunController {
     private final RunApplicationService service;

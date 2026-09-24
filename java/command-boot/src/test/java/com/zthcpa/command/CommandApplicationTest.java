@@ -3,7 +3,6 @@ package com.zthcpa.command;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionRegistry;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -16,9 +15,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration"
+})
 @AutoConfigureMockMvc
-@DisabledIfSystemProperty(named = "command.database.profile", matches = "true")
 class CommandApplicationTest {
     @Autowired
     private DefinitionRegistry definitionRegistry;
@@ -40,7 +42,7 @@ class CommandApplicationTest {
     }
 
     @Test
-    void exposesDisabledSchedulerStatusWithoutDatabase() throws Exception {
+    void exposesDisabledSchedulerStatusInUnitContext() throws Exception {
         mockMvc.perform(get("/api/system/scheduler"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enabled").value(false))
@@ -49,7 +51,7 @@ class CommandApplicationTest {
     }
 
     @Test
-    void exposesDisabledRecoveryStatusWithoutDatabase() throws Exception {
+    void exposesDisabledRecoveryStatusInUnitContext() throws Exception {
         mockMvc.perform(get("/api/system/recovery"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enabled").value(false))
