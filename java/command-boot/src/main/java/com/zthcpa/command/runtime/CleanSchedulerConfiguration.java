@@ -44,6 +44,25 @@ public class CleanSchedulerConfiguration {
         );
     }
 
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "recovery-enabled",
+            havingValue = "true"
+    )
+    CleanRecoveryLoop cleanRecoveryLoop(
+            CleanRecoveryPoller poller,
+            CleanSchedulerProperties properties
+    ) {
+        CleanRecoveryLoop loop = new CleanRecoveryLoop(
+                poller,
+                requirePositive(properties.getRecoveryPollInterval(), "recoveryPollInterval"),
+                exception -> log.error("Clean recovery poll failed", exception)
+        );
+        loop.start();
+        return loop;
+    }
+
     private static final Logger log = LoggerFactory.getLogger(CleanSchedulerConfiguration.class);
 
     @Bean

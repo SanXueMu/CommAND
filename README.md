@@ -74,10 +74,12 @@ Clean artifact 只登记外部对象存储索引，不把文件字节写入数�
 长任务轮询期间，dispatcher 按 `heartbeat-interval` 调用 clean task heartbeat；heartbeat CAS 返回 false 表示 worker ownership 丢失，立即停止 Worker 轮询并进入 runtime failure。默认 heartbeat interval 为 `30s`，且必须短于 `job-timeout`。
 Worker job 创建成功后的超时、ownership 丢失、轮询中断、未知状态或 HTTP 失败会执行 best-effort `cancelJob`，避免留下孤儿任务；清理失败作为 suppressed exception 保留，不覆盖原始 runtime error。平台取消已发送时不重复 cancel。
 若 heartbeat CAS 返回 false，dispatcher 认定旧 worker 已失去 task ownership：会清理 Worker job 并抛出 runtime error，但不会再用旧 worker 身份写 `failed` 终态，后续由 stale recovery/新的持有者处理。
-`CleanRecoveryRepository.recoverStaleTasks(staleBefore, limit)` 已支持并发安全的 stale running task 恢复：旧 execution 标记 `interrupted`，创建下一 attempt 的 queued execution，恢复 run/step 为 running，并写 recovery events；达到 max attempts 的任务不自动重试。当前已完成 repository 与本地 PostgreSQL 验证，尚未接入 scheduler 自动 recovery loop。
-`CleanRecoveryPoller` 提供独立的单次 recovery poll，使用可注入时钟计算 stale cutoff 并受 batch size 限制；配置位于 `command.clean.scheduler.recovery-enabled/stale-after/recovery-batch-size`，默认关闭。开启后只装配 poller，不启动线程或自动扫描，调用方需显式执行 `pollOnce()`。
-`CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；当前不自动创建后台线程、不在应用启动时抢任务，后台循环需通过后续显式配置接入。
-`CleanSchedulerLoop` 已提供可控后台生命周期：显式 `start()` 后按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。当前仍不由 Spring 自动启动，Worker 地址、identity、并发度和轮询策略待配置后接入。
+`CleanRecoveryRepository.recoverStaleTasks(staleBefore, limit)` 已支持并发安全的 stale running task 恢复：旧 execution 标记 `interrupted`，创建下一 attempt 的 queued execution，恢复 run/step 为 running，并写 recovery events；达到 max attempts 的任务不自动重试。当前已接入独立的 scheduler recovery loop，默认关闭，不与普通 task dispatch 共用线程。
+`CleanRecoveryPoller` 提供独立的单次 recovery poll，`CleanRecoveryLoop` 提供与普通 task scheduler 分离的后台生命周期；配置位于 `command.clean.scheduler.recovery-enabled/stale-after/recovery-batch-size/recovery-poll-interval`，默认关闭。显式开启后独立启动 recovery 线程，按 poll interval 扫描并受 batch size 限制；单轮异常记录后继续，应用关闭时停止线程。Recovery 不依赖 Worker 健康检查，也不与 task dispatch 共用线程。
+
+`GET /api/system/recovery` 提供只读运行状态：enabled/active、poll/recovery/error 计数、最近轮询时间、最近恢复数量和最新错误摘要。指标由 Recovery loop 内部独立维护，不暴露任务输入、任务 ID 或数据库连接信息。
+`CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；`CleanSchedulerLoop` 在 Spring database profile 且 `enabled=true` 时由 `SchedulerActivation` 健康检查通过后启动。
+`CleanSchedulerLoop` 已提供可控后台生命周期：按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。Worker 地址、identity、超时和轮询策略均由 `command.clean.scheduler` 配置并在 Bean 创建时校验。
 Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只有 database profile 且显式开启后才创建 HTTP Worker、JDBC task port、dispatcher 和后台 loop；`worker-id`、`worker-base-url`、`poll-interval`、`worker-timeout` 在 Bean 创建时校验。
 启用 scheduler 时会先执行 `GET {worker-base-url}/health`；只有 2xx 响应才启动后台 loop，非 2xx、连接失败、超时或中断会阻止应用完成 scheduler Bean 初始化。
 `SchedulerActivation` 统一管理 activate/deactivate/close；当前 Spring 启用配置在 Bean 初始化时执行一次 activate，未来动态恢复需创建新的 loop/activation 实例，不复用已停止的 executor。
@@ -87,7 +89,7 @@ Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只�
 已建立 Hibernate/JPA 只读样板：`command_definitions` 使用 `@Immutable` Entity、复合主键和 Spring Data Repository，通过 `DefinitionQueryPort` 对外提供 active 定义查询；JDBC 仍是 insert-only 写入事实源。JPA 依赖在 `command-persistence` 中标记为 optional，默认 Boot 不启用 DataSource/JPA，避免无数据库启动路径被 ORM 自动配置接管。
 数据库模式通过 `mvn -Pdatabase` 和 Spring `database` profile 显式启用，`application-database.yml` 固定 `ddl-auto=validate`；本地 `command_dev.command_runtime` 已完成 Hibernate schema validation，默认 profile 仍保持无数据库启动。
 `JpaDefinitionQueryIntegrationTest` 已在真实 PostgreSQL 中验证 active definition 的写入准备、JPA 查询、JSONB→`DefinitionDocument` 转换和 fixture 清理；核心 `DefinitionRegistry` 暂继续使用完整 JDBC 定义集合，避免在读模型尚未覆盖全部状态/版本前切换事实读取路径。
-Java clean API 已提供 `POST /api/runs` 和 `GET /api/runs/{runId}`：提交接口只接收 Workflow、可选版本和用户输入，详情接口只返回运行/步骤/最新任务状态，不暴露定义快照、内部 task ID 或任务输入。数据库 profile 下已通过真实 PostgreSQL MockMvc 集成测试，重复运行数据自动清理。
+Java clean API 已提供 `POST /api/runs`、`GET /api/runs/{runId}`、`GET /api/runs/{runId}/events?afterId=0&limit=100` 和 `GET /api/runs/{runId}/events/stream?afterId=0`：提交接口只接收 Workflow、可选版本和用户输入，详情接口只返回运行/步骤/最新任务状态，事件接口按数据库事件 ID 增量读取 run events，stream 接口在终态 run 发送完待处理事件后自动关闭；API 不暴露定义快照、内部 task ID 或任务输入。数据库 profile 下已通过真实 PostgreSQL MockMvc 集成测试，重复运行数据自动清理。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
 

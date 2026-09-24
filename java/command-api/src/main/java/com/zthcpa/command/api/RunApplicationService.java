@@ -2,6 +2,7 @@ package com.zthcpa.command.api;
 
 import com.zthcpa.command.contract.DefinitionRegistry;
 import com.zthcpa.command.persistence.CleanRunQueryRepository;
+import com.zthcpa.command.persistence.CleanRunEvent;
 import com.zthcpa.command.persistence.CleanRunSnapshot;
 import com.zthcpa.command.persistence.CleanRunSubmissionRepository;
 import com.zthcpa.command.persistence.CleanStepSnapshot;
@@ -13,9 +14,11 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 
 import static com.zthcpa.command.api.RunApiModels.RunResponse;
+import static com.zthcpa.command.api.RunApiModels.RunEventResponse;
 import static com.zthcpa.command.api.RunApiModels.StepResponse;
 import static com.zthcpa.command.api.RunApiModels.SubmitRunResponse;
 import static com.zthcpa.command.api.RunApiModels.TaskResponse;
@@ -59,6 +62,20 @@ public final class RunApplicationService {
                 snapshot.createdAt(),
                 snapshot.finishedAt(),
                 snapshot.steps().stream().map(this::toStep).toList()
+        );
+    }
+
+    public List<RunEventResponse> events(String runId, long afterId, int limit) {
+        if (queries.get(runId) == null) {
+            return null;
+        }
+        return queries.listEvents(runId, afterId, limit).stream().map(this::toEvent).toList();
+    }
+
+    private RunEventResponse toEvent(CleanRunEvent event) {
+        return new RunEventResponse(
+                event.id(), event.runId(), event.stepId(), event.kind(), event.actor(),
+                event.detail(), event.createdAt()
         );
     }
 

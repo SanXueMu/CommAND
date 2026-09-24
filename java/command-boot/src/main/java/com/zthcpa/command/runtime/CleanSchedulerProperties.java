@@ -17,6 +17,7 @@ public class CleanSchedulerProperties {
     private boolean recoveryEnabled;
     private Duration staleAfter = Duration.ofMinutes(5);
     private int recoveryBatchSize = 50;
+    private Duration recoveryPollInterval = Duration.ofSeconds(30);
 
     public boolean isEnabled() {
         return enabled;
@@ -104,5 +105,13 @@ public class CleanSchedulerProperties {
 
     public void setRecoveryBatchSize(int recoveryBatchSize) {
         this.recoveryBatchSize = recoveryBatchSize;
+    }
+
+    public Duration getRecoveryPollInterval() {
+        return recoveryPollInterval;
+    }
+
+    public void setRecoveryPollInterval(Duration recoveryPollInterval) {
+        this.recoveryPollInterval = recoveryPollInterval;
     }
 }

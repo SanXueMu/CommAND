@@ -19,3 +19,4 @@ command:
       recovery-enabled: false
       stale-after: 5m
       recovery-batch-size: 50
+      recovery-poll-interval: 30s

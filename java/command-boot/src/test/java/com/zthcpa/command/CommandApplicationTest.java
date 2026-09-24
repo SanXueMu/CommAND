@@ -47,4 +47,15 @@ class CommandApplicationTest {
                 .andExpect(jsonPath("$.active").value(false))
                 .andExpect(jsonPath("$.polls").value(0));
     }
+
+    @Test
+    void exposesDisabledRecoveryStatusWithoutDatabase() throws Exception {
+        mockMvc.perform(get("/api/system/recovery"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.active").value(false))
+                .andExpect(jsonPath("$.polls").value(0))
+                .andExpect(jsonPath("$.recovered").value(0))
+                .andExpect(jsonPath("$.errors").value(0));
+    }
 }

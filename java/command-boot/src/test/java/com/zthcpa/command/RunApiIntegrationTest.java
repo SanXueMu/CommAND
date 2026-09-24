@@ -19,6 +19,9 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -91,6 +94,81 @@ class RunApiIntegrationTest {
                 .andExpect(jsonPath("$.enabled").value(false))
                 .andExpect(jsonPath("$.active").value(false))
                 .andExpect(jsonPath("$.workerBaseUrl").doesNotExist());
+    }
+
+    @Test
+    void readsRunEventsWithAfterIdCursor() throws Exception {
+        String body = mapper.writeValueAsString(Map.of(
+                "workflowId", "ocr.extract-document",
+                "workflowVersion", 1,
+                "input", Map.of("file", "events.pdf")
+        ));
+        String response = mockMvc.perform(post("/api/runs")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        runId = mapper.readTree(response).get("runId").asText();
+
+        Number firstId = jdbc.queryForObject(
+                "INSERT INTO command_runtime.run_events (run_id, kind, actor, detail) "
+                        + "VALUES (?, 'run.started', 'test', '{}'::jsonb) RETURNING id",
+                Number.class,
+                runId
+        );
+        jdbc.update(
+                "INSERT INTO command_runtime.run_events (run_id, kind, actor, detail) "
+                        + "VALUES (?, 'run.progress', 'test', '{\"percent\":50}'::jsonb)",
+                runId
+        );
+
+        mockMvc.perform(get("/api/runs/{runId}/events", runId)
+                        .param("afterId", String.valueOf(firstId.longValue()))
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].kind", is("run.progress")))
+                .andExpect(jsonPath("$[0].detail.percent", is(50)));
+    }
+
+    @Test
+    void returnsNotFoundForEventsOfUnknownRun() throws Exception {
+        mockMvc.perform(get("/api/runs/unknown-run/events"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void streamsEventsAndClosesAfterTerminalRun() throws Exception {
+        String body = mapper.writeValueAsString(Map.of(
+                "workflowId", "ocr.extract-document",
+                "workflowVersion", 1,
+                "input", Map.of("file", "stream.pdf")
+        ));
+        String response = mockMvc.perform(post("/api/runs")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        runId = mapper.readTree(response).get("runId").asText();
+        jdbc.update("UPDATE command_runtime.runs SET status = 'succeeded', finished_at = CURRENT_TIMESTAMP WHERE id = ?", runId);
+        jdbc.update(
+                "INSERT INTO command_runtime.run_events (run_id, kind, actor, detail) "
+                        + "VALUES (?, 'run.succeeded', 'test', '{}'::jsonb)",
+                runId
+        );
+
+        var async = mockMvc.perform(get("/api/runs/{runId}/events/stream", runId))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(async))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/event-stream"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("run.succeeded")));
     }
 
     @AfterEach

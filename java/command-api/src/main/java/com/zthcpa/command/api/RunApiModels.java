@@ -31,6 +31,17 @@ public final class RunApiModels {
     public record TaskResponse(int attempt, int maxAttempts, String status, Instant startedAt, Instant finishedAt) {
     }
 
+    public record RunEventResponse(
+            long id,
+            String runId,
+            String stepId,
+            String kind,
+            String actor,
+            Map<String, Object> detail,
+            Instant createdAt
+    ) {
+    }
+
     public record ErrorResponse(String code, String message) {
     }
 }
