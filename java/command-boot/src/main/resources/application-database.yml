@@ -1,8 +1,0 @@
-spring:
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-  sql:
-    init:
-      mode: never

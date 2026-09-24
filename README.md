@@ -50,7 +50,7 @@ command/
 └── tests/                     # 镜像 core/ 结构，Fake 客户端零外部依赖
 ```
 
-Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期，以及统一 Hibernate/JPA 持久化。PostgreSQL、Flyway 和 Hibernate 现在是默认生产启动依赖：`application.yml` 读取 `COMMAND_DB_URL`、`COMMAND_DB_USERNAME`、`COMMAND_DB_PASSWORD`，数据库不可用或密码缺失时应用启动失败。Flyway 使用 clean migration，Hibernate 使用 `ddl-auto=validate`。纯单元测试通过显式排除数据库自动配置隔离，不再把无数据库启动作为生产验收目标。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
+Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期，以及统一 Hibernate/JPA 持久化。PostgreSQL、Flyway 和 Hibernate 现在是默认生产启动依赖：`application.yml` 是唯一生产配置事实源，读取 `COMMAND_DB_URL`、`COMMAND_DB_USERNAME`、`COMMAND_DB_PASSWORD`，数据库不可用或密码缺失时应用启动失败。Flyway 使用 clean migration，Hibernate 使用 `ddl-auto=validate`。纯单元测试通过显式排除数据库自动配置隔离，不再把无数据库启动作为生产验收目标。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
 `command-tools` 是 Java 工具实现模块，不调用旧 Python 工具。当前 `text.llm.translate` 已按新 Tool Manifest 实现为纯 Java 工具，模型、缓存和进度事件均通过端口注入，并通过 `InProcessToolRuntime` 暴露与 Worker 相同的异步 job/事件/取消协议；旧 Python 实现只作为行为参考，不进入运行时。真实模型调用仅在显式开启 `command.tools.translation.enabled=true` 且提供 `COMMAND_TRANSLATION_BASE_URL`、`COMMAND_TRANSLATION_API_KEY` 时装配。
 
 运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正持久化前会先完成新架构的运行、步骤、任务表设计，不把旧 `pipelines`/`tasks` 表作为长期模型。
@@ -91,7 +91,7 @@ Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，只�
 `JdbcTaskExecutionPort` 已将 dispatcher 接入 clean persistence：认领同时把 queued step/task 原子切换为 running，返回冻结的 toolId、attempt 和输入；成功路径再由 clean completion 事务同步收口 step/run 并追加事件。clean 持久层已批量切换到 Hibernate/JPA：普通提交、查询、事件、制品使用 EntityManager/JPQL，认领、CAS、恢复、收口和多步骤推进使用 Hibernate Native Query，不再由 Spring 装配 JDBC 业务适配器。
 `command_definitions` 已完成首个 Hibernate/JPA 迁移：实体统一位于 `entity.definition`，复合主键和 JSONB 由 Hibernate 管理，Spring Data Repository 提供 active 查询，`JpaDefinitionRepositoryAdapter` 负责 insert-only 幂等写入；该表不再由 JDBC 适配器承担运行时写入。
 数据库模式通过 `mvn -Pdatabase` 和 Spring `database` profile 显式启用，`application-database.yml` 固定 `ddl-auto=validate`；本地 `command_dev.command_runtime` 已完成 Hibernate schema validation，默认 profile 仍保持无数据库启动。
-`command_definitions` 及 clean run/step/task/event/artifact 的 Hibernate EntityManagerFactory 已通过真实 `command_dev.command_runtime` schema 校验。clean runtime 已删除旧 `RunRepository`、`TaskRepository`、JDBC SQL/RowMapper 和相关 LocalOpsRunner，不再保留第二套持久层。默认 `mvn -q clean test` 使用纯单元测试上下文并通过；生产主代码使用 `mvn -q clean package -Dmaven.test.skip=true` 构建，数据库集成测试直接使用默认数据库装配并提供 `COMMAND_DB_PASSWORD`。
+`command_definitions` 及 clean run/step/task/event/artifact 的 Hibernate EntityManagerFactory 已通过真实 `command_dev.command_runtime` schema 校验。clean runtime 已删除旧 `RunRepository`、`TaskRepository`、JDBC SQL/RowMapper 和相关 LocalOpsRunner，不再保留第二套持久层。`application-database.yml`、`application-clean.yml`、`application-migration.yml` 已删除，数据库集成测试直接使用默认数据库装配并提供 `COMMAND_DB_PASSWORD`。默认 `mvn -q clean test` 使用纯单元测试上下文并通过；生产主代码使用 `mvn -q clean package -Dmaven.test.skip=true` 构建。
 Java clean API 已提供 `POST /api/runs`、`GET /api/runs/{runId}`、`GET /api/runs/{runId}/events?afterId=0&limit=100` 和 `GET /api/runs/{runId}/events/stream?afterId=0`：提交接口只接收 Workflow、可选版本和用户输入，详情接口只返回运行/步骤/最新任务状态，事件接口按数据库事件 ID 增量读取 run events，stream 接口在终态 run 发送完待处理事件后自动关闭；API 不暴露定义快照、内部 task ID 或任务输入。数据库 profile 下已通过真实 PostgreSQL MockMvc 集成测试，重复运行数据自动清理。
 
 当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。

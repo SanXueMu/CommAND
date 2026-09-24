@@ -8,14 +8,12 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @SpringBootTest
-@ActiveProfiles("database")
 @EnabledIfEnvironmentVariable(named = "COMMAND_DB_PASSWORD", matches = ".+")
 class SchedulerDisabledDatabaseProfileTest {
     @Autowired
