@@ -3,10 +3,13 @@ package com.zthcpa.command;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,12 +18,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration"
-})
+@SpringBootTest
 @AutoConfigureMockMvc
+@EnabledIfEnvironmentVariable(named = "COMMAND_DB_PASSWORD", matches = ".+")
 class CommandApplicationTest {
     @Autowired
     private DefinitionRegistry definitionRegistry;
@@ -42,7 +42,7 @@ class CommandApplicationTest {
     }
 
     @Test
-    void exposesDisabledSchedulerStatusInUnitContext() throws Exception {
+    void exposesDisabledSchedulerStatus() throws Exception {
         mockMvc.perform(get("/api/system/scheduler"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enabled").value(false))
@@ -51,7 +51,7 @@ class CommandApplicationTest {
     }
 
     @Test
-    void exposesDisabledRecoveryStatusInUnitContext() throws Exception {
+    void exposesDisabledRecoveryStatus() throws Exception {
         mockMvc.perform(get("/api/system/recovery"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enabled").value(false))
@@ -59,5 +59,12 @@ class CommandApplicationTest {
                 .andExpect(jsonPath("$.polls").value(0))
                 .andExpect(jsonPath("$.recovered").value(0))
                 .andExpect(jsonPath("$.errors").value(0));
+    }
+
+    @DynamicPropertySource
+    static void databaseProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> "jdbc:postgresql://localhost:5432/command_dev");
+        registry.add("spring.datasource.username", () -> "command_dev");
+        registry.add("spring.datasource.password", () -> System.getenv("COMMAND_DB_PASSWORD"));
     }
 }

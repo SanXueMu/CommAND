@@ -4,12 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Conditional;
-import javax.sql.DataSource;
 
 
 @Configuration
-@Conditional(DataSourcePresentCondition.class)
 public class HibernatePersistenceConfiguration {
 
     @Bean
