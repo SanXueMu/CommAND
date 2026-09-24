@@ -1,220 +1,111 @@
 package com.zthcpa.command.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import com.zthcpa.command.persistence.entity.event.RunEventEntity;
+import com.zthcpa.command.persistence.entity.event.TaskEventEntity;
+import com.zthcpa.command.persistence.entity.task.TaskExecutionEntity;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.sql.DataSource;
-import java.util.Map;
-import java.time.Instant;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
+@Transactional
 public final class CleanRecoveryRepository {
-    private final NamedParameterJdbcTemplate jdbc;
+    private final EntityManager entityManager;
     private final ObjectMapper mapper;
-    private final TransactionTemplate transaction;
 
-    public CleanRecoveryRepository(
-            NamedParameterJdbcTemplate jdbc,
-            ObjectMapper mapper,
-            DataSource dataSource
-    ) {
-        this.jdbc = jdbc;
+    public CleanRecoveryRepository(EntityManager entityManager, ObjectMapper mapper) {
+        this.entityManager = entityManager;
         this.mapper = mapper;
-        this.transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
     }
 
     public boolean recoverInterruptedRun(String runId) {
         require(runId, "Run id");
-        Boolean recovered = transaction.execute(status -> {
-            String stepId = jdbc.query(LOCK_STEP, Map.of("runId", runId),
-                    resultSet -> resultSet.next() ? resultSet.getString("step_id") : null);
-            if (stepId == null) {
-                return false;
-            }
-            String taskId = jdbc.queryForObject(LOCK_TASK, Map.of("stepId", stepId), String.class);
-            Map<String, Object> task = jdbc.queryForMap(TASK_DETAILS, Map.of("taskId", taskId));
-            int attempt = ((Number) task.get("attempt")).intValue();
-            int maxAttempts = ((Number) task.get("max_attempts")).intValue();
-            if (attempt >= maxAttempts) {
-                return false;
-            }
-
-            jdbc.update(RESTORE_RUN, Map.of("runId", runId));
-            jdbc.update(RESTORE_STEP, Map.of("stepId", stepId));
-            String newTaskId = taskId + ":retry:" + (attempt + 1);
-            jdbc.update(INSERT_RETRY, new MapSqlParameterSource()
-                    .addValue("taskId", newTaskId)
-                    .addValue("stepId", stepId)
-                    .addValue("attempt", attempt + 1)
-                    .addValue("maxAttempts", maxAttempts)
-                    .addValue("input", PostgresJson.write(mapper,
-                            PostgresJson.read(mapper, task.get("input").toString()))));
-            insertTaskEvent(newTaskId, "task.requeued", Map.of("attempt", attempt + 1));
-            insertRunEvent(runId, stepId, "run.recovered", Map.of("task_id", newTaskId));
-            return true;
-        });
-        return Boolean.TRUE.equals(recovered);
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = entityManager.createNativeQuery("""
+                SELECT s.id, t.id, t.attempt, t.max_attempts, t.input::text
+                FROM command_runtime.run_steps s
+                JOIN command_runtime.task_executions t ON t.step_id = s.id
+                WHERE s.run_id=:runId AND s.status='interrupted' AND t.status='interrupted'
+                ORDER BY s.step_index DESC, t.attempt DESC LIMIT 1
+                FOR UPDATE OF s, t
+                """).setParameter("runId", runId).getResultList();
+        if (rows.isEmpty()) return false;
+        Object[] row = rows.get(0);
+        int attempt = number(row[2]);
+        int maxAttempts = number(row[3]);
+        if (attempt >= maxAttempts) return false;
+        String stepId = row[0].toString();
+        String taskId = row[1].toString();
+        restore(runId, stepId);
+        String retryId = taskId + ":retry:" + (attempt + 1);
+        entityManager.persist(new TaskExecutionEntity(retryId, stepId, maxAttempts,
+                PostgresJson.read(mapper, row[4].toString())));
+        appendEvents(runId, stepId, retryId, "run.recovered", "task.requeued", attempt + 1);
+        return true;
     }
 
     public int recoverStaleTasks(Instant staleBefore, int limit) {
-        if (staleBefore == null) {
-            throw new IllegalArgumentException("staleBefore must not be null");
+        if (staleBefore == null) throw new IllegalArgumentException("staleBefore must not be null");
+        if (limit <= 0) throw new IllegalArgumentException("limit must be positive");
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = entityManager.createNativeQuery("""
+                SELECT t.id, t.step_id, s.run_id, t.attempt, t.max_attempts, t.input::text
+                FROM command_runtime.task_executions t
+                JOIN command_runtime.run_steps s ON s.id=t.step_id
+                JOIN command_runtime.runs r ON r.id=s.run_id
+                WHERE t.status='running' AND s.status='running' AND r.status='running'
+                  AND t.heartbeat_at < :staleBefore
+                ORDER BY t.heartbeat_at, t.created_at LIMIT :limit
+                FOR UPDATE OF t, s, r SKIP LOCKED
+                """).setParameter("staleBefore", Timestamp.from(staleBefore))
+                .setParameter("limit", limit).getResultList();
+        int recovered = 0;
+        for (Object[] row : rows) {
+            int attempt = number(row[3]);
+            int maxAttempts = number(row[4]);
+            if (attempt >= maxAttempts) continue;
+            String taskId = row[0].toString();
+            String stepId = row[1].toString();
+            String runId = row[2].toString();
+            markInterrupted(taskId, stepId, runId);
+            restore(runId, stepId);
+            String retryId = taskId + ":stale-retry:" + (attempt + 1);
+            entityManager.persist(new TaskExecutionEntity(retryId, stepId, maxAttempts,
+                    PostgresJson.read(mapper, row[5].toString())));
+            appendEvents(runId, stepId, retryId, "run.stale_recovered", "task.stale_recovered", attempt + 1);
+            recovered++;
         }
-        if (limit <= 0) {
-            throw new IllegalArgumentException("limit must be positive");
-        }
-        Integer recovered = transaction.execute(status -> jdbc.query(
-                STALE_TASKS,
-                new MapSqlParameterSource()
-                        .addValue("staleBefore", Timestamp.from(staleBefore))
-                        .addValue("limit", limit),
-                resultSet -> {
-                    int count = 0;
-                    while (resultSet.next()) {
-                        count += recoverStaleTask(resultSet.getString("task_id"),
-                                resultSet.getString("step_id"),
-                                resultSet.getString("run_id"),
-                                resultSet.getInt("attempt"),
-                                resultSet.getInt("max_attempts"),
-                                resultSet.getString("input"));
-                    }
-                    return count;
-                }
-        ));
-        return recovered == null ? 0 : recovered;
+        return recovered;
     }
 
-    private int recoverStaleTask(
-            String taskId,
-            String stepId,
-            String runId,
-            int attempt,
-            int maxAttempts,
-            String input
-    ) {
-        if (attempt >= maxAttempts) {
-            return 0;
-        }
-        jdbc.update(MARK_INTERRUPTED, Map.of("taskId", taskId));
-        jdbc.update(MARK_STEP_INTERRUPTED, Map.of("stepId", stepId));
-        jdbc.update(MARK_RUN_INTERRUPTED, Map.of("runId", runId));
-        jdbc.update(RESTORE_RUN, Map.of("runId", runId));
-        jdbc.update(RESTORE_STEP, Map.of("stepId", stepId));
-        String newTaskId = taskId + ":stale-retry:" + (attempt + 1);
-        jdbc.update(INSERT_RETRY, new MapSqlParameterSource()
-                .addValue("taskId", newTaskId)
-                .addValue("stepId", stepId)
-                .addValue("attempt", attempt + 1)
-                .addValue("maxAttempts", maxAttempts)
-                .addValue("input", input));
-        insertTaskEvent(newTaskId, "task.stale_recovered", Map.of("attempt", attempt + 1));
-        insertRunEvent(runId, stepId, "run.stale_recovered", Map.of("task_id", newTaskId));
-        return 1;
+    private void restore(String runId, String stepId) {
+        entityManager.createNativeQuery("UPDATE command_runtime.runs SET status='running', error=NULL, finished_at=NULL WHERE id=:id")
+                .setParameter("id", runId).executeUpdate();
+        entityManager.createNativeQuery("UPDATE command_runtime.run_steps SET status='running', finished_at=NULL WHERE id=:id")
+                .setParameter("id", stepId).executeUpdate();
     }
 
-    private void insertTaskEvent(String taskId, String kind, Map<String, Object> detail) {
-        jdbc.update("""
-                INSERT INTO command_runtime.task_events (task_id, kind, detail)
-                VALUES (:taskId, :kind, CAST(:detail AS jsonb))
-                """, new MapSqlParameterSource()
-                .addValue("taskId", taskId)
-                .addValue("kind", kind)
-                .addValue("detail", PostgresJson.write(mapper, detail)));
+    private void markInterrupted(String taskId, String stepId, String runId) {
+        entityManager.createNativeQuery("UPDATE command_runtime.task_executions SET status='interrupted', finished_at=CURRENT_TIMESTAMP WHERE id=:id AND status='running'")
+                .setParameter("id", taskId).executeUpdate();
+        entityManager.createNativeQuery("UPDATE command_runtime.run_steps SET status='interrupted', finished_at=CURRENT_TIMESTAMP WHERE id=:id AND status='running'")
+                .setParameter("id", stepId).executeUpdate();
+        entityManager.createNativeQuery("UPDATE command_runtime.runs SET status='interrupted', finished_at=CURRENT_TIMESTAMP WHERE id=:id AND status='running'")
+                .setParameter("id", runId).executeUpdate();
     }
 
-    private void insertRunEvent(String runId, String stepId, String kind, Map<String, Object> detail) {
-        jdbc.update("""
-                INSERT INTO command_runtime.run_events (run_id, step_id, kind, actor, detail)
-                VALUES (:runId, :stepId, :kind, 'system', CAST(:detail AS jsonb))
-                """, new MapSqlParameterSource()
-                .addValue("runId", runId)
-                .addValue("stepId", stepId)
-                .addValue("kind", kind)
-                .addValue("detail", PostgresJson.write(mapper, detail)));
+    private void appendEvents(String runId, String stepId, String taskId, String runKind, String taskKind, int attempt) {
+        entityManager.persist(new TaskEventEntity(taskId, taskKind, Map.of("attempt", attempt)));
+        entityManager.persist(new RunEventEntity(runId, stepId, runKind, "system", Map.of("task_id", taskId)));
     }
+
+    private static int number(Object value) { return ((Number) value).intValue(); }
 
     private static void require(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
-
-    private static final String LOCK_STEP = """
-            SELECT s.id AS step_id
-            FROM command_runtime.runs r
-            JOIN command_runtime.run_steps s ON s.run_id = r.id
-            WHERE r.id = :runId AND r.status = 'interrupted'
-              AND s.status = 'interrupted'
-            ORDER BY s.step_index DESC
-            LIMIT 1
-            FOR UPDATE OF r, s
-            """;
-
-    private static final String LOCK_TASK = """
-            SELECT id
-            FROM command_runtime.task_executions
-            WHERE step_id = :stepId AND status = 'interrupted'
-            ORDER BY attempt DESC
-            LIMIT 1
-            FOR UPDATE
-            """;
-
-    private static final String TASK_DETAILS = """
-            SELECT attempt, max_attempts, input::text AS input
-            FROM command_runtime.task_executions
-            WHERE id = :taskId
-            """;
-
-    private static final String RESTORE_RUN = """
-            UPDATE command_runtime.runs
-            SET status = 'running', error = NULL, finished_at = NULL
-            WHERE id = :runId AND status = 'interrupted'
-            """;
-
-    private static final String RESTORE_STEP = """
-            UPDATE command_runtime.run_steps
-            SET status = 'running', finished_at = NULL
-            WHERE id = :stepId AND status = 'interrupted'
-            """;
-
-    private static final String INSERT_RETRY = """
-            INSERT INTO command_runtime.task_executions (
-                id, step_id, attempt, max_attempts, input, status
-            ) VALUES (
-                :taskId, :stepId, :attempt, :maxAttempts, CAST(:input AS jsonb), 'queued'
-            )
-            """;
-
-    private static final String STALE_TASKS = """
-            SELECT t.id AS task_id, t.step_id, s.run_id, t.attempt, t.max_attempts, t.input::text AS input
-            FROM command_runtime.task_executions t
-            JOIN command_runtime.run_steps s ON s.id = t.step_id
-            JOIN command_runtime.runs r ON r.id = s.run_id
-            WHERE t.status = 'running' AND s.status = 'running' AND r.status = 'running'
-              AND t.heartbeat_at < :staleBefore
-            ORDER BY t.heartbeat_at, t.created_at
-            LIMIT :limit
-            FOR UPDATE OF t, s, r SKIP LOCKED
-            """;
-
-    private static final String MARK_INTERRUPTED = """
-            UPDATE command_runtime.task_executions
-            SET status = 'interrupted', finished_at = now()
-            WHERE id = :taskId AND status = 'running'
-            """;
-
-    private static final String MARK_STEP_INTERRUPTED = """
-            UPDATE command_runtime.run_steps
-            SET status = 'interrupted', finished_at = now()
-            WHERE id = :stepId AND status = 'running'
-            """;
-
-    private static final String MARK_RUN_INTERRUPTED = """
-            UPDATE command_runtime.runs
-            SET status = 'interrupted', finished_at = now()
-            WHERE id = :runId AND status = 'running'
-            """;
 }

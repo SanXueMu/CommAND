@@ -1,227 +1,127 @@
 package com.zthcpa.command.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zthcpa.command.run.TaskStatus;
+import com.zthcpa.command.persistence.entity.event.RunEventEntity;
+import com.zthcpa.command.persistence.entity.event.TaskEventEntity;
+import com.zthcpa.command.persistence.entity.step.RunStepEntity;
+import com.zthcpa.command.persistence.entity.task.TaskExecutionEntity;
 import com.zthcpa.command.run.PipelineRunSubmissionPlan;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import com.zthcpa.command.run.TaskStatus;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.sql.DataSource;
 import java.util.Map;
 
+@Transactional
 public final class CleanStepCoordinatorRepository {
-    private final NamedParameterJdbcTemplate jdbc;
+    private final EntityManager entityManager;
     private final ObjectMapper mapper;
-    private final TransactionTemplate transaction;
 
-    public CleanStepCoordinatorRepository(
-            NamedParameterJdbcTemplate jdbc,
-            ObjectMapper mapper,
-            DataSource dataSource
-    ) {
-        this.jdbc = jdbc;
+    public CleanStepCoordinatorRepository(EntityManager entityManager, ObjectMapper mapper) {
+        this.entityManager = entityManager;
         this.mapper = mapper;
-        this.transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
     }
 
-    public boolean completeAndAdvance(
-            String taskId,
-            String workerId,
-            TaskStatus terminalStatus,
-            Map<String, Object> output,
-            Map<String, Object> error,
-            CleanNextStepPlan nextStep
-    ) {
+    public boolean completeAndAdvance(String taskId, String workerId, TaskStatus status,
+                                      Map<String, Object> output, Map<String, Object> error,
+                                      CleanNextStepPlan nextStep) {
         require(taskId, "Task id");
         require(workerId, "Worker id");
-        if (terminalStatus != TaskStatus.SUCCEEDED) {
+        if (status != TaskStatus.SUCCEEDED) {
             throw new IllegalArgumentException("Only successful tasks can advance to a next step");
         }
-
-        Boolean completed = transaction.execute(status -> {
-            String stepId = jdbc.query(COMPLETE_TASK, parameters(taskId, workerId, output, error),
-                    resultSet -> resultSet.next() ? resultSet.getString("step_id") : null);
-            if (stepId == null) {
-                return false;
-            }
-            String runId = jdbc.queryForObject(FIND_RUN_ID, Map.of("stepId", stepId), String.class);
-            jdbc.update(COMPLETE_STEP, Map.of("stepId", stepId));
-            insertTaskEvent(taskId, "task.succeeded", output == null ? Map.of() : output);
-
-            if (nextStep == null) {
-                jdbc.update(COMPLETE_RUN, Map.of("runId", runId));
-                insertRunEvent(runId, stepId, "run.succeeded", Map.of());
-            } else {
-                insertNextStep(runId, nextStep);
-                insertRunEvent(runId, stepId, "step.advanced", Map.of("next_step_id", nextStep.stepId()));
-            }
-            return true;
-        });
-        return Boolean.TRUE.equals(completed);
+        Object stepId = completeTask(taskId, workerId, output);
+        if (stepId == null) return false;
+        Object runId = runId(stepId);
+        markStepSucceeded(stepId);
+        if (nextStep == null) {
+            markRunSucceeded(runId);
+            appendRunEvent(runId, stepId, "run.succeeded", Map.of());
+        } else {
+            persistNextStep(runId.toString(), nextStep);
+            appendRunEvent(runId, stepId, "step.advanced", Map.of("next_step_id", nextStep.stepId()));
+        }
+        appendTaskEvent(taskId, "task.succeeded", output);
+        return true;
     }
 
-    public boolean completeAndAdvance(
-            String taskId,
-            String workerId,
-            Map<String, Object> output,
-            PipelineRunSubmissionPlan plan
-    ) {
+    public boolean completeAndAdvance(String taskId, String workerId, Map<String, Object> output,
+                                      PipelineRunSubmissionPlan plan) {
         require(taskId, "Task id");
         require(workerId, "Worker id");
-        if (plan == null) {
-            throw new IllegalArgumentException("Pipeline submission plan must not be null");
+        if (plan == null) throw new IllegalArgumentException("Pipeline submission plan must not be null");
+        Object stepId = completeTask(taskId, workerId, output);
+        if (stepId == null) return false;
+        Object[] current = (Object[]) entityManager.createNativeQuery(
+                        "SELECT run_id, step_index FROM command_runtime.run_steps WHERE id=:id")
+                .setParameter("id", stepId).getSingleResult();
+        if (!plan.runId().equals(current[0].toString())) {
+            throw new IllegalArgumentException("Frozen submission plan belongs to another run");
         }
+        markStepSucceeded(stepId);
+        CleanNextStepPlan next = nextStep(plan, Integer.parseInt(current[1].toString()));
+        if (next == null) {
+            markRunSucceeded(current[0]);
+            appendRunEvent(current[0], stepId, "run.succeeded", Map.of());
+        } else {
+            persistNextStep(current[0].toString(), next);
+            appendRunEvent(current[0], stepId, "step.advanced", Map.of("next_step_id", next.stepId()));
+        }
+        appendTaskEvent(taskId, "task.succeeded", output);
+        return true;
+    }
 
-        Boolean completed = transaction.execute(status -> {
-            String stepId = jdbc.query(COMPLETE_TASK, parameters(taskId, workerId, output, null),
-                    resultSet -> resultSet.next() ? resultSet.getString("step_id") : null);
-            if (stepId == null) {
-                return false;
-            }
-            Map<String, Object> current = jdbc.queryForMap(FIND_STEP, Map.of("stepId", stepId));
-            String runId = current.get("run_id").toString();
-            if (!runId.equals(plan.runId())) {
-                throw new IllegalArgumentException("Frozen submission plan belongs to another run");
-            }
-            int currentIndex = ((Number) current.get("step_index")).intValue();
-            jdbc.update(COMPLETE_STEP, Map.of("stepId", stepId));
-            insertTaskEvent(taskId, "task.succeeded", output == null ? Map.of() : output);
+    private Object completeTask(String taskId, String workerId, Map<String, Object> output) {
+        int updated = entityManager.createNativeQuery("""
+                UPDATE command_runtime.task_executions
+                SET status='succeeded', output=CAST(:output AS jsonb), finished_at=CURRENT_TIMESTAMP
+                WHERE id=:taskId AND worker_id=:workerId AND status='running'
+                """).setParameter("output", PostgresJson.write(mapper, output == null ? Map.of() : output))
+                .setParameter("taskId", taskId).setParameter("workerId", workerId).executeUpdate();
+        if (updated != 1) return null;
+        return entityManager.createNativeQuery("SELECT step_id FROM command_runtime.task_executions WHERE id=:id")
+                .setParameter("id", taskId).getSingleResult();
+    }
 
-            CleanNextStepPlan nextStep = nextStep(plan, currentIndex);
-            if (nextStep == null) {
-                jdbc.update(COMPLETE_RUN, Map.of("runId", runId));
-                insertRunEvent(runId, stepId, "run.succeeded", Map.of());
-            } else {
-                insertNextStep(runId, nextStep);
-                insertRunEvent(runId, stepId, "step.advanced", Map.of("next_step_id", nextStep.stepId()));
-            }
-            return true;
-        });
-        return Boolean.TRUE.equals(completed);
+    private Object runId(Object stepId) {
+        return entityManager.createNativeQuery("SELECT run_id FROM command_runtime.run_steps WHERE id=:id")
+                .setParameter("id", stepId).getSingleResult();
+    }
+
+    private void markStepSucceeded(Object stepId) {
+        entityManager.createNativeQuery("UPDATE command_runtime.run_steps SET status='succeeded', finished_at=CURRENT_TIMESTAMP WHERE id=:id")
+                .setParameter("id", stepId).executeUpdate();
+    }
+
+    private void markRunSucceeded(Object runId) {
+        entityManager.createNativeQuery("UPDATE command_runtime.runs SET status='succeeded', finished_at=CURRENT_TIMESTAMP WHERE id=:id AND status='running'")
+                .setParameter("id", runId).executeUpdate();
+    }
+
+    private void persistNextStep(String runId, CleanNextStepPlan next) {
+        entityManager.persist(new RunStepEntity(next.stepId(), runId, next.stepIndex(), next.stepKey(),
+                next.tool().id(), next.tool().version(), next.input()));
+        entityManager.persist(new TaskExecutionEntity(next.taskId(), next.stepId(), next.maxAttempts(), next.input()));
+        appendTaskEvent(next.taskId(), "task.queued", Map.of("step_index", next.stepIndex()));
+    }
+
+    private void appendTaskEvent(String taskId, String kind, Map<String, Object> detail) {
+        entityManager.persist(new TaskEventEntity(taskId, kind, detail == null ? Map.of() : detail));
+    }
+
+    private void appendRunEvent(Object runId, Object stepId, String kind, Map<String, Object> detail) {
+        entityManager.persist(new RunEventEntity(runId.toString(), stepId.toString(), kind, "system", detail));
     }
 
     private CleanNextStepPlan nextStep(PipelineRunSubmissionPlan plan, int currentIndex) {
         int nextIndex = currentIndex + 1;
-        if (nextIndex >= plan.execution().steps().size()) {
-            return null;
-        }
+        if (nextIndex >= plan.execution().steps().size()) return null;
         var step = plan.execution().steps().get(nextIndex);
-        return new CleanNextStepPlan(
-                plan.runId() + ":step:" + nextIndex,
-                nextIndex,
-                step.id(),
-                step.tool(),
-                step.input(),
-                plan.taskIds().get(nextIndex),
-                step.maxAttempts()
-        );
-    }
-
-    private void insertNextStep(String runId, CleanNextStepPlan nextStep) {
-        jdbc.update(INSERT_STEP, new MapSqlParameterSource()
-                .addValue("stepId", nextStep.stepId())
-                .addValue("runId", runId)
-                .addValue("stepIndex", nextStep.stepIndex())
-                .addValue("stepKey", nextStep.stepKey())
-                .addValue("definitionId", nextStep.tool().id())
-                .addValue("definitionVersion", nextStep.tool().version())
-                .addValue("input", PostgresJson.write(mapper, nextStep.input())));
-        jdbc.update(INSERT_TASK, new MapSqlParameterSource()
-                .addValue("taskId", nextStep.taskId())
-                .addValue("stepId", nextStep.stepId())
-                .addValue("maxAttempts", nextStep.maxAttempts())
-                .addValue("input", PostgresJson.write(mapper, nextStep.input())));
-        insertTaskEvent(nextStep.taskId(), "task.queued", Map.of("step_index", nextStep.stepIndex()));
-    }
-
-    private void insertTaskEvent(String taskId, String kind, Map<String, Object> detail) {
-        jdbc.update(INSERT_TASK_EVENT, new MapSqlParameterSource()
-                .addValue("taskId", taskId)
-                .addValue("kind", kind)
-                .addValue("detail", PostgresJson.write(mapper, detail)));
-    }
-
-    private void insertRunEvent(String runId, String stepId, String kind, Map<String, Object> detail) {
-        jdbc.update(INSERT_RUN_EVENT, new MapSqlParameterSource()
-                .addValue("runId", runId)
-                .addValue("stepId", stepId)
-                .addValue("kind", kind)
-                .addValue("detail", PostgresJson.write(mapper, detail)));
-    }
-
-    private MapSqlParameterSource parameters(
-            String taskId, String workerId, Map<String, Object> output, Map<String, Object> error
-    ) {
-        return new MapSqlParameterSource()
-                .addValue("taskId", taskId)
-                .addValue("workerId", workerId)
-                .addValue("output", PostgresJson.write(mapper, output == null ? Map.of() : output))
-                .addValue("error", PostgresJson.write(mapper, error));
+        return new CleanNextStepPlan(plan.runId() + ":step:" + nextIndex, nextIndex, step.id(), step.tool(),
+                step.input(), plan.taskIds().get(nextIndex), step.maxAttempts());
     }
 
     private static void require(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
-
-    private static final String COMPLETE_TASK = """
-            UPDATE command_runtime.task_executions
-            SET status = 'succeeded', output = CAST(:output AS jsonb),
-                error = CAST(:error AS jsonb), finished_at = now()
-            WHERE id = :taskId AND worker_id = :workerId AND status = 'running'
-            RETURNING step_id
-            """;
-
-    private static final String FIND_RUN_ID = """
-            SELECT run_id FROM command_runtime.run_steps WHERE id = :stepId
-            """;
-
-    private static final String FIND_STEP = """
-            SELECT run_id, step_index
-            FROM command_runtime.run_steps
-            WHERE id = :stepId
-            """;
-
-    private static final String COMPLETE_STEP = """
-            UPDATE command_runtime.run_steps
-            SET status = 'succeeded', finished_at = now()
-            WHERE id = :stepId AND status = 'running'
-            """;
-
-    private static final String COMPLETE_RUN = """
-            UPDATE command_runtime.runs
-            SET status = 'succeeded', finished_at = now()
-            WHERE id = :runId AND status = 'running'
-            """;
-
-    private static final String INSERT_STEP = """
-            INSERT INTO command_runtime.run_steps (
-                id, run_id, step_index, step_key, definition_kind,
-                definition_id, definition_version, input, status
-            ) VALUES (
-                :stepId, :runId, :stepIndex, :stepKey, 'tool',
-                :definitionId, :definitionVersion, CAST(:input AS jsonb), 'queued'
-            )
-            """;
-
-    private static final String INSERT_TASK = """
-            INSERT INTO command_runtime.task_executions (
-                id, step_id, attempt, max_attempts, input, status
-            ) VALUES (
-                :taskId, :stepId, 1, :maxAttempts, CAST(:input AS jsonb), 'queued'
-            )
-            """;
-
-    private static final String INSERT_TASK_EVENT = """
-            INSERT INTO command_runtime.task_events (task_id, kind, detail)
-            VALUES (:taskId, :kind, CAST(:detail AS jsonb))
-            """;
-
-    private static final String INSERT_RUN_EVENT = """
-            INSERT INTO command_runtime.run_events (run_id, step_id, kind, actor, detail)
-            VALUES (:runId, :stepId, :kind, 'system', CAST(:detail AS jsonb))
-            """;
 }

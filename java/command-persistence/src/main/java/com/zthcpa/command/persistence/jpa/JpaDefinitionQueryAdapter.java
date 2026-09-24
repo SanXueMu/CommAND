@@ -7,14 +7,12 @@ import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionStatus;
 import com.zthcpa.command.persistence.DefinitionQueryPort;
+import com.zthcpa.command.persistence.entity.definition.CommandDefinitionEntity;
 
 import java.util.List;
 import java.util.Optional;
 
 public final class JpaDefinitionQueryAdapter implements DefinitionQueryPort {
-    private static final TypeReference<java.util.Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
-    };
-
     private final CommandDefinitionJpaRepository repository;
     private final ObjectMapper mapper;
 
@@ -46,7 +44,7 @@ public final class JpaDefinitionQueryAdapter implements DefinitionQueryPort {
                     ),
                     entity.getSchemaVersion(),
                     DefinitionStatus.fromValue(entity.getStatus()),
-                    mapper.readValue(entity.getDocument(), JSON_OBJECT),
+                    entity.getDocument(),
                     entity.getChecksum(),
                     "jpa:command_runtime.command_definitions"
             );

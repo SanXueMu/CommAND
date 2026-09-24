@@ -1,0 +1,18 @@
+{
+  "kind": "tool",
+  "id": "text.llm.translate",
+  "version": 1,
+  "schema_version": 1,
+  "status": "active",
+  "title": "Translate text segments",
+  "runtime": "java",
+  "entry": "com.zthcpa.command.tools.TextLlmTranslateTool",
+  "input_schema": "tools/text.llm.translate/input.schema.json",
+  "output_schema": "tools/text.llm.translate/output.schema.json",
+  "resources": {
+    "timeout_seconds": 1800,
+    "concurrency": 4,
+    "max_attempts": 2
+  },
+  "capabilities": ["translation", "glossary", "cache", "progress"]
+}

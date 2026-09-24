@@ -3,7 +3,6 @@ package com.zthcpa.command.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.run.TaskStatus;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
 
 import java.util.Map;
 
@@ -21,8 +20,7 @@ class CleanRunCompletionRepositoryTest {
 
     @Test
     void completionRejectsNonTerminalStatusBeforeTransaction() {
-        var dataSource = new PGSimpleDataSource();
-        var repository = new CleanRunCompletionRepository(null, new ObjectMapper(), dataSource);
+        var repository = new CleanRunCompletionRepository(null, new ObjectMapper());
         assertThrows(IllegalArgumentException.class, () -> repository.completeTask(
                 "task-1", "worker-1", TaskStatus.RUNNING, Map.of(), null
         ));

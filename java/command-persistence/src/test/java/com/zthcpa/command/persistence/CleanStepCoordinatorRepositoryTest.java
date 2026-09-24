@@ -5,7 +5,6 @@ import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.run.TaskStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
 
 import java.util.Map;
 
@@ -14,8 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class CleanStepCoordinatorRepositoryTest {
     @Test
     void rejectsNonSuccessfulAdvanceBeforeOpeningTransaction() {
-        var dataSource = new PGSimpleDataSource();
-        var repository = new CleanStepCoordinatorRepository(null, new ObjectMapper(), dataSource);
+        var repository = new CleanStepCoordinatorRepository(null, new ObjectMapper());
         assertThrows(IllegalArgumentException.class, () -> repository.completeAndAdvance(
                 "task-1", "worker-1", TaskStatus.FAILED, Map.of(), Map.of(), null
         ));

@@ -3,7 +3,6 @@ package com.zthcpa.command.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.run.TaskStatus;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
 
 import java.util.Map;
 
@@ -13,7 +12,7 @@ class CleanRunCompletionFailureTest {
     @Test
     void rejectsSuccessAndCancellationAsFailureStatus() {
         var repository = new CleanRunCompletionRepository(
-                null, new ObjectMapper(), new PGSimpleDataSource()
+                null, new ObjectMapper()
         );
         assertThrows(IllegalArgumentException.class, () -> repository.failTask(
                 "task-1", "worker-1", TaskStatus.SUCCEEDED, Map.of()

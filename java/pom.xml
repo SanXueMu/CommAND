@@ -26,6 +26,7 @@
         <module>command-contract</module>
         <module>command-definition</module>
         <module>command-tool-catalog</module>
+        <module>command-tools</module>
         <module>command-workflow</module>
         <module>command-run</module>
         <module>command-runtime</module>
@@ -49,6 +50,11 @@
             <dependency>
                 <groupId>com.zthcpa.command</groupId>
                 <artifactId>command-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zthcpa.command</groupId>
+                <artifactId>command-tools</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

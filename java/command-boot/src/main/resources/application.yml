@@ -8,6 +8,9 @@ spring:
     locations: classpath:db/migration
 
 command:
+  tools:
+    translation:
+      enabled: false
   clean:
     scheduler:
       enabled: false

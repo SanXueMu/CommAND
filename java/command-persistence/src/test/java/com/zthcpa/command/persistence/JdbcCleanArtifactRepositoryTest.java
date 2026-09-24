@@ -7,10 +7,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class JdbcCleanArtifactRepositoryTest {
+class HibernateCleanArtifactRepositoryTest {
     @Test
     void rejectsInvalidArtifactMetadata() {
-        var repository = new JdbcCleanArtifactRepository(null, new ObjectMapper());
+        var repository = new HibernateCleanArtifactRepository(null);
         var artifact = new CleanArtifact("id", "run", null, "file", "key", null,
                 -1L, null, Map.of(), null);
         assertThrows(IllegalArgumentException.class, () -> repository.register(artifact));
@@ -18,7 +18,7 @@ class JdbcCleanArtifactRepositoryTest {
 
     @Test
     void rejectsInvalidChecksum() {
-        var repository = new JdbcCleanArtifactRepository(null, new ObjectMapper());
+        var repository = new HibernateCleanArtifactRepository(null);
         var artifact = new CleanArtifact("id", "run", null, "file", "key", null,
                 1L, "BAD", Map.of(), null);
         assertThrows(IllegalArgumentException.class, () -> repository.register(artifact));

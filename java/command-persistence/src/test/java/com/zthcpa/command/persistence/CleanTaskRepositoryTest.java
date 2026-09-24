@@ -2,6 +2,7 @@ package com.zthcpa.command.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.run.TaskStatus;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -18,7 +19,7 @@ class CleanTaskRepositoryTest {
 
     @Test
     void finishRejectsNonTerminalStatusBeforeJdbc() {
-        var repository = new JdbcCleanTaskRepository(null, new ObjectMapper());
+        var repository = new HibernateCleanTaskRepository((EntityManager) null, new ObjectMapper());
 
         assertThrows(IllegalArgumentException.class, () -> repository.finish(
                 "task-1", "worker-1", TaskStatus.RUNNING, Map.of(), null
