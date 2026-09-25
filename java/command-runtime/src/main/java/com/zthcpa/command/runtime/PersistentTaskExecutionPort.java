@@ -8,12 +8,12 @@ import com.zthcpa.command.run.TaskStatus;
 
 import java.util.Map;
 
-public final class JdbcTaskExecutionPort implements TaskExecutionPort {
+public final class PersistentTaskExecutionPort implements TaskExecutionPort {
     private final CleanTaskRepository tasks;
     private final CleanEventRepository events;
     private final CleanRunCompletionRepository completion;
 
-    public JdbcTaskExecutionPort(
+    public PersistentTaskExecutionPort(
             CleanTaskRepository tasks,
             CleanEventRepository events,
             CleanRunCompletionRepository completion

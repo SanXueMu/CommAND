@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.persistence.CleanEventRepository;
 import com.zthcpa.command.persistence.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.CleanTaskRepository;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,12 +119,12 @@ public class CleanSchedulerConfiguration {
             name = "enabled",
             havingValue = "true"
     )
-    JdbcTaskExecutionPort cleanTaskExecutionPort(
+    PersistentTaskExecutionPort cleanTaskExecutionPort(
             CleanTaskRepository tasks,
             CleanEventRepository events,
             CleanRunCompletionRepository completion
     ) {
-        return new JdbcTaskExecutionPort(tasks, events, completion);
+        return new PersistentTaskExecutionPort(tasks, events, completion);
     }
 
     @Bean
@@ -135,7 +134,7 @@ public class CleanSchedulerConfiguration {
             havingValue = "true"
     )
     TaskDispatcher cleanTaskDispatcher(
-            JdbcTaskExecutionPort tasks,
+            PersistentTaskExecutionPort tasks,
             HttpWorkerRuntime worker,
             CleanSchedulerProperties properties
     ) {
