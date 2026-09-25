@@ -37,7 +37,7 @@ class CommandApplicationTest {
                 "ocr.extract-document",
                 definitionRegistry.getActive(DefinitionKind.WORKFLOW, "ocr.extract-document").key().id()
         );
-        assertFalse(context.getBeansOfType(com.zthcpa.command.runtime.CleanSchedulerLoop.class)
+        assertFalse(context.getBeansOfType(com.zthcpa.command.runtime.scheduler.CleanSchedulerLoop.class)
                 .containsKey("cleanSchedulerLoop"));
     }
 

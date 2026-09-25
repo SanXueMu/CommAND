@@ -1,6 +1,8 @@
 package com.zthcpa.command.runtime;
 
 import com.zthcpa.command.api.RecoveryStatusPort;
+import com.zthcpa.command.runtime.recovery.CleanRecoveryLoop;
+import com.zthcpa.command.runtime.recovery.RecoveryMetrics;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;

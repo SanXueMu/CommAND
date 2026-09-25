@@ -6,6 +6,18 @@ import com.zthcpa.command.persistence.event.CleanEventRepository;
 import com.zthcpa.command.persistence.run.CleanRecoveryRepository;
 import com.zthcpa.command.persistence.task.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.task.CleanTaskRepository;
+import com.zthcpa.command.runtime.dispatch.PersistentTaskExecutionPort;
+import com.zthcpa.command.runtime.dispatch.TaskDispatcher;
+import com.zthcpa.command.runtime.recovery.CleanRecoveryLoop;
+import com.zthcpa.command.runtime.recovery.CleanRecoveryPoller;
+import com.zthcpa.command.runtime.scheduler.CleanScheduler;
+import com.zthcpa.command.runtime.scheduler.CleanSchedulerLoop;
+import com.zthcpa.command.runtime.scheduler.SchedulerActivation;
+import com.zthcpa.command.runtime.scheduler.SchedulerMetrics;
+import com.zthcpa.command.runtime.tool.InProcessToolRuntime;
+import com.zthcpa.command.runtime.tool.ToolRuntimeRouter;
+import com.zthcpa.command.runtime.worker.HttpWorkerRuntime;
+import com.zthcpa.command.runtime.worker.WorkerHealthChecker;
 import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
 import org.slf4j.Logger;

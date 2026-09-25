@@ -1,8 +1,8 @@
 package com.zthcpa.command;
 
-import com.zthcpa.command.runtime.CleanSchedulerLoop;
-import com.zthcpa.command.runtime.CleanRecoveryPoller;
-import com.zthcpa.command.runtime.CleanRecoveryLoop;
+import com.zthcpa.command.runtime.recovery.CleanRecoveryLoop;
+import com.zthcpa.command.runtime.recovery.CleanRecoveryPoller;
+import com.zthcpa.command.runtime.scheduler.CleanSchedulerLoop;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;

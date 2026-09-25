@@ -71,6 +71,7 @@ Clean 运行查询只读取新 `runs/run_steps/task_executions/run_events`，详
 Clean artifact 只登记外部对象存储索引，不把文件字节写入数据库；支持按 run/step 查询、artifact ID 幂等登记和外键级联清理。
 `command-runtime` 已提供 `HttpWorkerRuntime`：Java 通过 HTTP 创建/查询/取消 Worker job，并按 sequence 读取 Worker 事件；Worker 不访问平台数据库。
 `command-runtime` 同时提供 `InProcessToolRuntime`：Java 原生工具通过相同的 job handle、状态、事件游标和取消接口执行；`ToolRuntimeRouter` 按 Java Tool Registry 将已注册工具路由到 INPROC，其余工具在配置了 `worker-base-url` 时回退 HTTP Worker，`TaskDispatcher` 不区分工具实现语言或运行形态。
+`command-runtime` 已按职责整理为 `worker`、`tool`、`dispatch`、`scheduler`、`recovery` 五个包：Worker 协议与 HTTP Adapter、Java INPROC 路由、任务执行编排、调度生命周期、陈旧任务恢复分别归属独立边界；生产与测试目录采用相同结构，不再把全部运行类堆在根包。
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。
 `TaskDispatcher` 已支持长任务 Worker job：对 `queued/running` 做有界轮询，按 `afterSequence` 单调游标转发事件，重复 sequence 不重复写入，并在终态后执行一次最终事件 drain；`job-poll-interval` 与 `job-timeout` 可配置。
 当平台先将当前 worker 持有的 task 标记为 `cancelled` 时，dispatcher 会调用 Worker `cancelJob`；Worker 终态返回后不会重复写平台取消收口。Worker 自发返回 `cancelled` 仍走正常平台 `cancel()` CAS。

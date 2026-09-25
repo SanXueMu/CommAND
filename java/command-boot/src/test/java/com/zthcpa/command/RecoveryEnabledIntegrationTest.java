@@ -1,7 +1,7 @@
 package com.zthcpa.command;
 
 import com.zthcpa.command.api.RecoveryStatusPort;
-import com.zthcpa.command.runtime.CleanRecoveryLoop;
+import com.zthcpa.command.runtime.recovery.CleanRecoveryLoop;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
