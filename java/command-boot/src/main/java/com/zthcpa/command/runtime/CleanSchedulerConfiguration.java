@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.persistence.CleanEventRepository;
 import com.zthcpa.command.persistence.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.CleanTaskRepository;
+import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import org.springframework.context.SmartLifecycle;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Optional;
 
 @Configuration
 @EnableConfigurationProperties(CleanSchedulerProperties.class)
@@ -87,11 +89,7 @@ public class CleanSchedulerConfiguration {
     private static final Logger log = LoggerFactory.getLogger(CleanSchedulerConfiguration.class);
 
     @Bean
-    @ConditionalOnProperty(
-            prefix = "command.clean.scheduler",
-            name = "enabled",
-            havingValue = "true"
-    )
+    @ConditionalOnProperty(prefix = "command.clean.scheduler", name = "worker-base-url")
     HttpWorkerRuntime cleanWorkerRuntime(CleanSchedulerProperties properties, ObjectMapper mapper) {
         return new HttpWorkerRuntime(
                 requireUri(properties.getWorkerBaseUrl()),
@@ -100,12 +98,32 @@ public class CleanSchedulerConfiguration {
         );
     }
 
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "enabled",
+            havingValue = "true"
+    )
+    InProcessToolRuntime cleanInProcessToolRuntime(JavaToolRegistry tools) {
+        return new InProcessToolRuntime(tools);
+    }
+
     @Bean
     @ConditionalOnProperty(
             prefix = "command.clean.scheduler",
             name = "enabled",
             havingValue = "true"
     )
+    ToolRuntimeRouter cleanToolRuntimeRouter(
+            JavaToolRegistry tools,
+            InProcessToolRuntime inProcess,
+            Optional<HttpWorkerRuntime> external
+    ) {
+        return new ToolRuntimeRouter(tools, inProcess, external.orElse(null));
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "command.clean.scheduler", name = "worker-base-url")
     WorkerHealthChecker cleanWorkerHealthChecker(CleanSchedulerProperties properties) {
         return new WorkerHealthChecker(
                 requireUri(properties.getWorkerBaseUrl()),
@@ -135,7 +153,7 @@ public class CleanSchedulerConfiguration {
     )
     TaskDispatcher cleanTaskDispatcher(
             PersistentTaskExecutionPort tasks,
-            HttpWorkerRuntime worker,
+            ToolRuntimeRouter worker,
             CleanSchedulerProperties properties
     ) {
         return new TaskDispatcher(
@@ -210,10 +228,13 @@ public class CleanSchedulerConfiguration {
             havingValue = "true"
     )
     SchedulerActivation schedulerActivation(
-            WorkerHealthChecker healthChecker,
+            Optional<WorkerHealthChecker> healthChecker,
             CleanSchedulerLoop loop
     ) {
-        SchedulerActivation activation = new SchedulerActivation(healthChecker, loop);
+        SchedulerActivation activation = new SchedulerActivation(
+                () -> healthChecker.ifPresent(WorkerHealthChecker::verify),
+                loop
+        );
         activation.activate();
         return activation;
     }

@@ -43,8 +43,8 @@ class HttpWorkerRuntimeTest {
 
     @Test
     void createsReadsEventsAndCancelsWorkerJob() {
-        WorkerJob created = runtime.createJob("text.llm.translate", new WorkerJobRequest(
-                "text.llm.translate", "task-1", 1, Map.of("text", "hello")
+        WorkerJob created = runtime.createJob("llm.chat.complete", new WorkerJobRequest(
+                "llm.chat.complete", "task-1", 1, Map.of("text", "hello")
         ));
         assertEquals("job-1", created.jobId());
         assertEquals("queued", created.status());
@@ -67,7 +67,7 @@ class HttpWorkerRuntimeTest {
         String request = exchange.getRequestMethod() + " " + exchange.getRequestURI();
         lastRequest.set(request);
         String path = exchange.getRequestURI().getPath();
-        if (path.equals("/v1/tools/text.llm.translate/jobs")) {
+        if (path.equals("/v1/tools/llm.chat.complete/jobs")) {
             respond(exchange, 202, "{\"job_id\":\"job-1\",\"status\":\"queued\"}");
         } else if (path.equals("/v1/jobs/job-1")) {
             respond(exchange, 200, "{\"job_id\":\"job-1\",\"status\":\"succeeded\",\"output\":{\"text\":\"你好\"}}");

@@ -3,14 +3,14 @@ package com.zthcpa.command.runtime;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Explicitly activates a scheduler only after the Worker passes health verification. */
+/** Explicitly activates a scheduler only after configured readiness checks pass. */
 public final class SchedulerActivation implements AutoCloseable {
-    private final WorkerHealthChecker healthChecker;
+    private final Runnable readinessCheck;
     private final CleanSchedulerLoop loop;
     private final AtomicBoolean active = new AtomicBoolean();
 
-    public SchedulerActivation(WorkerHealthChecker healthChecker, CleanSchedulerLoop loop) {
-        this.healthChecker = Objects.requireNonNull(healthChecker, "healthChecker");
+    public SchedulerActivation(Runnable readinessCheck, CleanSchedulerLoop loop) {
+        this.readinessCheck = Objects.requireNonNull(readinessCheck, "readinessCheck");
         this.loop = Objects.requireNonNull(loop, "loop");
     }
 
@@ -19,7 +19,7 @@ public final class SchedulerActivation implements AutoCloseable {
             throw new IllegalStateException("Scheduler activation is already active");
         }
         try {
-            healthChecker.verify();
+            readinessCheck.run();
             loop.start();
         } catch (RuntimeException exception) {
             active.set(false);

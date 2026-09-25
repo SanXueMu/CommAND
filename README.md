@@ -41,7 +41,7 @@ command/
 │   ├── command-contract/      # 与框架无关的协议类型
 │   ├── command-definition/    # 四类定义加载与校验
 │   ├── command-tool-catalog/  # 工具目录与版本解析边界
-│   ├── command-tools/         # Java 工具实现（当前含 text.llm.translate）
+│   ├── command-tools/         # Java Tool SPI 与通用原子工具（当前含 LLM chat）
 │   ├── command-workflow/      # 用户工作流
 │   ├── command-run/           # 运行与任务生命周期
 │   ├── command-runtime/       # Worker/Runtime Adapter
@@ -51,7 +51,7 @@ command/
 ```
 
 Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期，以及统一 Hibernate/JPA 持久化。PostgreSQL、Flyway 和 Hibernate 现在是默认生产启动依赖：`application.yml` 是唯一生产配置事实源，读取 `COMMAND_DB_URL`、`COMMAND_DB_USERNAME`、`COMMAND_DB_PASSWORD`，数据库不可用或密码缺失时应用启动失败。Flyway 使用 clean migration，Hibernate 使用 `ddl-auto=validate`。纯单元测试通过显式排除数据库自动配置隔离，不再把无数据库启动作为生产验收目标。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
-`command-tools` 是 Java 工具实现模块，不调用旧 Python 工具。当前 `text.llm.translate` 已按新 Tool Manifest 实现为纯 Java 工具，模型、缓存和进度事件均通过端口注入，并通过 `InProcessToolRuntime` 暴露与 Worker 相同的异步 job/事件/取消协议；旧 Python 实现只作为行为参考，不进入运行时。真实模型调用仅在显式开启 `command.tools.translation.enabled=true` 且提供 `COMMAND_TRANSLATION_BASE_URL`、`COMMAND_TRANSLATION_API_KEY` 时装配。
+`command-tools` 按 `tools.spi` 与 `tools.llm` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。Java 运行时不再注册 `text.llm.translate` 业务工具，翻译、摘要、分类、抽取等由 Capability Pipeline/Workflow 组合消息、模型和结构化输出完成。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
 
 运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正持久化前会先完成新架构的运行、步骤、任务表设计，不把旧 `pipelines`/`tasks` 表作为长期模型。
 Clean schema 已在本地 `command_dev.command_runtime` 验证：独立 Flyway V1 创建 `runs`、`run_steps`、`task_executions`、`run_events`、`task_events`、`artifacts`、`command_definitions`、`run_definition_snapshots`；不创建旧表。`public` 旧表仅为当前迁移参考，最终切换后清理。
@@ -70,7 +70,7 @@ Coordinator 通过当前 step index 消费冻结的 `PipelineRunSubmissionPlan`�
 Clean 运行查询只读取新 `runs/run_steps/task_executions/run_events`，详情返回每个 step 的最新 task attempt，事件支持 `afterId` 增量读取。
 Clean artifact 只登记外部对象存储索引，不把文件字节写入数据库；支持按 run/step 查询、artifact ID 幂等登记和外键级联清理。
 `command-runtime` 已提供 `HttpWorkerRuntime`：Java 通过 HTTP 创建/查询/取消 Worker job，并按 sequence 读取 Worker 事件；Worker 不访问平台数据库。
-`command-runtime` 同时提供 `InProcessToolRuntime`：Java 原生工具通过相同的 job handle、状态、事件游标和取消接口执行，`TaskDispatcher` 不区分工具实现语言或运行形态。
+`command-runtime` 同时提供 `InProcessToolRuntime`：Java 原生工具通过相同的 job handle、状态、事件游标和取消接口执行；`ToolRuntimeRouter` 按 Java Tool Registry 将已注册工具路由到 INPROC，其余工具在配置了 `worker-base-url` 时回退 HTTP Worker，`TaskDispatcher` 不区分工具实现语言或运行形态。
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。
 `TaskDispatcher` 已支持长任务 Worker job：对 `queued/running` 做有界轮询，按 `afterSequence` 单调游标转发事件，重复 sequence 不重复写入，并在终态后执行一次最终事件 drain；`job-poll-interval` 与 `job-timeout` 可配置。
 当平台先将当前 worker 持有的 task 标记为 `cancelled` 时，dispatcher 会调用 Worker `cancelJob`；Worker 终态返回后不会重复写平台取消收口。Worker 自发返回 `cancelled` 仍走正常平台 `cancel()` CAS。
@@ -81,10 +81,10 @@ Worker job 创建成功后的超时、ownership 丢失、轮询中断、未知�
 `CleanRecoveryPoller` 提供独立的单次 recovery poll，`CleanRecoveryLoop` 提供与普通 task scheduler 分离的后台生命周期；配置位于 `command.clean.scheduler.recovery-enabled/stale-after/recovery-batch-size/recovery-poll-interval`，默认关闭。显式开启后独立启动 recovery 线程，按 poll interval 扫描并受 batch size 限制；单轮异常记录后继续，应用关闭时停止线程。Recovery 不依赖 Worker 健康检查，也不与 task dispatch 共用线程。
 
 `GET /api/system/recovery` 提供只读运行状态：enabled/active、poll/recovery/error 计数、最近轮询时间、最近恢复数量和最新错误摘要。指标由 Recovery loop 内部独立维护，不暴露任务输入、任务 ID 或数据库连接信息。
-`CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；`CleanSchedulerLoop` 在默认数据库装配下仅于 `enabled=true` 时由 `SchedulerActivation` 健康检查通过后启动。
+`CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；`CleanSchedulerLoop` 在默认数据库装配下仅于 `enabled=true` 时由 `SchedulerActivation` 完成可选 readiness check 后启动。
 `CleanSchedulerLoop` 已提供可控后台生命周期：按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。Worker 地址、identity、超时和轮询策略均由 `command.clean.scheduler` 配置并在 Bean 创建时校验。
-Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，显式开启后才创建 HTTP Worker、task execution port、dispatcher 和后台 loop；`worker-id`、`worker-base-url`、`poll-interval`、`worker-timeout` 在 Bean 创建时校验。
-启用 scheduler 时会先执行 `GET {worker-base-url}/health`；只有 2xx 响应才启动后台 loop，非 2xx、连接失败、超时或中断会阻止应用完成 scheduler Bean 初始化。
+Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，显式开启后创建 INPROC runtime、runtime router、task execution port、dispatcher 和后台 loop；`worker-id`、`poll-interval` 与任务超时在 Bean 创建时校验。`worker-base-url` 为可选的外部工具回退配置。
+配置 `worker-base-url` 时，scheduler 启动前执行 `GET {worker-base-url}/health`；只有 2xx 响应才启动后台 loop。未配置时按 Java-only 模式启动，不创建 HTTP Worker 或健康检查；遇到未注册 Tool 时明确失败，不静默选择错误 runtime。
 `SchedulerActivation` 统一管理 activate/deactivate/close；当前 Spring 启用配置在 Bean 初始化时执行一次 activate，未来动态恢复需创建新的 loop/activation 实例，不复用已停止的 executor。
 `SchedulerMetrics` 已记录 scheduler 自身的 poll/dispatched/idle/error 计数、最后轮询时间、最后错误摘要和 active 快照；计数线程安全且暂存内存，不引入 Micrometer/Actuator，也不记录任务输入输出。
 已提供只读状态端点 `GET /api/system/scheduler`：默认或 scheduler disabled 时返回 enabled=false 的零值快照；启用时返回共享 metrics 的 active、计数和错误摘要，不返回 Worker 地址、任务输入、任务输出或控制操作。

@@ -1,4 +1,4 @@
-package com.zthcpa.command.tools;
+package com.zthcpa.command.tools.spi;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +25,10 @@ public final class JavaToolRegistry {
             throw new IllegalArgumentException("Java tool not registered: " + id + "/v" + version);
         }
         return tool;
+    }
+
+    public boolean contains(String id, int version) {
+        return tools.containsKey(new Key(id, version));
     }
 
     public List<JavaTool> list() {

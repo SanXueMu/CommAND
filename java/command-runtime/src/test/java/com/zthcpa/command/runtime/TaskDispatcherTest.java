@@ -167,7 +167,7 @@ class TaskDispatcherTest {
     }
 
     private static final class FakeTasks implements TaskExecutionPort {
-        private TaskExecution task = new TaskExecution("task-1", "text.llm.translate", 1,
+        private TaskExecution task = new TaskExecution("task-1", "llm.chat.complete", 1,
                 Map.of("text", "hello"), null);
         private final List<String> actions = new ArrayList<>();
         private boolean cancellationRequested;

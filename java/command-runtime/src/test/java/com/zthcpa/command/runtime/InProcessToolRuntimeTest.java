@@ -1,7 +1,8 @@
 package com.zthcpa.command.runtime;
 
-import com.zthcpa.command.tools.JavaTool;
-import com.zthcpa.command.tools.JavaToolRegistry;
+import com.zthcpa.command.tools.spi.JavaTool;
+import com.zthcpa.command.tools.spi.JavaToolRegistry;
+import com.zthcpa.command.tools.spi.ProgressSink;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -15,20 +16,20 @@ class InProcessToolRuntimeTest {
     @Test
     void runsJavaToolAndRelaysProgressEvents() throws Exception {
         JavaTool tool = new JavaTool() {
-            @Override public String id() { return "text.llm.translate"; }
+            @Override public String id() { return "llm.chat.complete"; }
             @Override public int version() { return 1; }
-            @Override public Map<String, Object> execute(Map<String, Object> input, com.zthcpa.command.tools.ProgressSink progress) {
-                progress.emit(Map.of("phase", "translated", "total", 1));
-                return Map.of("translations", List.of("已翻译"));
+            @Override public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
+                progress.emit(Map.of("phase", "completed"));
+                return Map.of("content", "completed");
             }
         };
         try (InProcessToolRuntime runtime = new InProcessToolRuntime(new JavaToolRegistry(List.of(tool)))) {
-            WorkerJob created = runtime.createJob("text.llm.translate", new WorkerJobRequest(
-                    "text.llm.translate", "task-1", 1, Map.of("segments", List.of("source"))
+            WorkerJob created = runtime.createJob("llm.chat.complete", new WorkerJobRequest(
+                    "llm.chat.complete", "task-1", 1, Map.of("messages", List.of())
             ));
 
             WorkerJob completed = await(runtime, created.jobId(), "succeeded");
-            assertEquals(Map.of("translations", List.of("已翻译")), completed.output());
+            assertEquals(Map.of("content", "completed"), completed.output());
             assertTrue(runtime.listEvents(created.jobId(), 0).stream()
                     .anyMatch(event -> "progress".equals(event.type())));
         }
@@ -37,15 +38,15 @@ class InProcessToolRuntimeTest {
     @Test
     void recordsJavaToolFailureAsStructuredJobFailure() throws Exception {
         JavaTool tool = new JavaTool() {
-            @Override public String id() { return "text.llm.translate"; }
+            @Override public String id() { return "llm.chat.complete"; }
             @Override public int version() { return 1; }
-            @Override public Map<String, Object> execute(Map<String, Object> input, com.zthcpa.command.tools.ProgressSink progress) {
+            @Override public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
                 throw new IllegalStateException("model unavailable");
             }
         };
         try (InProcessToolRuntime runtime = new InProcessToolRuntime(new JavaToolRegistry(List.of(tool)))) {
-            WorkerJob created = runtime.createJob("text.llm.translate", new WorkerJobRequest(
-                    "text.llm.translate", "task-2", 1, Map.of()
+            WorkerJob created = runtime.createJob("llm.chat.complete", new WorkerJobRequest(
+                    "llm.chat.complete", "task-2", 1, Map.of()
             ));
 
             WorkerJob failed = await(runtime, created.jobId(), "failed");

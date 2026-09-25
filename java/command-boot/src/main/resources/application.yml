@@ -23,8 +23,12 @@ spring:
 
 command:
   tools:
-    translation:
+    llm:
       enabled: false
+      base-url: ${COMMAND_LLM_BASE_URL:}
+      api-key: ${COMMAND_LLM_API_KEY:}
+      connect-timeout: 10s
+      request-timeout: 120s
   clean:
     scheduler:
       enabled: false

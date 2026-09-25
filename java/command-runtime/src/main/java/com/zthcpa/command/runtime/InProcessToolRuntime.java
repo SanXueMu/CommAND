@@ -1,7 +1,7 @@
 package com.zthcpa.command.runtime;
 
-import com.zthcpa.command.tools.JavaTool;
-import com.zthcpa.command.tools.JavaToolRegistry;
+import com.zthcpa.command.tools.spi.JavaTool;
+import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
 import java.util.ArrayList;
 import java.util.List;

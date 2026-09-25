@@ -31,7 +31,7 @@ class SchedulerActivationTest {
         CountDownLatch poll = new CountDownLatch(1);
         server = start(200);
         SchedulerActivation activation = new SchedulerActivation(
-                healthChecker(), loop(poll)
+                healthChecker()::verify, loop(poll)
         );
 
         activation.activate();
@@ -45,11 +45,23 @@ class SchedulerActivationTest {
     void remainsInactiveWhenHealthFails() throws IOException {
         server = start(503);
         SchedulerActivation activation = new SchedulerActivation(
-                healthChecker(), loop(new CountDownLatch(1))
+                healthChecker()::verify, loop(new CountDownLatch(1))
         );
 
         assertThrows(WorkerRuntimeException.class, activation::activate);
         assertFalse(activation.isActive());
+        activation.close();
+    }
+
+    @Test
+    void startsWithoutExternalWorkerCheckForInProcessOnlyRuntime() throws Exception {
+        CountDownLatch poll = new CountDownLatch(1);
+        SchedulerActivation activation = new SchedulerActivation(() -> { }, loop(poll));
+
+        activation.activate();
+
+        assertTrue(poll.await(1, TimeUnit.SECONDS));
+        assertTrue(activation.isActive());
         activation.close();
     }
 

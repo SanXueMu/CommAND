@@ -17,17 +17,18 @@ class ClasspathDefinitionLoaderTest {
 
         var definitions = loader.load();
 
-        assertEquals(3, definitions.size());
+        assertEquals(4, definitions.size());
         var workflow = definitions.stream()
                 .filter(definition -> definition.key().kind() == DefinitionKind.WORKFLOW)
                 .findFirst()
                 .orElseThrow();
         assertEquals("ocr.extract-document", workflow.key().id());
 
-        var translation = definitions.stream()
+        var tools = definitions.stream()
                 .filter(definition -> definition.key().kind() == DefinitionKind.TOOL)
-                .findFirst()
-                .orElseThrow();
-        assertEquals("text.llm.translate", translation.key().id());
+                .map(definition -> definition.key().id())
+                .sorted()
+                .toList();
+        assertEquals(java.util.List.of("llm.chat.complete", "llm.chat.complete-json"), tools);
     }
 }

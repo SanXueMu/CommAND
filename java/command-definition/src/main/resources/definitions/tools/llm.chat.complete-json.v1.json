@@ -1,0 +1,18 @@
+{
+  "kind": "tool",
+  "id": "llm.chat.complete-json",
+  "version": 1,
+  "schema_version": 1,
+  "status": "active",
+  "title": "Complete an LLM chat as JSON",
+  "runtime": "java",
+  "entry": "com.zthcpa.command.tools.llm.LlmChatCompleteJsonTool",
+  "input_schema": "tools/llm.chat/input.schema.json",
+  "output_schema": "tools/llm.chat/json-output.schema.json",
+  "resources": {
+    "timeout_seconds": 1800,
+    "concurrency": 4,
+    "max_attempts": 2
+  },
+  "capabilities": ["llm", "chat", "structured-output"]
+}
