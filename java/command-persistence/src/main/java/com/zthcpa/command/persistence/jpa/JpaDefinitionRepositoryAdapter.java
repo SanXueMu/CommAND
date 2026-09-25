@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Transactional
-public final class JpaDefinitionRepositoryAdapter implements DefinitionRepository {
+public class JpaDefinitionRepositoryAdapter implements DefinitionRepository {
     private final EntityManager entityManager;
     private final ObjectMapper mapper;
 

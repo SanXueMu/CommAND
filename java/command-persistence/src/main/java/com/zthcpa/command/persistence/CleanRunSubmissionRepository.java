@@ -11,7 +11,7 @@ import jakarta.persistence.EntityManager;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
-public final class CleanRunSubmissionRepository {
+public class CleanRunSubmissionRepository {
     private final EntityManager entityManager;
 
     public CleanRunSubmissionRepository(EntityManager entityManager) {

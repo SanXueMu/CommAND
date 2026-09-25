@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "command.clean.scheduler.recovery-poll-interval=1h"
 })
 @EnabledIfEnvironmentVariable(named = "COMMAND_DB_PASSWORD", matches = ".+")
-class RecoveryEnabledDatabaseProfileTest {
+class RecoveryEnabledIntegrationTest {
     @Autowired
     private ApplicationContext context;
 

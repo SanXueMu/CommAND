@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "COMMAND_DB_PASSWORD", matches = ".+")
-class SchedulerDisabledDatabaseProfileTest {
+class SchedulerDisabledIntegrationTest {
     @Autowired
     private ApplicationContext context;
 

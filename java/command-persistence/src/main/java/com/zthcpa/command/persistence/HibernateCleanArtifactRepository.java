@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Transactional
-public final class HibernateCleanArtifactRepository implements CleanArtifactRepository {
+public class HibernateCleanArtifactRepository implements CleanArtifactRepository {
     private final EntityManager entityManager;
 
     public HibernateCleanArtifactRepository(EntityManager entityManager) {

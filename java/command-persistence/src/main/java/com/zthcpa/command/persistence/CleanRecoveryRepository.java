@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @Transactional
-public final class CleanRecoveryRepository {
+public class CleanRecoveryRepository {
     private final EntityManager entityManager;
     private final ObjectMapper mapper;
 

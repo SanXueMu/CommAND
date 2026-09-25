@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.SmartLifecycle;
 
 import java.net.URI;
 import java.time.Clock;
@@ -56,8 +57,32 @@ public class CleanSchedulerConfiguration {
                 requirePositive(properties.getRecoveryPollInterval(), "recoveryPollInterval"),
                 exception -> log.error("Clean recovery poll failed", exception)
         );
-        loop.start();
         return loop;
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "command.clean.scheduler",
+            name = "recovery-enabled",
+            havingValue = "true"
+    )
+    SmartLifecycle cleanRecoveryLifecycle(CleanRecoveryLoop loop) {
+        return new SmartLifecycle() {
+            @Override
+            public void start() {
+                loop.start();
+            }
+
+            @Override
+            public void stop() {
+                loop.stop();
+            }
+
+            @Override
+            public boolean isRunning() {
+                return loop.isRunning();
+            }
+        };
     }
 
     private static final Logger log = LoggerFactory.getLogger(CleanSchedulerConfiguration.class);

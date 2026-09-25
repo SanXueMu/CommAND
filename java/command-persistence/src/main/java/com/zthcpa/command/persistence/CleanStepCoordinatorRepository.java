@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 @Transactional
-public final class CleanStepCoordinatorRepository {
+public class CleanStepCoordinatorRepository {
     private final EntityManager entityManager;
     private final ObjectMapper mapper;
 

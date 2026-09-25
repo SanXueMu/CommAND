@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 @Transactional
-public final class CleanRunCompletionRepository {
+public class CleanRunCompletionRepository {
     private final EntityManager entityManager;
     private final ObjectMapper mapper;
 

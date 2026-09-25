@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Transactional
-public final class HibernateCleanTaskRepository implements CleanTaskRepository {
+public class HibernateCleanTaskRepository implements CleanTaskRepository {
     private final EntityManager entityManager;
     private final ObjectMapper mapper;
 

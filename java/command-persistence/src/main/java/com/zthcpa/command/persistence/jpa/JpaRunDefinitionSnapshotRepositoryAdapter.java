@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Transactional
-public final class JpaRunDefinitionSnapshotRepositoryAdapter implements RunDefinitionSnapshotRepository {
+public class JpaRunDefinitionSnapshotRepositoryAdapter implements RunDefinitionSnapshotRepository {
     private final EntityManager entityManager;
 
     public JpaRunDefinitionSnapshotRepositoryAdapter(EntityManager entityManager) {
