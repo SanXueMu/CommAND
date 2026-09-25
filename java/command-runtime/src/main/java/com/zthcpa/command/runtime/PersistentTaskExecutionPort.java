@@ -1,9 +1,9 @@
 package com.zthcpa.command.runtime;
 
-import com.zthcpa.command.persistence.CleanEventRepository;
-import com.zthcpa.command.persistence.CleanRunCompletionRepository;
-import com.zthcpa.command.persistence.CleanTaskRepository;
-import com.zthcpa.command.persistence.CleanTaskRow;
+import com.zthcpa.command.persistence.event.CleanEventRepository;
+import com.zthcpa.command.persistence.task.CleanRunCompletionRepository;
+import com.zthcpa.command.persistence.task.CleanTaskRepository;
+import com.zthcpa.command.persistence.task.CleanTaskRow;
 import com.zthcpa.command.run.TaskStatus;
 
 import java.util.Map;

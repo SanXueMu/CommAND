@@ -1,7 +1,7 @@
 package com.zthcpa.command;
 
 import com.zthcpa.command.contract.DefinitionDocument;
-import com.zthcpa.command.persistence.DefinitionQueryPort;
+import com.zthcpa.command.persistence.definition.DefinitionQueryPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;

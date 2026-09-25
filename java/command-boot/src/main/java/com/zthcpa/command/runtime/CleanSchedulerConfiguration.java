@@ -1,11 +1,11 @@
 package com.zthcpa.command.runtime;
 
 import com.zthcpa.command.api.SchedulerStatusPort;
-import com.zthcpa.command.persistence.CleanRecoveryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zthcpa.command.persistence.CleanEventRepository;
-import com.zthcpa.command.persistence.CleanRunCompletionRepository;
-import com.zthcpa.command.persistence.CleanTaskRepository;
+import com.zthcpa.command.persistence.event.CleanEventRepository;
+import com.zthcpa.command.persistence.run.CleanRecoveryRepository;
+import com.zthcpa.command.persistence.task.CleanRunCompletionRepository;
+import com.zthcpa.command.persistence.task.CleanTaskRepository;
 import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
 import org.slf4j.Logger;

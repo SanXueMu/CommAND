@@ -1,12 +1,12 @@
 package com.zthcpa.command.api;
 
 import com.zthcpa.command.contract.DefinitionRegistry;
-import com.zthcpa.command.persistence.CleanRunQueryRepository;
-import com.zthcpa.command.persistence.CleanRunEvent;
-import com.zthcpa.command.persistence.CleanRunSnapshot;
-import com.zthcpa.command.persistence.CleanRunSubmissionRepository;
-import com.zthcpa.command.persistence.CleanStepSnapshot;
-import com.zthcpa.command.persistence.CleanTaskSnapshot;
+import com.zthcpa.command.persistence.event.CleanRunEvent;
+import com.zthcpa.command.persistence.run.CleanRunQueryRepository;
+import com.zthcpa.command.persistence.run.CleanRunSnapshot;
+import com.zthcpa.command.persistence.run.CleanRunSubmissionRepository;
+import com.zthcpa.command.persistence.step.CleanStepSnapshot;
+import com.zthcpa.command.persistence.task.CleanTaskSnapshot;
 import com.zthcpa.command.run.PipelineRunSubmissionPlan;
 import com.zthcpa.command.run.RunSubmissionException;
 import com.zthcpa.command.run.RunSubmissionPlanner;

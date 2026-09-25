@@ -1,5 +1,8 @@
 package com.zthcpa.command.persistence;
 
+import com.zthcpa.command.persistence.run.RunStatusChange;
+import com.zthcpa.command.persistence.task.TaskClaim;
+
 import com.zthcpa.command.run.RunStatus;
 import org.junit.jupiter.api.Test;
 
