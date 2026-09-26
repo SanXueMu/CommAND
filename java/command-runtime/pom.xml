@@ -11,6 +11,10 @@
     <dependencies>
         <dependency>
             <groupId>com.zthcpa.command</groupId>
+            <artifactId>command-tool-catalog</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zthcpa.command</groupId>
             <artifactId>command-contract</artifactId>
         </dependency>
         <dependency>

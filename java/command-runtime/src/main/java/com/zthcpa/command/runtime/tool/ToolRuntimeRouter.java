@@ -5,6 +5,10 @@ import com.zthcpa.command.runtime.worker.WorkerJob;
 import com.zthcpa.command.runtime.worker.WorkerJobRequest;
 import com.zthcpa.command.runtime.worker.WorkerRuntime;
 import com.zthcpa.command.runtime.worker.WorkerRuntimeException;
+import com.zthcpa.command.catalog.ToolCatalog;
+import com.zthcpa.command.contract.RuntimeKind;
+import com.zthcpa.command.contract.ToolDescriptor;
+import com.zthcpa.command.contract.ToolNotFoundException;
 import com.zthcpa.command.contract.ToolKey;
 import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
@@ -15,21 +19,36 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Routes registered Java tools in-process and delegates other tools to an external Worker. */
 public final class ToolRuntimeRouter implements WorkerRuntime {
     private final JavaToolRegistry tools;
+    private final ToolCatalog catalog;
     private final WorkerRuntime inProcess;
     private final WorkerRuntime external;
     private final Map<String, WorkerRuntime> jobs = new ConcurrentHashMap<>();
 
-    public ToolRuntimeRouter(JavaToolRegistry tools, WorkerRuntime inProcess, WorkerRuntime external) {
+    public ToolRuntimeRouter(JavaToolRegistry tools, ToolCatalog catalog, WorkerRuntime inProcess, WorkerRuntime external) {
         this.tools = tools;
+        this.catalog = catalog;
         this.inProcess = inProcess;
         this.external = external;
     }
 
     @Override
     public WorkerJob createJob(String toolId, WorkerJobRequest request) {
-        WorkerRuntime runtime = tools.contains(new ToolKey(toolId, request.toolVersion())) ? inProcess : external;
+        ToolDescriptor descriptor;
+        try {
+            descriptor = catalog.get(new ToolKey(toolId, request.toolVersion()));
+        } catch (ToolNotFoundException exception) {
+            throw new WorkerRuntimeException("Tool is not registered in catalog: " + toolId
+                    + "/v" + request.toolVersion(), exception);
+        }
+        if (!"active".equalsIgnoreCase(descriptor.status())) {
+            throw new WorkerRuntimeException("Tool is not active: " + descriptor.key());
+        }
+        WorkerRuntime runtime = descriptor.runtimeKind() == RuntimeKind.INPROC ? inProcess : external;
+        if (descriptor.runtimeKind() == RuntimeKind.INPROC && !tools.contains(descriptor.key())) {
+            throw new WorkerRuntimeException("No Java implementation registered for tool: " + descriptor.key());
+        }
         if (runtime == null) {
-            throw new WorkerRuntimeException("No runtime registered for tool: " + toolId);
+            throw new WorkerRuntimeException("No runtime registered for tool: " + descriptor.key());
         }
         WorkerJob job = runtime.createJob(toolId, request);
         jobs.put(job.jobId(), runtime);

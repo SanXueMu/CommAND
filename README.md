@@ -73,7 +73,7 @@ Coordinator 通过当前 step index 消费冻结的 `PipelineRunSubmissionPlan`�
 Clean 运行查询只读取新 `runs/run_steps/task_executions/run_events`，详情返回每个 step 的最新 task attempt，事件支持 `afterId` 增量读取。
 Clean artifact 只登记外部对象存储索引，不把文件字节写入数据库；支持按 run/step 查询、artifact ID 幂等登记和外键级联清理。
 `command-runtime` 已提供 `HttpWorkerRuntime`：Java 通过 HTTP 创建/查询/取消 Worker job，并按 sequence 读取 Worker 事件；Worker 不访问平台数据库。
-`command-runtime` 同时提供 `InProcessToolRuntime`：Java 原生工具通过相同的 job handle、状态、事件游标和取消接口执行；`ToolRuntimeRouter` 按 Java Tool Registry 将已注册工具路由到 INPROC，其余工具在配置了 `worker-base-url` 时回退 HTTP Worker，`TaskDispatcher` 不区分工具实现语言或运行形态。
+`command-runtime` 同时提供 `InProcessToolRuntime`：Java 原生工具通过相同的 job handle、状态、事件游标和取消接口执行；`ToolRuntimeRouter` 以 Tool Catalog 声明的 `runtime` 和 `status` 为准，`inproc` Tool 必须存在 Java Tool Registry 实现，`http` Tool 必须配置 HTTP Worker，`TaskDispatcher` 不区分工具实现语言或运行形态。
 Tool 身份统一使用公共契约 `ToolKey(id, version)`：Pipeline 冻结的 Tool 版本从 `run_steps.definition_version` 贯通到 claim、`TaskExecution`、`WorkerJobRequest` 和 `JavaToolRegistry`，Router 按请求版本选择 Java INPROC 实现，避免将运行时版本硬编码为 v1。
 `command-runtime` 已按职责整理为 `worker`、`tool`、`dispatch`、`scheduler`、`recovery` 五个包：Worker 协议与 HTTP Adapter、Java INPROC 路由、任务执行编排、调度生命周期、陈旧任务恢复分别归属独立边界；生产与测试目录采用相同结构，不再把全部运行类堆在根包。
 `TaskDispatcher` 已提供 task→Worker→task 终态编排端口，成功、失败、取消和 Worker 异常均走独立收口路径。

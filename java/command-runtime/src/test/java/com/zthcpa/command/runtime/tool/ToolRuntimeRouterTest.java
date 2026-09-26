@@ -1,6 +1,9 @@
 package com.zthcpa.command.runtime.tool;
 
+import com.zthcpa.command.catalog.InMemoryToolCatalog;
 import com.zthcpa.command.contract.ToolKey;
+import com.zthcpa.command.contract.ToolDescriptor;
+import com.zthcpa.command.contract.RuntimeKind;
 import com.zthcpa.command.runtime.worker.WorkerEvent;
 import com.zthcpa.command.runtime.worker.WorkerJob;
 import com.zthcpa.command.runtime.worker.WorkerJobRequest;
@@ -29,7 +32,10 @@ class ToolRuntimeRouterTest {
         var registry = new JavaToolRegistry(List.of(tool));
         var inProcess = new FakeRuntime("java-job");
         var external = new FakeRuntime("http-job");
-        var router = new ToolRuntimeRouter(registry, inProcess, external);
+        var router = new ToolRuntimeRouter(registry, catalog(
+                descriptor("llm.chat.complete", 1, RuntimeKind.INPROC),
+                descriptor("file.inspect", 1, RuntimeKind.HTTP)
+        ), inProcess, external);
 
         WorkerJob javaJob = router.createJob("llm.chat.complete", request("llm.chat.complete"));
         WorkerJob httpJob = router.createJob("file.inspect", request("file.inspect"));
@@ -46,7 +52,7 @@ class ToolRuntimeRouterTest {
 
     @Test
     void rejectsUnknownToolWhenNoExternalRuntimeIsConfigured() {
-        var router = new ToolRuntimeRouter(new JavaToolRegistry(List.of()), new FakeRuntime("java-job"), null);
+        var router = new ToolRuntimeRouter(new JavaToolRegistry(List.of()), catalog(), new FakeRuntime("java-job"), null);
 
         assertThrows(
                 WorkerRuntimeException.class,
@@ -64,7 +70,9 @@ class ToolRuntimeRouterTest {
         };
         var inProcess = new FakeRuntime("java-v2-job");
         var external = new FakeRuntime("http-job");
-        var router = new ToolRuntimeRouter(new JavaToolRegistry(List.of(tool)), inProcess, external);
+        var router = new ToolRuntimeRouter(new JavaToolRegistry(List.of(tool)), catalog(
+                descriptor("llm.chat.complete", 2, RuntimeKind.INPROC)
+        ), inProcess, external);
 
         WorkerJob job = router.createJob("llm.chat.complete", request("llm.chat.complete", 2));
 
@@ -79,6 +87,14 @@ class ToolRuntimeRouterTest {
 
     private WorkerJobRequest request(String toolId, int version) {
         return new WorkerJobRequest(toolId, version, "task-1", 1, Map.of());
+    }
+
+    private static InMemoryToolCatalog catalog(ToolDescriptor... descriptors) {
+        return new InMemoryToolCatalog(List.of(descriptors));
+    }
+
+    private static ToolDescriptor descriptor(String id, int version, RuntimeKind runtime) {
+        return new ToolDescriptor(new ToolKey(id, version), runtime, "active", Map.of());
     }
 
     private static final class FakeRuntime implements WorkerRuntime {

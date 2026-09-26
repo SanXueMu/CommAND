@@ -18,6 +18,7 @@ import com.zthcpa.command.runtime.tool.InProcessToolRuntime;
 import com.zthcpa.command.runtime.tool.ToolRuntimeRouter;
 import com.zthcpa.command.runtime.worker.HttpWorkerRuntime;
 import com.zthcpa.command.runtime.worker.WorkerHealthChecker;
+import com.zthcpa.command.catalog.ToolCatalog;
 import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
 import org.slf4j.Logger;
@@ -128,10 +129,11 @@ public class CleanSchedulerConfiguration {
     )
     ToolRuntimeRouter cleanToolRuntimeRouter(
             JavaToolRegistry tools,
+            ToolCatalog catalog,
             InProcessToolRuntime inProcess,
             Optional<HttpWorkerRuntime> external
     ) {
-        return new ToolRuntimeRouter(tools, inProcess, external.orElse(null));
+        return new ToolRuntimeRouter(tools, catalog, inProcess, external.orElse(null));
     }
 
     @Bean
