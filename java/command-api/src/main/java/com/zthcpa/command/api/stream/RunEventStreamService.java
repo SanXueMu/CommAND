@@ -1,5 +1,7 @@
-package com.zthcpa.command.api;
+package com.zthcpa.command.api.stream;
 
+import com.zthcpa.command.api.application.RunApplicationService;
+import com.zthcpa.command.api.model.RunApiModels;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -12,7 +14,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static com.zthcpa.command.api.RunApiModels.RunEventResponse;
+import static com.zthcpa.command.api.model.RunApiModels.RunEventResponse;
 
 @Service
 public final class RunEventStreamService implements AutoCloseable {

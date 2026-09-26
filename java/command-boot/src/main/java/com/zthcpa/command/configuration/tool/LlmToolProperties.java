@@ -1,4 +1,4 @@
-package com.zthcpa.command;
+package com.zthcpa.command.configuration.tool;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

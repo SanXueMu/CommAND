@@ -1,4 +1,4 @@
-package com.zthcpa.command.api;
+package com.zthcpa.command.api.application;
 
 import com.zthcpa.command.contract.DefinitionRegistry;
 import com.zthcpa.command.persistence.event.CleanRunEvent;
@@ -16,11 +16,11 @@ import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 
-import static com.zthcpa.command.api.RunApiModels.RunResponse;
-import static com.zthcpa.command.api.RunApiModels.RunEventResponse;
-import static com.zthcpa.command.api.RunApiModels.StepResponse;
-import static com.zthcpa.command.api.RunApiModels.SubmitRunResponse;
-import static com.zthcpa.command.api.RunApiModels.TaskResponse;
+import static com.zthcpa.command.api.model.RunApiModels.RunResponse;
+import static com.zthcpa.command.api.model.RunApiModels.RunEventResponse;
+import static com.zthcpa.command.api.model.RunApiModels.StepResponse;
+import static com.zthcpa.command.api.model.RunApiModels.SubmitRunResponse;
+import static com.zthcpa.command.api.model.RunApiModels.TaskResponse;
 
 @Service
 public final class RunApplicationService {

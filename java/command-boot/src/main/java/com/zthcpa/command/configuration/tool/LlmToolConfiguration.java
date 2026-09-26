@@ -1,4 +1,4 @@
-package com.zthcpa.command;
+package com.zthcpa.command.configuration.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.tools.llm.LlmChatCompleteJsonTool;

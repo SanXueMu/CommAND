@@ -1,6 +1,6 @@
 package com.zthcpa.command;
 
-import com.zthcpa.command.api.RecoveryStatusPort;
+import com.zthcpa.command.api.port.RecoveryStatusPort;
 import com.zthcpa.command.runtime.recovery.CleanRecoveryLoop;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;

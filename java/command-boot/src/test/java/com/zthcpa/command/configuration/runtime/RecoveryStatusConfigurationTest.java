@@ -1,6 +1,6 @@
-package com.zthcpa.command.runtime;
+package com.zthcpa.command.configuration.runtime;
 
-import com.zthcpa.command.api.RecoveryStatusPort;
+import com.zthcpa.command.api.port.RecoveryStatusPort;
 import com.zthcpa.command.runtime.recovery.CleanRecoveryLoop;
 import com.zthcpa.command.runtime.recovery.CleanRecoveryPoller;
 import org.junit.jupiter.api.Test;

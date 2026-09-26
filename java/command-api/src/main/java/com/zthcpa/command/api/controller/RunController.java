@@ -1,5 +1,8 @@
-package com.zthcpa.command.api;
+package com.zthcpa.command.api.controller;
 
+import com.zthcpa.command.api.application.RunApplicationService;
+import com.zthcpa.command.api.model.RunApiModels;
+import com.zthcpa.command.api.stream.RunEventStreamService;
 import com.zthcpa.command.run.RunSubmissionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,11 +18,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
-import static com.zthcpa.command.api.RunApiModels.ErrorResponse;
-import static com.zthcpa.command.api.RunApiModels.RunResponse;
-import static com.zthcpa.command.api.RunApiModels.RunEventResponse;
-import static com.zthcpa.command.api.RunApiModels.SubmitRunRequest;
-import static com.zthcpa.command.api.RunApiModels.SubmitRunResponse;
+import static com.zthcpa.command.api.model.RunApiModels.ErrorResponse;
+import static com.zthcpa.command.api.model.RunApiModels.RunResponse;
+import static com.zthcpa.command.api.model.RunApiModels.RunEventResponse;
+import static com.zthcpa.command.api.model.RunApiModels.SubmitRunRequest;
+import static com.zthcpa.command.api.model.RunApiModels.SubmitRunResponse;
 
 @RestController
 @RequestMapping("/api/runs")

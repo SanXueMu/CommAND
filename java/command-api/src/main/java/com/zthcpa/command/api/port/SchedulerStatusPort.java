@@ -1,18 +1,18 @@
-package com.zthcpa.command.api;
+package com.zthcpa.command.api.port;
 
 import java.time.Instant;
 
-public interface RecoveryStatusPort {
+public interface SchedulerStatusPort {
     Status status();
 
     record Status(
             boolean enabled,
             boolean active,
             long polls,
-            long recovered,
+            long dispatched,
+            long idle,
             long errors,
             Instant lastPollAt,
-            Integer lastRecovered,
             ErrorStatus lastError
     ) {
     }

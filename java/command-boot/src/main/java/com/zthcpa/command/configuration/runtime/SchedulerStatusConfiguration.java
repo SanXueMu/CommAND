@@ -1,6 +1,6 @@
-package com.zthcpa.command.runtime;
+package com.zthcpa.command.configuration.runtime;
 
-import com.zthcpa.command.api.SchedulerStatusPort;
+import com.zthcpa.command.api.port.SchedulerStatusPort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

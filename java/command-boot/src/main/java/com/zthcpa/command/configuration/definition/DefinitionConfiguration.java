@@ -1,4 +1,4 @@
-package com.zthcpa.command;
+package com.zthcpa.command.configuration.definition;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionRegistry;

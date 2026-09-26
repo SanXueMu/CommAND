@@ -1,4 +1,4 @@
-package com.zthcpa.command.runtime;
+package com.zthcpa.command.configuration.runtime;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

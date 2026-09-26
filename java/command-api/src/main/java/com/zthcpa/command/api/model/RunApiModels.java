@@ -1,4 +1,4 @@
-package com.zthcpa.command.api;
+package com.zthcpa.command.api.model;
 
 import java.time.Instant;
 import java.util.List;

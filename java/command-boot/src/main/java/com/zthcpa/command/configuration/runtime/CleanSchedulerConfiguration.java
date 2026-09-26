@@ -1,6 +1,6 @@
-package com.zthcpa.command.runtime;
+package com.zthcpa.command.configuration.runtime;
 
-import com.zthcpa.command.api.SchedulerStatusPort;
+import com.zthcpa.command.api.port.SchedulerStatusPort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.persistence.event.CleanEventRepository;
 import com.zthcpa.command.persistence.run.CleanRecoveryRepository;

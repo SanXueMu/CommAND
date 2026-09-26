@@ -51,6 +51,7 @@ command/
 ```
 
 Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期，以及统一 Hibernate/JPA 持久化。PostgreSQL、Flyway 和 Hibernate 现在是默认生产启动依赖：`application.yml` 是唯一生产配置事实源，读取 `COMMAND_DB_URL`、`COMMAND_DB_USERNAME`、`COMMAND_DB_PASSWORD`，数据库不可用或密码缺失时应用启动失败。Flyway 使用 clean migration，Hibernate 使用 `ddl-auto=validate`。纯单元测试通过显式排除数据库自动配置隔离，不再把无数据库启动作为生产验收目标。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
+`command-boot` 根包只保留 `CommandApplication`；Spring 装配和类型化属性按 `configuration.definition`、`configuration.tool`、`configuration.runtime` 归档，定义加载、LLM Tool 注册和运行时生命周期不再与启动入口混放。
 `command-tools` 按 `tools.spi` 与 `tools.llm` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。Java 运行时不再注册 `text.llm.translate` 业务工具，翻译、摘要、分类、抽取等由 Capability Pipeline/Workflow 组合消息、模型和结构化输出完成。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
 
 运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正持久化前会先完成新架构的运行、步骤、任务表设计，不把旧 `pipelines`/`tasks` 表作为长期模型。
@@ -82,6 +83,7 @@ Worker job 创建成功后的超时、ownership 丢失、轮询中断、未知�
 `CleanRecoveryPoller` 提供独立的单次 recovery poll，`CleanRecoveryLoop` 提供与普通 task scheduler 分离的后台生命周期；配置位于 `command.clean.scheduler.recovery-enabled/stale-after/recovery-batch-size/recovery-poll-interval`，默认关闭。显式开启后独立启动 recovery 线程，按 poll interval 扫描并受 batch size 限制；单轮异常记录后继续，应用关闭时停止线程。Recovery 不依赖 Worker 健康检查，也不与 task dispatch 共用线程。
 
 `GET /api/system/recovery` 提供只读运行状态：enabled/active、poll/recovery/error 计数、最近轮询时间、最近恢复数量和最新错误摘要。指标由 Recovery loop 内部独立维护，不暴露任务输入、任务 ID 或数据库连接信息。
+`command-api` 按 `controller`、`application`、`stream`、`model`、`port` 五个包组织：HTTP 路由、运行提交与查询、SSE 事件生命周期、API DTO、运行状态端口分别归属独立边界；Controller 不直接承担运行编排或流生命周期管理。
 `CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；`CleanSchedulerLoop` 在默认数据库装配下仅于 `enabled=true` 时由 `SchedulerActivation` 完成可选 readiness check 后启动。
 `CleanSchedulerLoop` 已提供可控后台生命周期：按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。Worker 地址、identity、超时和轮询策略均由 `command.clean.scheduler` 配置并在 Bean 创建时校验。
 Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，显式开启后创建 INPROC runtime、runtime router、task execution port、dispatcher 和后台 loop；`worker-id`、`poll-interval` 与任务超时在 Bean 创建时校验。`worker-base-url` 为可选的外部工具回退配置。

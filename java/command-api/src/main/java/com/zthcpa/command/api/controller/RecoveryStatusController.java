@@ -1,5 +1,6 @@
-package com.zthcpa.command.api;
+package com.zthcpa.command.api.controller;
 
+import com.zthcpa.command.api.port.RecoveryStatusPort;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
