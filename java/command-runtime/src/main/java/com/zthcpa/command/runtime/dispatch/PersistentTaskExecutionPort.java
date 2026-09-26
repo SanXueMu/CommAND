@@ -57,7 +57,7 @@ public final class PersistentTaskExecutionPort implements TaskExecutionPort {
     }
 
     private TaskExecution toExecution(CleanTaskRow task) {
-        return new TaskExecution(task.id(), task.toolId(), task.attempt(), task.input(), task.workerId());
+        return new TaskExecution(task.id(), task.toolId(), task.toolVersion(), task.attempt(), task.input(), task.workerId());
     }
 
     private static void requireCompletion(boolean completed, String taskId) {

@@ -97,7 +97,7 @@ public final class TaskDispatcher {
         JobPolling polling = null;
         try {
             job = worker.createJob(task.toolId(), new WorkerJobRequest(
-                    task.toolId(), task.taskId(), task.attempt(), task.input()
+                    task.toolId(), task.toolVersion(), task.taskId(), task.attempt(), task.input()
             ));
             polling = new JobPolling(job);
             WorkerJob finalJob = awaitTerminal(task.taskId(), workerId, polling);

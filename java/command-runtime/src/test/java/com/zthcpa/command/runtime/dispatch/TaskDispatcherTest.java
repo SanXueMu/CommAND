@@ -172,7 +172,7 @@ class TaskDispatcherTest {
     }
 
     private static final class FakeTasks implements TaskExecutionPort {
-        private TaskExecution task = new TaskExecution("task-1", "llm.chat.complete", 1,
+        private TaskExecution task = new TaskExecution("task-1", "llm.chat.complete", 1, 1,
                 Map.of("text", "hello"), null);
         private final List<String> actions = new ArrayList<>();
         private boolean cancellationRequested;
@@ -183,7 +183,7 @@ class TaskDispatcherTest {
         public TaskExecution claim(String workerId) {
             actions.add("claim");
             if (task != null) {
-                task = new TaskExecution(task.taskId(), task.toolId(), task.attempt(), task.input(), workerId);
+                task = new TaskExecution(task.taskId(), task.toolId(), task.toolVersion(), task.attempt(), task.input(), workerId);
             }
             return task;
         }

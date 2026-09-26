@@ -26,6 +26,7 @@ public interface TaskExecutionPort {
     record TaskExecution(
             String taskId,
             String toolId,
+            int toolVersion,
             int attempt,
             Map<String, Object> input,
             String workerId

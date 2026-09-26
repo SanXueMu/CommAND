@@ -38,7 +38,7 @@ public final class InProcessToolRuntime implements WorkerRuntime, AutoCloseable 
         if (request == null) {
             throw new IllegalArgumentException("Java tool request must not be null");
         }
-        JavaTool tool = tools.get(toolId, 1);
+        JavaTool tool = tools.get(toolId, request.toolVersion());
         String jobId = "java-" + UUID.randomUUID();
         JobState state = new JobState(jobId);
         jobs.put(jobId, state);

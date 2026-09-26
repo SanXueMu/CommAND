@@ -56,7 +56,7 @@ class CleanSchedulerTest {
 
         @Override
         public TaskExecution claim(String workerId) {
-            return available ? new TaskExecution("task-1", "tool-1", 1, Map.of(), workerId) : null;
+            return available ? new TaskExecution("task-1", "tool-1", 1, 1, Map.of(), workerId) : null;
         }
 
         @Override

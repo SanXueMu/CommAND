@@ -5,6 +5,7 @@ import com.zthcpa.command.runtime.worker.WorkerJob;
 import com.zthcpa.command.runtime.worker.WorkerJobRequest;
 import com.zthcpa.command.runtime.worker.WorkerRuntime;
 import com.zthcpa.command.runtime.worker.WorkerRuntimeException;
+import com.zthcpa.command.contract.ToolKey;
 import com.zthcpa.command.tools.spi.JavaToolRegistry;
 
 import java.util.List;
@@ -26,7 +27,7 @@ public final class ToolRuntimeRouter implements WorkerRuntime {
 
     @Override
     public WorkerJob createJob(String toolId, WorkerJobRequest request) {
-        WorkerRuntime runtime = tools.contains(toolId, 1) ? inProcess : external;
+        WorkerRuntime runtime = tools.contains(new ToolKey(toolId, request.toolVersion())) ? inProcess : external;
         if (runtime == null) {
             throw new WorkerRuntimeException("No runtime registered for tool: " + toolId);
         }

@@ -1,5 +1,6 @@
 package com.zthcpa.command.tools.spi;
 
+import com.zthcpa.command.contract.ToolKey;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -12,8 +13,7 @@ class JavaToolRegistryTest {
     @Test
     void resolvesToolsByStableIdAndVersion() {
         JavaTool tool = new JavaTool() {
-            @Override public String id() { return "llm.chat.complete"; }
-            @Override public int version() { return 1; }
+            @Override public ToolKey key() { return new ToolKey("llm.chat.complete", 1); }
             @Override public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
                 return Map.of();
             }

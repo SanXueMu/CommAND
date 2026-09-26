@@ -22,11 +22,6 @@ abstract class AbstractLlmChatTool implements JavaTool {
     }
 
     @Override
-    public int version() {
-        return 1;
-    }
-
-    @Override
     public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
         LlmRequest request = new LlmRequest(
                 requiredText(input.get("model"), "model"),

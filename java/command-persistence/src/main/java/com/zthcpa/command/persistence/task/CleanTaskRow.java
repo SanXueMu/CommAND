@@ -8,6 +8,7 @@ public record CleanTaskRow(
         String id,
         String stepId,
         String toolId,
+        int toolVersion,
         int attempt,
         int maxAttempts,
         String workerId,

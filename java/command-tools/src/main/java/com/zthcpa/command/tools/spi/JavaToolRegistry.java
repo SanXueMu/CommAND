@@ -1,5 +1,7 @@
 package com.zthcpa.command.tools.spi;
 
+import com.zthcpa.command.contract.ToolKey;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +13,7 @@ public final class JavaToolRegistry {
     public JavaToolRegistry(List<JavaTool> registeredTools) {
         Map<Key, JavaTool> values = new LinkedHashMap<>();
         for (JavaTool tool : registeredTools) {
-            Key key = new Key(tool.id(), tool.version());
+            Key key = new Key(tool.key());
             if (values.put(key, tool) != null) {
                 throw new IllegalArgumentException("Duplicate Java tool: " + key);
             }
@@ -31,11 +33,28 @@ public final class JavaToolRegistry {
         return tools.containsKey(new Key(id, version));
     }
 
+    public JavaTool get(ToolKey key) {
+        JavaTool tool = tools.get(new Key(key));
+        if (tool == null) {
+            throw new IllegalArgumentException("Java tool not registered: " + key);
+        }
+        return tool;
+    }
+
+    public boolean contains(ToolKey key) {
+        return tools.containsKey(new Key(key));
+    }
+
     public List<JavaTool> list() {
         return tools.values().stream()
-                .sorted(java.util.Comparator.comparing(JavaTool::id).thenComparingInt(JavaTool::version))
+                .sorted(java.util.Comparator.comparing((JavaTool tool) -> tool.key().id())
+                        .thenComparingInt(tool -> tool.key().version()))
                 .toList();
     }
 
-    private record Key(String id, int version) { }
+    private record Key(ToolKey value) {
+        private Key(String id, int version) {
+            this(new ToolKey(id, version));
+        }
+    }
 }

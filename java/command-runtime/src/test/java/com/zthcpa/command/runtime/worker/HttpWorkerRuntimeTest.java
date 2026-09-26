@@ -44,7 +44,7 @@ class HttpWorkerRuntimeTest {
     @Test
     void createsReadsEventsAndCancelsWorkerJob() {
         WorkerJob created = runtime.createJob("llm.chat.complete", new WorkerJobRequest(
-                "llm.chat.complete", "task-1", 1, Map.of("text", "hello")
+                "llm.chat.complete", 1, "task-1", 1, Map.of("text", "hello")
         ));
         assertEquals("job-1", created.jobId());
         assertEquals("queued", created.status());

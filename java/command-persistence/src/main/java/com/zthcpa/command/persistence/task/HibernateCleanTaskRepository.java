@@ -50,7 +50,8 @@ public class HibernateCleanTaskRepository implements CleanTaskRepository {
                 WHERE id = :stepId AND status = 'queued'
                 """).setParameter("stepId", row[1]).executeUpdate();
         return Optional.of(new CleanTaskRow(row[0].toString(), row[1].toString(), row[5].toString(),
-                Integer.parseInt(row[2].toString()), Integer.parseInt(row[3].toString()), workerId,
+                Integer.parseInt(row[7].toString()), Integer.parseInt(row[2].toString()),
+                Integer.parseInt(row[3].toString()), workerId,
                 PostgresJson.read(mapper, row[4].toString()), null, null, TaskStatus.RUNNING));
     }
 

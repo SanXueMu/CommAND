@@ -1,5 +1,6 @@
 package com.zthcpa.command.runtime.tool;
 
+import com.zthcpa.command.contract.ToolKey;
 import com.zthcpa.command.runtime.worker.WorkerEvent;
 import com.zthcpa.command.runtime.worker.WorkerJob;
 import com.zthcpa.command.runtime.worker.WorkerJobRequest;
@@ -20,8 +21,7 @@ class ToolRuntimeRouterTest {
     @Test
     void routesRegisteredJavaToolsInProcessAndOtherToolsExternally() {
         JavaTool tool = new JavaTool() {
-            @Override public String id() { return "llm.chat.complete"; }
-            @Override public int version() { return 1; }
+            @Override public ToolKey key() { return new ToolKey("llm.chat.complete", 1); }
             @Override public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
                 return Map.of();
             }
@@ -54,13 +54,37 @@ class ToolRuntimeRouterTest {
         );
     }
 
+    @Test
+    void routesTheRequestedToolVersionWithoutFallingBackToVersionOne() {
+        JavaTool tool = new JavaTool() {
+            @Override public ToolKey key() { return new ToolKey("llm.chat.complete", 2); }
+            @Override public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
+                return Map.of();
+            }
+        };
+        var inProcess = new FakeRuntime("java-v2-job");
+        var external = new FakeRuntime("http-job");
+        var router = new ToolRuntimeRouter(new JavaToolRegistry(List.of(tool)), inProcess, external);
+
+        WorkerJob job = router.createJob("llm.chat.complete", request("llm.chat.complete", 2));
+
+        assertEquals("java-v2-job", job.jobId());
+        assertEquals(1, inProcess.createdJobs);
+        assertEquals(0, external.createdJobs);
+    }
+
     private WorkerJobRequest request(String toolId) {
-        return new WorkerJobRequest(toolId, "task-1", 1, Map.of());
+        return request(toolId, 1);
+    }
+
+    private WorkerJobRequest request(String toolId, int version) {
+        return new WorkerJobRequest(toolId, version, "task-1", 1, Map.of());
     }
 
     private static final class FakeRuntime implements WorkerRuntime {
         private final String jobId;
         private int cancellations;
+        private int createdJobs;
 
         private FakeRuntime(String jobId) {
             this.jobId = jobId;
@@ -68,6 +92,7 @@ class ToolRuntimeRouterTest {
 
         @Override
         public WorkerJob createJob(String toolId, WorkerJobRequest request) {
+            createdJobs++;
             return new WorkerJob(jobId, "running", null, null);
         }
 
