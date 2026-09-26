@@ -3,6 +3,10 @@ package com.zthcpa.command.run;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionRegistry;
+import com.zthcpa.command.contract.RuntimeKind;
+import com.zthcpa.command.contract.ToolDescriptor;
+import com.zthcpa.command.contract.ToolKey;
+import com.zthcpa.command.catalog.InMemoryToolCatalog;
 import com.zthcpa.command.definition.loader.JsonDefinitionParser;
 import com.zthcpa.command.definition.registry.InMemoryDefinitionRegistry;
 import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
@@ -21,7 +25,7 @@ class PipelineExecutionPlannerTest {
     @Test
     void plansToolStepsInDefinitionOrder() {
         DefinitionRegistry registry = registry();
-        var planner = new PipelineExecutionPlanner(registry);
+        var planner = new PipelineExecutionPlanner(registry, tools());
 
         PipelineExecutionPlan plan = planner.plan(
                 new com.zthcpa.command.contract.DefinitionKey(
@@ -50,7 +54,7 @@ class PipelineExecutionPlannerTest {
                 List.of(pipeline, nestedPipeline()), new DefinitionSetValidator(), new DefinitionReferenceValidator()
         );
 
-        assertThrows(RunSubmissionException.class, () -> new PipelineExecutionPlanner(registry).plan(
+        assertThrows(RunSubmissionException.class, () -> new PipelineExecutionPlanner(registry, tools()).plan(
                 pipeline.key(), Map.of()
         ));
     }
@@ -74,6 +78,19 @@ class PipelineExecutionPlannerTest {
         return new InMemoryDefinitionRegistry(
                 List.of(workflow, pipeline), new DefinitionSetValidator(), new DefinitionReferenceValidator()
         );
+    }
+
+    private InMemoryToolCatalog tools() {
+        return new InMemoryToolCatalog(List.of(
+                tool("file.inspect"),
+                tool("ocr.page.extract"),
+                tool("ocr.result.persist"),
+                tool("nested.tool")
+        ));
+    }
+
+    private ToolDescriptor tool(String id) {
+        return new ToolDescriptor(new ToolKey(id, 1), RuntimeKind.INPROC, "active", Map.of());
     }
 
     private DefinitionDocument nestedPipeline() {

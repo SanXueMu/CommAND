@@ -1,6 +1,7 @@
 package com.zthcpa.command.api.application;
 
 import com.zthcpa.command.contract.DefinitionRegistry;
+import com.zthcpa.command.catalog.ToolCatalog;
 import com.zthcpa.command.persistence.event.CleanRunEvent;
 import com.zthcpa.command.persistence.run.CleanRunQueryRepository;
 import com.zthcpa.command.persistence.run.CleanRunSnapshot;
@@ -25,15 +26,18 @@ import static com.zthcpa.command.api.model.RunApiModels.TaskResponse;
 @Service
 public final class RunApplicationService {
     private final DefinitionRegistry definitions;
+    private final ToolCatalog tools;
     private final CleanRunSubmissionRepository submissions;
     private final CleanRunQueryRepository queries;
 
     public RunApplicationService(
             DefinitionRegistry definitions,
+            ToolCatalog tools,
             CleanRunSubmissionRepository submissions,
             CleanRunQueryRepository queries
     ) {
         this.definitions = definitions;
+        this.tools = tools;
         this.submissions = submissions;
         this.queries = queries;
     }
@@ -41,6 +45,7 @@ public final class RunApplicationService {
     public SubmitRunResponse submit(String workflowId, Integer workflowVersion, Map<String, Object> input) {
         PipelineRunSubmissionPlan plan = new RunSubmissionPlanner(
                 definitions,
+                tools,
                 () -> UUID.randomUUID().toString()
         ).planPipeline(workflowId, workflowVersion, input == null ? Map.of() : input);
         submissions.submit(plan);

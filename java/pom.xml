@@ -59,6 +59,11 @@
             </dependency>
             <dependency>
                 <groupId>com.zthcpa.command</groupId>
+                <artifactId>command-tool-catalog</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zthcpa.command</groupId>
                 <artifactId>command-persistence</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -4,6 +4,8 @@ import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionRegistry;
+import com.zthcpa.command.catalog.ToolCatalog;
+import com.zthcpa.command.contract.ToolDescriptor;
 import com.zthcpa.command.workflow.CapabilityPipelineDefinition;
 import com.zthcpa.command.workflow.DefinitionReference;
 import com.zthcpa.command.workflow.WorkflowDefinitionReader;
@@ -15,10 +17,12 @@ import java.util.Objects;
 
 public final class PipelineExecutionPlanner {
     private final DefinitionRegistry definitions;
+    private final ToolCatalog tools;
     private final WorkflowDefinitionReader reader;
 
-    public PipelineExecutionPlanner(DefinitionRegistry definitions) {
+    public PipelineExecutionPlanner(DefinitionRegistry definitions, ToolCatalog tools) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.tools = Objects.requireNonNull(tools, "tools");
         this.reader = new WorkflowDefinitionReader();
     }
 
@@ -37,9 +41,23 @@ public final class PipelineExecutionPlanner {
                         "Composite pipeline step requires a separate subrun boundary: " + step.id()
                 );
             }
+            DefinitionKey toolKey = new DefinitionKey(
+                    DefinitionKind.TOOL, reference.tool().id(), reference.tool().version()
+            );
+            ToolDescriptor descriptor;
+            try {
+                descriptor = tools.get(new com.zthcpa.command.contract.ToolKey(
+                        toolKey.id(), toolKey.version()
+                ));
+            } catch (RuntimeException exception) {
+                throw new RunSubmissionException("Tool is not registered: " + toolKey);
+            }
+            if (!"active".equalsIgnoreCase(descriptor.status())) {
+                throw new RunSubmissionException("Tool is not active: " + toolKey);
+            }
             steps.add(new PipelineExecutionPlan.StepPlan(
-                    index, step.id(),
-                    new DefinitionKey(DefinitionKind.TOOL, reference.tool().id(), reference.tool().version()),
+                     index, step.id(),
+                    toolKey,
                     input,
                     1
             ));

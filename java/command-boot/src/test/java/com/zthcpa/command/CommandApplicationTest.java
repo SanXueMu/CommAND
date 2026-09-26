@@ -2,6 +2,7 @@ package com.zthcpa.command;
 
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionRegistry;
+import com.zthcpa.command.catalog.ToolCatalog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ class CommandApplicationTest {
     private DefinitionRegistry definitionRegistry;
 
     @Autowired
+    private ToolCatalog toolCatalog;
+
+    @Autowired
     private ApplicationContext context;
 
     @Autowired
@@ -39,6 +43,12 @@ class CommandApplicationTest {
         );
         assertFalse(context.getBeansOfType(com.zthcpa.command.runtime.scheduler.CleanSchedulerLoop.class)
                 .containsKey("cleanSchedulerLoop"));
+    }
+
+    @Test
+    void loadsToolCatalogSeparatelyFromDefinitionRegistry() {
+        assertEquals(5, toolCatalog.list().size());
+        assertEquals(0, definitionRegistry.list(DefinitionKind.TOOL).size());
     }
 
     @Test

@@ -17,7 +17,7 @@ class ClasspathDefinitionLoaderTest {
 
         var definitions = loader.load();
 
-        assertEquals(4, definitions.size());
+        assertEquals(2, definitions.size());
         var workflow = definitions.stream()
                 .filter(definition -> definition.key().kind() == DefinitionKind.WORKFLOW)
                 .findFirst()
@@ -29,6 +29,6 @@ class ClasspathDefinitionLoaderTest {
                 .map(definition -> definition.key().id())
                 .sorted()
                 .toList();
-        assertEquals(java.util.List.of("llm.chat.complete", "llm.chat.complete-json"), tools);
+        assertEquals(java.util.List.of(), tools);
     }
 }

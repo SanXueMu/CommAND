@@ -54,6 +54,7 @@ Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验�
 `command-boot` 根包只保留 `CommandApplication`；Spring 装配和类型化属性按 `configuration.definition`、`configuration.tool`、`configuration.runtime` 归档，定义加载、LLM Tool 注册和运行时生命周期不再与启动入口混放。
 `command-tools` 按 `tools.spi` 与 `tools.llm` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。Java 运行时不再注册 `text.llm.translate` 业务工具，翻译、摘要、分类、抽取等由 Capability Pipeline/Workflow 组合消息、模型和结构化输出完成。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
 `command-definition` 按 `loader`、`validation`、`registry` 三个包归档：加载/解析、跨定义校验、不可变定义注册分别承担独立职责。它只维护 Workflow、Capability Pipeline 等定义，不吸收 `command-tool-catalog` 的 ToolDescriptor 目录，也不直接依赖 Java Tool 实现；Tool 描述目录与可执行实现继续保持独立。
+`command-tool-catalog` 现在从独立的 `tools/index.txt` 加载 Tool manifest：Java LLM Tool 与尚未迁移的 OCR HTTP Tool 均进入统一 `ToolCatalog`，但不会自动注册 Java 实现。`DefinitionConfiguration` 会排除数据库历史 `kind=tool` 记录，避免旧数据重新污染 DefinitionRegistry；`RunSubmissionPlanner` 和 `PipelineExecutionPlanner` 改由 ToolCatalog 校验 Tool 是否存在且 active，再冻结到运行计划。
 
 运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正持久化前会先完成新架构的运行、步骤、任务表设计，不把旧 `pipelines`/`tasks` 表作为长期模型。
 Clean schema 已在本地 `command_dev.command_runtime` 验证：独立 Flyway V1 创建 `runs`、`run_steps`、`task_executions`、`run_events`、`task_events`、`artifacts`、`command_definitions`、`run_definition_snapshots`；不创建旧表。`public` 旧表仅为当前迁移参考，最终切换后清理。

@@ -5,6 +5,7 @@ import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionRegistry;
 import com.zthcpa.command.contract.DefinitionStatus;
+import com.zthcpa.command.catalog.ToolCatalog;
 
 import java.util.List;
 import java.util.Map;
@@ -13,10 +14,16 @@ import java.util.function.Supplier;
 
 public final class RunSubmissionPlanner {
     private final DefinitionRegistry definitions;
+    private final ToolCatalog tools;
     private final Supplier<String> idGenerator;
 
-    public RunSubmissionPlanner(DefinitionRegistry definitions, Supplier<String> idGenerator) {
+    public RunSubmissionPlanner(
+            DefinitionRegistry definitions,
+            ToolCatalog tools,
+            Supplier<String> idGenerator
+    ) {
         this.definitions = Objects.requireNonNull(definitions, "definitions");
+        this.tools = Objects.requireNonNull(tools, "tools");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator");
     }
 
@@ -51,6 +58,7 @@ public final class RunSubmissionPlanner {
         }
         Object referenceValue = first.get("definition_ref");
         DefinitionKey toolKey = reference(referenceValue, pipeline.key(), DefinitionKind.TOOL);
+        validateTool(toolKey);
 
         String runId = idGenerator.get();
         String handle = idGenerator.get();
@@ -79,7 +87,7 @@ public final class RunSubmissionPlanner {
         DefinitionDocument pipeline = definitions.get(
                 reference(first.definitions().get(0), "capability_pipeline_ref", DefinitionKind.CAPABILITY_PIPELINE)
         );
-        PipelineExecutionPlan execution = new PipelineExecutionPlanner(definitions)
+        PipelineExecutionPlan execution = new PipelineExecutionPlanner(definitions, tools)
                 .plan(pipeline.key(), input);
         List<String> taskIds = execution.steps().stream()
                 .map(step -> idGenerator.get())
@@ -122,5 +130,16 @@ public final class RunSubmissionPlanner {
             throw new RunSubmissionException("Referenced definition is not active: " + key);
         }
         return key;
+    }
+
+    private void validateTool(DefinitionKey toolKey) {
+        try {
+            var tool = tools.get(new com.zthcpa.command.contract.ToolKey(toolKey.id(), toolKey.version()));
+            if (!"active".equalsIgnoreCase(tool.status())) {
+                throw new RunSubmissionException("Tool is not active: " + toolKey);
+            }
+        } catch (com.zthcpa.command.contract.ToolNotFoundException exception) {
+            throw new RunSubmissionException("Tool is not registered: " + toolKey);
+        }
     }
 }

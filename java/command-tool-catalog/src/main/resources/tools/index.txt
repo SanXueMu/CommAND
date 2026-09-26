@@ -1,0 +1,6 @@
+# One tool manifest resource per line.
+tools/llm.chat.complete.v1.json
+tools/llm.chat.complete-json.v1.json
+tools/file.inspect.v1.json
+tools/ocr.page.extract.v1.json
+tools/ocr.result.persist.v1.json

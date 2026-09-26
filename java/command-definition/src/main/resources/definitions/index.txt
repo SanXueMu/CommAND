@@ -1,5 +1,3 @@
 # One classpath JSON definition resource per line.
 definitions/workflows/ocr.extract-document.v1.json
 definitions/pipelines/ocr.extract-by-template.v1.json
-definitions/tools/llm.chat.complete.v1.json
-definitions/tools/llm.chat.complete-json.v1.json

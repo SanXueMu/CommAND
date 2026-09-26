@@ -4,6 +4,10 @@ import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionStatus;
+import com.zthcpa.command.contract.RuntimeKind;
+import com.zthcpa.command.contract.ToolDescriptor;
+import com.zthcpa.command.contract.ToolKey;
+import com.zthcpa.command.catalog.InMemoryToolCatalog;
 import com.zthcpa.command.definition.registry.InMemoryDefinitionRegistry;
 import com.zthcpa.command.definition.validation.DefinitionSetValidator;
 import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
@@ -29,7 +33,7 @@ class RunSubmissionPlannerTest {
         );
         AtomicInteger ids = new AtomicInteger();
 
-        RunSubmissionPlan plan = new RunSubmissionPlanner(registry, () -> "id-" + ids.incrementAndGet())
+        RunSubmissionPlan plan = new RunSubmissionPlanner(registry, tools(), () -> "id-" + ids.incrementAndGet())
                 .plan("ocr.extract-document", Map.of("file", "a.pdf", "template_id", "invoice"));
 
         assertEquals("id-1", plan.runId());
@@ -73,7 +77,7 @@ class RunSubmissionPlannerTest {
                 new DefinitionSetValidator(), new DefinitionReferenceValidator()
         );
 
-        assertThrows(RunSubmissionException.class, () -> new RunSubmissionPlanner(registry, () -> "id")
+        assertThrows(RunSubmissionException.class, () -> new RunSubmissionPlanner(registry, tools(), () -> "id")
                 .plan("subrun-workflow", Map.of()));
     }
 
@@ -101,5 +105,11 @@ class RunSubmissionPlannerTest {
                         ))
                 ), CHECKSUM_A, "test"
         );
+    }
+
+    private InMemoryToolCatalog tools() {
+        return new InMemoryToolCatalog(List.of(
+                new ToolDescriptor(new ToolKey("file.inspect", 1), RuntimeKind.INPROC, "active", Map.of())
+        ));
     }
 }

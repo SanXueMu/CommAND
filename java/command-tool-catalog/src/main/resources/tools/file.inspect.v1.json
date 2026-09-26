@@ -1,0 +1,9 @@
+{
+  "kind": "tool",
+  "id": "file.inspect",
+  "version": 1,
+  "status": "active",
+  "runtime": "http",
+  "title": "Inspect an input file",
+  "protocol": "worker-job"
+}

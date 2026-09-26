@@ -1,0 +1,9 @@
+{
+  "kind": "tool",
+  "id": "ocr.result.persist",
+  "version": 1,
+  "status": "active",
+  "runtime": "http",
+  "title": "Persist OCR extraction results",
+  "protocol": "worker-job"
+}

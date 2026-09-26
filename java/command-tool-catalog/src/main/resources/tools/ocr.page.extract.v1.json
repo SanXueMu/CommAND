@@ -1,0 +1,9 @@
+{
+  "kind": "tool",
+  "id": "ocr.page.extract",
+  "version": 1,
+  "status": "active",
+  "runtime": "http",
+  "title": "Extract OCR results from document pages",
+  "protocol": "worker-job"
+}
