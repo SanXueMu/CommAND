@@ -1,4 +1,4 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.loader;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -7,6 +7,7 @@ import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionStatus;
+import com.zthcpa.command.definition.validation.DefinitionValidationException;
 
 import java.io.IOException;
 import java.io.InputStream;

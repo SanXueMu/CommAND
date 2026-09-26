@@ -1,4 +1,4 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.loader;
 
 import com.zthcpa.command.contract.DefinitionDocument;
 

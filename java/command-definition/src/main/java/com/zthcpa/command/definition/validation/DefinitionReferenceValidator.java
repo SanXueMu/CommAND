@@ -1,8 +1,9 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.validation;
 
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
+import com.zthcpa.command.definition.validation.DefinitionValidationException;
 
 import java.util.ArrayList;
 import java.util.HashMap;

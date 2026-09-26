@@ -4,9 +4,9 @@ import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionStatus;
-import com.zthcpa.command.definition.InMemoryDefinitionRegistry;
-import com.zthcpa.command.definition.DefinitionSetValidator;
-import com.zthcpa.command.definition.DefinitionReferenceValidator;
+import com.zthcpa.command.definition.registry.InMemoryDefinitionRegistry;
+import com.zthcpa.command.definition.validation.DefinitionSetValidator;
+import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

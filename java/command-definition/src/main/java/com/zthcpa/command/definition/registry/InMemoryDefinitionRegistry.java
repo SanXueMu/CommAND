@@ -1,4 +1,4 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.registry;
 
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
@@ -6,6 +6,8 @@ import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionNotFoundException;
 import com.zthcpa.command.contract.DefinitionRegistry;
 import com.zthcpa.command.contract.DefinitionStatus;
+import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
+import com.zthcpa.command.definition.validation.DefinitionSetValidator;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;

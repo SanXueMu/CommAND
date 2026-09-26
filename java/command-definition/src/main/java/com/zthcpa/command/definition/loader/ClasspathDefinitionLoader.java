@@ -1,6 +1,7 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.loader;
 
 import com.zthcpa.command.contract.DefinitionDocument;
+import com.zthcpa.command.definition.validation.DefinitionValidationException;
 
 import java.io.BufferedReader;
 import java.io.IOException;

@@ -2,7 +2,7 @@ package com.zthcpa.command.workflow;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionDocument;
-import com.zthcpa.command.definition.JsonDefinitionParser;
+import com.zthcpa.command.definition.loader.JsonDefinitionParser;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

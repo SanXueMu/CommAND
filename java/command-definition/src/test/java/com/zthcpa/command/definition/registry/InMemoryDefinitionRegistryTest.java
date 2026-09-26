@@ -1,10 +1,13 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.registry;
 
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKey;
 import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.DefinitionNotFoundException;
 import com.zthcpa.command.contract.DefinitionStatus;
+import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
+import com.zthcpa.command.definition.validation.DefinitionSetValidator;
+import com.zthcpa.command.definition.validation.DefinitionValidationException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

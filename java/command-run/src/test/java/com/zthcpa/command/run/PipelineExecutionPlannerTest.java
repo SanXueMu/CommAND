@@ -3,10 +3,10 @@ package com.zthcpa.command.run;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionRegistry;
-import com.zthcpa.command.definition.DefinitionReferenceValidator;
-import com.zthcpa.command.definition.DefinitionSetValidator;
-import com.zthcpa.command.definition.InMemoryDefinitionRegistry;
-import com.zthcpa.command.definition.JsonDefinitionParser;
+import com.zthcpa.command.definition.loader.JsonDefinitionParser;
+import com.zthcpa.command.definition.registry.InMemoryDefinitionRegistry;
+import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
+import com.zthcpa.command.definition.validation.DefinitionSetValidator;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.validation;
 
 import java.util.List;
 

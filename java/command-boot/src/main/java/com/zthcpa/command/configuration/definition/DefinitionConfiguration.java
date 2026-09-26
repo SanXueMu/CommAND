@@ -3,11 +3,11 @@ package com.zthcpa.command.configuration.definition;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionRegistry;
 import com.zthcpa.command.contract.DefinitionRepository;
-import com.zthcpa.command.definition.ClasspathDefinitionLoader;
-import com.zthcpa.command.definition.DefinitionSetValidator;
-import com.zthcpa.command.definition.DefinitionReferenceValidator;
-import com.zthcpa.command.definition.InMemoryDefinitionRegistry;
-import com.zthcpa.command.definition.JsonDefinitionParser;
+import com.zthcpa.command.definition.loader.ClasspathDefinitionLoader;
+import com.zthcpa.command.definition.loader.JsonDefinitionParser;
+import com.zthcpa.command.definition.registry.InMemoryDefinitionRegistry;
+import com.zthcpa.command.definition.validation.DefinitionReferenceValidator;
+import com.zthcpa.command.definition.validation.DefinitionSetValidator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

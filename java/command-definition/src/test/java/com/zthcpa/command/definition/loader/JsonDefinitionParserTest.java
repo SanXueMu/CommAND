@@ -1,8 +1,9 @@
-package com.zthcpa.command.definition;
+package com.zthcpa.command.definition.loader;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.contract.DefinitionKind;
+import com.zthcpa.command.definition.validation.DefinitionValidationException;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
