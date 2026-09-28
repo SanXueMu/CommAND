@@ -67,6 +67,13 @@ public class HibernateCleanTaskRepository implements CleanTaskRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean exists(String taskId) {
+        return ((Number) entityManager.createNativeQuery("select count(*) from command_runtime.task_executions where id = :taskId")
+                .setParameter("taskId", taskId).getSingleResult()).longValue() > 0;
+    }
+
+    @Override
     public boolean heartbeat(String taskId, String workerId) {
         require(taskId, "Task id");
         require(workerId, "Worker id");

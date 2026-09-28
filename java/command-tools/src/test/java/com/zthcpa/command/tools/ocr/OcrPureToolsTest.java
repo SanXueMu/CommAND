@@ -45,17 +45,11 @@ class OcrPureToolsTest {
     }
 
     @Test
-    void writesControlledResultArtifact() throws Exception {
-        Path data = Files.createTempDirectory("command-ocr-");
-        try {
-            Map<String, Object> output = new OcrWriteRecordsTool(new ObjectMapper(), data).execute(
-                    Map.of("name", "result.json", "records", List.of(Map.of("页码", 1, "金额", "10"))), event -> { });
-            Path file = Path.of(String.valueOf(output.get("file")));
-            assertTrue(Files.isRegularFile(file));
-            assertEquals(1, output.get("written"));
-        } finally {
-            Files.walk(data).sorted(java.util.Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-        }
+    void writesRecordsThroughResultStorePort() {
+        Map<String, Object> output = new OcrWriteRecordsTool((sourcePath, sourceHash, templateId, templateVersion, records) -> "result-1").execute(
+                Map.of("records", List.of(Map.of("页码", 1, "金额", "10"))), event -> { });
+        assertEquals("result-1", output.get("result_set_id"));
+        assertEquals(1, output.get("written"));
     }
 
     @Test

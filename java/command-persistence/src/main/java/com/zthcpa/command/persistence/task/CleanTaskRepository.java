@@ -10,6 +10,8 @@ public interface CleanTaskRepository {
 
     boolean isCancellationRequested(String taskId, String workerId);
 
+    boolean exists(String taskId);
+
     boolean heartbeat(String taskId, String workerId);
 
     boolean finish(String taskId, String workerId, TaskStatus status,

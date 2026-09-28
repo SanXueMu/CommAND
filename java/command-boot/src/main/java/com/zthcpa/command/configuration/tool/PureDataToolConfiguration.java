@@ -14,7 +14,8 @@ import com.zthcpa.command.tools.ocr.RecordsViewQueryTool;
 import com.zthcpa.command.tools.file.FileInspectTool;
 import com.zthcpa.command.tools.pdf.PdfExtractPagesTool;
 import com.zthcpa.command.tools.pdf.PdfPagesToImagesTool;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zthcpa.command.tools.records.RecordsExportXlsxTool;
+import com.zthcpa.command.persistence.ocr.OcrPersistenceService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -63,7 +64,7 @@ public class PureDataToolConfiguration {
     OcrExtractUnitsTool ocrExtractUnitsTool() { return new OcrExtractUnitsTool(); }
 
     @Bean
-    OcrWriteRecordsTool ocrWriteRecordsTool(ObjectMapper objectMapper) { return new OcrWriteRecordsTool(objectMapper); }
+    OcrWriteRecordsTool ocrWriteRecordsTool(OcrPersistenceService store) { return new OcrWriteRecordsTool(store); }
 
     @Bean
     RecordsViewQueryTool recordsViewQueryTool() { return new RecordsViewQueryTool(); }
@@ -76,4 +77,7 @@ public class PureDataToolConfiguration {
 
     @Bean
     PdfPagesToImagesTool pdfPagesToImagesTool() { return new PdfPagesToImagesTool(); }
+
+    @Bean
+    RecordsExportXlsxTool recordsExportXlsxTool() { return new RecordsExportXlsxTool(); }
 }

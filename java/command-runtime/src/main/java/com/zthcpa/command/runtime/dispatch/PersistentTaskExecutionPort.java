@@ -50,6 +50,9 @@ public final class PersistentTaskExecutionPort implements TaskExecutionPort {
 
     @Override
     public void recordWorkerEvent(String taskId, WorkerEvent event) {
+        if (!tasks.exists(taskId)) {
+            return;
+        }
         events.appendTaskEvent(taskId, "worker." + event.type(), event.data());
     }
 

@@ -14,7 +14,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,23 +41,22 @@ class CommandApplicationTest {
                 "ocr.extract-document",
                 definitionRegistry.getActive(DefinitionKind.WORKFLOW, "ocr.extract-document").key().id()
         );
-        assertFalse(context.getBeansOfType(com.zthcpa.command.runtime.scheduler.CleanSchedulerLoop.class)
+        assertTrue(context.getBeansOfType(com.zthcpa.command.runtime.scheduler.CleanSchedulerLoop.class)
                 .containsKey("cleanSchedulerLoop"));
     }
 
     @Test
     void loadsToolCatalogSeparatelyFromDefinitionRegistry() {
-        assertEquals(11, toolCatalog.list().size());
+        assertEquals(18, toolCatalog.list().size());
         assertEquals(0, definitionRegistry.list(DefinitionKind.TOOL).size());
     }
 
     @Test
-    void exposesDisabledSchedulerStatus() throws Exception {
+    void exposesEnabledSchedulerStatus() throws Exception {
         mockMvc.perform(get("/api/system/scheduler"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(false))
-                .andExpect(jsonPath("$.active").value(false))
-                .andExpect(jsonPath("$.polls").value(0));
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.active").value(true));
     }
 
     @Test

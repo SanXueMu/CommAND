@@ -1,0 +1,1 @@
+{"type":"object","required":["file","file_name","rows","columns"],"properties":{"file":{"type":"string"},"file_name":{"type":"string"},"rows":{"type":"integer"},"columns":{"type":"integer"}}}

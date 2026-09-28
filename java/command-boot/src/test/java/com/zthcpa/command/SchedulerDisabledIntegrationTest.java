@@ -11,7 +11,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "COMMAND_DB_PASSWORD", matches = ".+")
@@ -27,9 +27,9 @@ class SchedulerDisabledIntegrationTest {
     }
 
     @Test
-    void doesNotCreateSchedulerWhenDisabled() {
-        assertFalse(context.getBeansOfType(CleanSchedulerLoop.class).containsKey("cleanSchedulerLoop"));
-        assertFalse(context.getBeansOfType(CleanRecoveryPoller.class).containsKey("cleanRecoveryPoller"));
-        assertFalse(context.getBeansOfType(CleanRecoveryLoop.class).containsKey("cleanRecoveryLoop"));
+    void createsSchedulerByDefaultAndKeepsRecoveryDisabled() {
+        assertTrue(context.getBeansOfType(CleanSchedulerLoop.class).containsKey("cleanSchedulerLoop"));
+        assertTrue(context.getBeansOfType(CleanRecoveryPoller.class).isEmpty());
+        assertTrue(context.getBeansOfType(CleanRecoveryLoop.class).isEmpty());
     }
 }

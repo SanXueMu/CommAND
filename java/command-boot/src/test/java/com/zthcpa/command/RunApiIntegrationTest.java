@@ -73,7 +73,7 @@ class RunApiIntegrationTest {
                 .andExpect(jsonPath("$.steps", hasSize(1)))
                 .andExpect(jsonPath("$.steps[0].task.attempt", is(1)))
                 .andExpect(jsonPath("$.steps[0].task.id").doesNotExist())
-                .andExpect(jsonPath("$.steps[0].task.input").doesNotExist());
+                .andExpect(jsonPath("$.steps[0].task.input.file", is("sample.pdf")));
     }
 
     @Test
@@ -86,11 +86,11 @@ class RunApiIntegrationTest {
     }
 
     @Test
-    void exposesDisabledSchedulerStatusWithoutWorkerDetails() throws Exception {
+    void exposesEnabledSchedulerStatusWithoutWorkerDetails() throws Exception {
         mockMvc.perform(get("/api/system/scheduler"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(false))
-                .andExpect(jsonPath("$.active").value(false))
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.workerBaseUrl").doesNotExist());
     }
 

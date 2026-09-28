@@ -62,7 +62,7 @@ public final class CatalogController {
                                         "recordsPath", "/ocr/records",
                                         "dbsPath", "/ocr/results",
                                         "batch", Map.of("extensions", List.of(".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"), "maxFiles", 200, "maxTotalMB", 500),
-                                        "records", Map.of("export", false)
+                                         "records", Map.of("export", true, "exportFlow", "records.export.xlsx")
                                 ))
                 )
         );
@@ -97,20 +97,6 @@ public final class CatalogController {
                 "doc_md", "按模板识别文档并保留结构化结果。"
         )));
     }
-
-    @GetMapping("/ocr/templates")
-    public Map<String, Object> ocrTemplates() {
-        return Map.of("templates", List.of(), "total", 0);
-    }
-
-    @GetMapping("/ocr/results")
-    public Map<String, Object> ocrResults() { return Map.of("dbs", List.of()); }
-
-    @GetMapping("/ocr/records")
-    public Map<String, Object> ocrRecords() { return Map.of("rows", List.of(), "total", 0); }
-
-    @GetMapping("/ocr/views")
-    public Map<String, Object> ocrViews() { return Map.of("views", List.of()); }
 
     @GetMapping("/translate/templates")
     public Map<String, Object> translateTemplates() {
