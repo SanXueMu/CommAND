@@ -5,6 +5,7 @@ import com.zthcpa.command.persistence.support.PostgresJson;
 import com.zthcpa.command.persistence.event.RunEventEntity;
 import com.zthcpa.command.persistence.event.TaskEventEntity;
 import com.zthcpa.command.persistence.task.TaskExecutionEntity;
+import com.zthcpa.command.run.PipelineExecutionIdentifiers;
 import jakarta.persistence.EntityManager;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +28,7 @@ public class CleanRecoveryRepository {
         require(runId, "Run id");
         @SuppressWarnings("unchecked")
         List<Object[]> rows = entityManager.createNativeQuery("""
-                SELECT s.id, t.id, t.attempt, t.max_attempts, t.input::text
+                SELECT s.id, s.step_index, t.id, t.attempt, t.max_attempts, t.input::text
                 FROM command_runtime.run_steps s
                 JOIN command_runtime.task_executions t ON t.step_id = s.id
                 WHERE s.run_id=:runId AND s.status='interrupted' AND t.status='interrupted'
@@ -36,15 +37,15 @@ public class CleanRecoveryRepository {
                 """).setParameter("runId", runId).getResultList();
         if (rows.isEmpty()) return false;
         Object[] row = rows.get(0);
-        int attempt = number(row[2]);
-        int maxAttempts = number(row[3]);
+         int stepIndex = number(row[1]);
+         int attempt = number(row[3]);
+         int maxAttempts = number(row[4]);
         if (attempt >= maxAttempts) return false;
-        String stepId = row[0].toString();
-        String taskId = row[1].toString();
+         String stepId = row[0].toString();
         restore(runId, stepId);
-        String retryId = taskId + ":retry:" + (attempt + 1);
-        entityManager.persist(new TaskExecutionEntity(retryId, stepId, maxAttempts,
-                PostgresJson.read(mapper, row[4].toString())));
+         String retryId = PipelineExecutionIdentifiers.recoveryTaskId(runId, stepIndex, attempt + 1);
+         entityManager.persist(new TaskExecutionEntity(retryId, stepId, attempt + 1, maxAttempts,
+                 PostgresJson.read(mapper, row[5].toString())));
         appendEvents(runId, stepId, retryId, "run.recovered", "task.requeued", attempt + 1);
         return true;
     }
@@ -54,7 +55,7 @@ public class CleanRecoveryRepository {
         if (limit <= 0) throw new IllegalArgumentException("limit must be positive");
         @SuppressWarnings("unchecked")
         List<Object[]> rows = entityManager.createNativeQuery("""
-                SELECT t.id, t.step_id, s.run_id, t.attempt, t.max_attempts, t.input::text
+                SELECT t.id, t.step_id, s.run_id, s.step_index, t.attempt, t.max_attempts, t.input::text
                 FROM command_runtime.task_executions t
                 JOIN command_runtime.run_steps s ON s.id=t.step_id
                 JOIN command_runtime.runs r ON r.id=s.run_id
@@ -66,17 +67,18 @@ public class CleanRecoveryRepository {
                 .setParameter("limit", limit).getResultList();
         int recovered = 0;
         for (Object[] row : rows) {
-            int attempt = number(row[3]);
-            int maxAttempts = number(row[4]);
+            int stepIndex = number(row[3]);
+            int attempt = number(row[4]);
+            int maxAttempts = number(row[5]);
             if (attempt >= maxAttempts) continue;
             String taskId = row[0].toString();
             String stepId = row[1].toString();
             String runId = row[2].toString();
             markInterrupted(taskId, stepId, runId);
             restore(runId, stepId);
-            String retryId = taskId + ":stale-retry:" + (attempt + 1);
-            entityManager.persist(new TaskExecutionEntity(retryId, stepId, maxAttempts,
-                    PostgresJson.read(mapper, row[5].toString())));
+            String retryId = PipelineExecutionIdentifiers.recoveryTaskId(runId, stepIndex, attempt + 1);
+            entityManager.persist(new TaskExecutionEntity(retryId, stepId, attempt + 1, maxAttempts,
+                    PostgresJson.read(mapper, row[6].toString())));
             appendEvents(runId, stepId, retryId, "run.stale_recovered", "task.stale_recovered", attempt + 1);
             recovered++;
         }

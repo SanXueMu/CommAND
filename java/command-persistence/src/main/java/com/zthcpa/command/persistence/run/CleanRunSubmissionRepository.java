@@ -4,6 +4,7 @@ import com.zthcpa.command.contract.DefinitionDocument;
 import com.zthcpa.command.persistence.step.RunStepEntity;
 import com.zthcpa.command.persistence.task.TaskExecutionEntity;
 import com.zthcpa.command.run.PipelineRunSubmissionPlan;
+import com.zthcpa.command.run.PipelineExecutionIdentifiers;
 import com.zthcpa.command.run.RunSubmissionPlan;
 import jakarta.persistence.EntityManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,7 @@ public class CleanRunSubmissionRepository {
         persistRun(plan.runId(), plan.workflow().id(), plan.workflow().version(), plan.input());
         plan.definitions().forEach(definition -> persistSnapshot(plan.runId(), definition));
         var first = plan.firstTask();
-        String stepId = plan.runId() + ":step:" + first.stepIndex();
+        String stepId = PipelineExecutionIdentifiers.stepId(plan.runId(), first.stepIndex());
         persistStep(stepId, plan.runId(), first.stepIndex(), first.tool().id(), first.tool().id(),
                 first.tool().version(), first.input());
         persistTask(first.handle(), stepId, first.maxAttempts(), first.input());
@@ -30,7 +31,7 @@ public class CleanRunSubmissionRepository {
         persistRun(plan.runId(), plan.workflow().id(), plan.workflow().version(), plan.input());
         plan.definitions().forEach(definition -> persistSnapshot(plan.runId(), definition));
         var first = plan.execution().steps().get(0);
-        String stepId = plan.runId() + ":step:" + first.index();
+        String stepId = PipelineExecutionIdentifiers.stepId(plan.runId(), first.index());
         persistStep(stepId, plan.runId(), first.index(), first.id(), first.tool().id(),
                 first.tool().version(), first.input());
         persistTask(plan.firstTaskId(), stepId, first.maxAttempts(), first.input());

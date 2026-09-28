@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.persistence.event.CleanEventRepository;
 import com.zthcpa.command.persistence.run.CleanRecoveryRepository;
 import com.zthcpa.command.persistence.task.CleanRunCompletionRepository;
+import com.zthcpa.command.persistence.run.CleanStepCoordinatorRepository;
 import com.zthcpa.command.persistence.task.CleanTaskRepository;
 import com.zthcpa.command.runtime.dispatch.PersistentTaskExecutionPort;
 import com.zthcpa.command.runtime.dispatch.TaskDispatcher;
@@ -154,9 +155,10 @@ public class CleanSchedulerConfiguration {
     PersistentTaskExecutionPort cleanTaskExecutionPort(
             CleanTaskRepository tasks,
             CleanEventRepository events,
-            CleanRunCompletionRepository completion
+            CleanRunCompletionRepository completion,
+            CleanStepCoordinatorRepository coordinator
     ) {
-        return new PersistentTaskExecutionPort(tasks, events, completion);
+        return new PersistentTaskExecutionPort(tasks, events, completion, coordinator);
     }
 
     @Bean

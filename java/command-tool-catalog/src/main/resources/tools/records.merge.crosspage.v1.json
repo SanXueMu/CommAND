@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "records.merge.crosspage",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Merge cross-page records",
+  "entry": "com.zthcpa.command.tools.records.MergeCrosspageTool",
+  "input_schema": "tools/records.merge.crosspage.input.schema.json",
+  "output_schema": "tools/records.merge.crosspage.output.schema.json"
+}

@@ -7,11 +7,15 @@ import com.zthcpa.command.persistence.event.TaskEventEntity;
 import com.zthcpa.command.persistence.step.RunStepEntity;
 import com.zthcpa.command.persistence.task.TaskExecutionEntity;
 import com.zthcpa.command.run.PipelineRunSubmissionPlan;
+import com.zthcpa.command.run.PipelineExecutionIdentifiers;
+import com.zthcpa.command.run.InputTemplateResolver;
 import com.zthcpa.command.run.TaskStatus;
 import jakarta.persistence.EntityManager;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.List;
 
 @Transactional
 public class CleanStepCoordinatorRepository {
@@ -72,6 +76,99 @@ public class CleanStepCoordinatorRepository {
         return true;
     }
 
+    /**
+     * Advances a persisted pipeline without passing an in-memory submission plan
+     * through the scheduler. The immutable definition snapshot is the source of
+     * the next step and its input mapping.
+     */
+    public boolean completeAndAdvance(String taskId, String workerId, Map<String, Object> output) {
+        require(taskId, "Task id");
+        require(workerId, "Worker id");
+        Object stepId = completeTask(taskId, workerId, output);
+        if (stepId == null) return false;
+
+        Object[] current = (Object[]) entityManager.createNativeQuery(
+                        "SELECT run_id, step_index FROM command_runtime.run_steps WHERE id=:id")
+                .setParameter("id", stepId).getSingleResult();
+        String runId = current[0].toString();
+        int currentIndex = Integer.parseInt(current[1].toString());
+        markStepSucceeded(stepId);
+
+        Map<String, Object> runInput = jsonObject(entityManager.createNativeQuery(
+                        "SELECT input::text FROM command_runtime.runs WHERE id=:id")
+                .setParameter("id", runId).getSingleResult());
+        Map<String, Map<String, Object>> stepOutputs = completedOutputs(runId);
+        Map<String, Object> pipeline = jsonObject(entityManager.createNativeQuery("""
+                SELECT document::text FROM command_runtime.run_definition_snapshots
+                WHERE run_id=:runId AND definition_kind='capability_pipeline'
+                """).setParameter("runId", runId).getSingleResult());
+        List<?> steps = (List<?>) pipeline.get("steps");
+        if (currentIndex + 1 >= steps.size()) {
+            markRunSucceeded(runId);
+            appendRunEvent(runId, stepId, "run.succeeded", Map.of());
+        } else {
+            Map<?, ?> next = (Map<?, ?>) steps.get(currentIndex + 1);
+            Map<?, ?> reference = (Map<?, ?>) next.get("definition_ref");
+            Map<String, Object> template = next.get("input") instanceof Map<?, ?> value
+                    ? toMap(value) : Map.of();
+            Map<String, Object> input = InputTemplateResolver.resolve(template, runInput, stepOutputs);
+            String nextStepId = PipelineExecutionIdentifiers.stepId(runId, currentIndex + 1);
+            String nextTaskId = PipelineExecutionIdentifiers.taskId(runId, currentIndex + 1);
+            CleanNextStepPlan plan = new CleanNextStepPlan(
+                    nextStepId, currentIndex + 1,
+                    next.get("id").toString(),
+                    new com.zthcpa.command.contract.DefinitionKey(
+                            com.zthcpa.command.contract.DefinitionKind.TOOL,
+                            reference.get("id").toString(), ((Number) reference.get("version")).intValue()),
+                    input, nextTaskId, 1);
+            persistNextStep(runId, plan);
+            appendRunEvent(runId, stepId, "step.advanced", Map.of("next_step_id", plan.stepId()));
+        }
+        appendTaskEvent(taskId, "task.succeeded", output);
+        return true;
+    }
+
+    public boolean isPipelineTask(String taskId) {
+        require(taskId, "Task id");
+        Number count = (Number) entityManager.createNativeQuery("""
+                SELECT COUNT(*)
+                FROM command_runtime.task_executions t
+                JOIN command_runtime.run_steps s ON s.id=t.step_id
+                JOIN command_runtime.run_definition_snapshots d ON d.run_id=s.run_id
+                WHERE t.id=:taskId AND d.definition_kind='capability_pipeline'
+                """).setParameter("taskId", taskId).getSingleResult();
+        return count.longValue() > 0;
+    }
+
+    private Map<String, Map<String, Object>> completedOutputs(String runId) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = entityManager.createNativeQuery("""
+                SELECT s.step_key, t.output::text
+                FROM command_runtime.run_steps s
+                JOIN command_runtime.task_executions t ON t.step_id=s.id
+                WHERE s.run_id=:runId AND t.status='succeeded'
+                ORDER BY s.step_index, t.attempt
+                """).setParameter("runId", runId).getResultList();
+        Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+        for (Object[] row : rows) result.put(row[0].toString(), jsonObject(row[1]));
+        return result;
+    }
+
+    private Map<String, Object> jsonObject(Object value) {
+        try {
+            return mapper.readValue(value.toString(), mapper.getTypeFactory()
+                    .constructMapType(Map.class, String.class, Object.class));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Stored JSON object is invalid", exception);
+        }
+    }
+
+    private Map<String, Object> toMap(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        source.forEach((key, value) -> result.put(key.toString(), value));
+        return result;
+    }
+
     private Object completeTask(String taskId, String workerId, Map<String, Object> output) {
         int updated = entityManager.createNativeQuery("""
                 UPDATE command_runtime.task_executions
@@ -118,7 +215,8 @@ public class CleanStepCoordinatorRepository {
         int nextIndex = currentIndex + 1;
         if (nextIndex >= plan.execution().steps().size()) return null;
         var step = plan.execution().steps().get(nextIndex);
-        return new CleanNextStepPlan(plan.runId() + ":step:" + nextIndex, nextIndex, step.id(), step.tool(),
+        return new CleanNextStepPlan(PipelineExecutionIdentifiers.stepId(plan.runId(), nextIndex),
+                nextIndex, step.id(), step.tool(),
                 step.input(), plan.taskIds().get(nextIndex), step.maxAttempts());
     }
 

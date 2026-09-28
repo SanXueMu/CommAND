@@ -90,7 +90,7 @@ public final class RunSubmissionPlanner {
         PipelineExecutionPlan execution = new PipelineExecutionPlanner(definitions, tools)
                 .plan(pipeline.key(), input);
         List<String> taskIds = execution.steps().stream()
-                .map(step -> idGenerator.get())
+                .map(step -> PipelineExecutionIdentifiers.taskId(first.runId(), step.index()))
                 .toList();
         return new PipelineRunSubmissionPlan(
                 first.runId(), first.workflow(), first.input(), first.definitions(), execution, taskIds

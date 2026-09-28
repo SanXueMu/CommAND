@@ -28,6 +28,12 @@ public record PipelineRunSubmissionPlan(
         if (taskIds.size() != execution.steps().size()) {
             throw new IllegalArgumentException("Task id count must match execution steps");
         }
+        for (int index = 0; index < taskIds.size(); index++) {
+            String expected = PipelineExecutionIdentifiers.taskId(runId, execution.steps().get(index).index());
+            if (!expected.equals(taskIds.get(index))) {
+                throw new IllegalArgumentException("Task id does not match the frozen execution identifier");
+            }
+        }
     }
 
     public String firstTaskId() {

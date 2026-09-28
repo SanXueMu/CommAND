@@ -3,6 +3,7 @@ package com.zthcpa.command.workflow;
 import com.zthcpa.command.contract.DefinitionKey;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public record CapabilityPipelineDefinition(
@@ -22,12 +23,17 @@ public record CapabilityPipelineDefinition(
         }
     }
 
-    public record PipelineStep(String id, DefinitionReference reference) {
+    public record PipelineStep(String id, DefinitionReference reference, Map<String, Object> inputTemplate) {
+        public PipelineStep(String id, DefinitionReference reference) {
+            this(id, reference, Map.of());
+        }
+
         public PipelineStep {
             if (id == null || id.isBlank()) {
                 throw new IllegalArgumentException("Pipeline step id must not be blank");
             }
             Objects.requireNonNull(reference, "reference");
+            inputTemplate = Map.copyOf(Objects.requireNonNull(inputTemplate, "inputTemplate"));
         }
     }
 }

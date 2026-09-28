@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["records", "key_field"],
+  "properties": {
+    "records": {"type": "array", "items": {"type": "object"}, "minItems": 1},
+    "key_field": {"type": "string", "minLength": 1},
+    "modes": {"type": "array", "items": {"enum": ["join", "fill"]}},
+    "sep": {"type": "string"}
+  }
+}

@@ -24,10 +24,13 @@ class PipelineRunSubmissionPlanTest {
         ));
         var plan = new PipelineRunSubmissionPlan(
                 "run-1", new DefinitionKey(DefinitionKind.WORKFLOW, "workflow", 1),
-                Map.of(), List.of(document), execution, List.of("task-1", "task-2")
+                Map.of(), List.of(document), execution, List.of(
+                        PipelineExecutionIdentifiers.taskId("run-1", 0),
+                        PipelineExecutionIdentifiers.taskId("run-1", 1)
+                )
         );
 
-        assertEquals("task-1", plan.firstTaskId());
+        assertEquals(PipelineExecutionIdentifiers.taskId("run-1", 0), plan.firstTaskId());
         assertEquals(2, plan.taskIds().size());
     }
 }

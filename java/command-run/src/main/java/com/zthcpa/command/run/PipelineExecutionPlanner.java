@@ -58,7 +58,8 @@ public final class PipelineExecutionPlanner {
             steps.add(new PipelineExecutionPlan.StepPlan(
                      index, step.id(),
                     toolKey,
-                    input,
+                    index == 0 ? InputTemplateResolver.resolve(step.inputTemplate(), input, Map.of()) : input,
+                    step.inputTemplate(),
                     1
             ));
         }

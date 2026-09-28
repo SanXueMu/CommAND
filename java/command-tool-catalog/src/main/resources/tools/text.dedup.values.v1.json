@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "text.dedup.values",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Deduplicate normalized text values",
+  "entry": "com.zthcpa.command.tools.text.DedupValuesTool",
+  "input_schema": "tools/text.dedup.values.input.schema.json",
+  "output_schema": "tools/text.dedup.values.output.schema.json"
+}

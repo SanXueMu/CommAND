@@ -6,8 +6,10 @@ import com.zthcpa.command.contract.DefinitionKind;
 import com.zthcpa.command.contract.ToolKey;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class WorkflowDefinitionReader {
     public WorkflowDefinition readWorkflow(DefinitionDocument document) {
@@ -30,16 +32,63 @@ public final class WorkflowDefinitionReader {
         }
 
         List<CapabilityPipelineDefinition.PipelineStep> parsed = new ArrayList<>();
+        Set<String> stepIds = new HashSet<>();
         for (Object rawStep : steps) {
             Map<?, ?> step = asObject(rawStep, document, "pipeline step");
             String id = text(step, "id", document);
+            if (stepIds.contains(id)) {
+                throw invalid(document, "duplicate pipeline step id: " + id);
+            }
             Map<?, ?> reference = asObject(step.get("definition_ref"), document, "definition_ref");
+            Map<String, Object> input = step.containsKey("input")
+                    ? stepInput(step, "input", document)
+                    : Map.of();
+            validateInputReferences(input, stepIds, document);
+            stepIds.add(id);
             parsed.add(new CapabilityPipelineDefinition.PipelineStep(
                     id,
-                    reference(reference, null, document)
+                    reference(reference, null, document),
+                    input
             ));
         }
         return new CapabilityPipelineDefinition(document.key(), text(document.content(), "title"), parsed);
+    }
+
+    private void validateInputReferences(Object value, Set<String> previousStepIds,
+                                         DefinitionDocument owner) {
+        if (value instanceof Map<?, ?> map) {
+            map.values().forEach(item -> validateInputReferences(item, previousStepIds, owner));
+            return;
+        }
+        if (value instanceof List<?> list) {
+            list.forEach(item -> validateInputReferences(item, previousStepIds, owner));
+            return;
+        }
+        if (!(value instanceof String reference) || !reference.startsWith("$")) {
+            return;
+        }
+        String[] parts = reference.split("\\.", -1);
+        if ("$run".equals(parts[0])) {
+            if (parts.length < 2 || hasBlankPart(parts)) {
+                throw invalid(owner, "invalid input reference: " + reference);
+            }
+            return;
+        }
+        if (!"$step".equals(parts[0]) || parts.length < 3 || hasBlankPart(parts)) {
+            throw invalid(owner, "invalid input reference: " + reference);
+        }
+        if (!previousStepIds.contains(parts[1])) {
+            throw invalid(owner, "step input references a non-previous step: " + reference);
+        }
+    }
+
+    private boolean hasBlankPart(String[] parts) {
+        for (String part : parts) {
+            if (part.isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private DefinitionKey reference(Map<?, ?> value, DefinitionKind expectedKind) {
@@ -105,6 +154,20 @@ public final class WorkflowDefinitionReader {
             throw invalid(owner, field + " must be an object");
         }
         return object;
+    }
+
+    private Map<String, Object> stepInput(Map<?, ?> value, String field, DefinitionDocument owner) {
+        return objectContentFromStep(value, field);
+    }
+
+    private Map<String, Object> objectContentFromStep(Map<?, ?> value, String field) {
+        Object raw = value.get(field);
+        if (!(raw instanceof Map<?, ?> object)) {
+            throw new IllegalArgumentException(field + " must be an object");
+        }
+        return object.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                entry -> entry.getKey().toString(), Map.Entry::getValue
+        ));
     }
 
     private int number(Object value) {

@@ -41,7 +41,7 @@ command/
 │   ├── command-contract/      # 与框架无关的协议类型
 │   ├── command-definition/    # 四类定义加载与校验
 │   ├── command-tool-catalog/  # 工具目录与版本解析边界
-│   ├── command-tools/         # Java Tool SPI 与通用原子工具（当前含 LLM chat）
+│   ├── command-tools/         # Java Tool SPI 与通用原子工具
 │   ├── command-workflow/      # 用户工作流
 │   ├── command-run/           # 运行与任务生命周期
 │   ├── command-runtime/       # Worker/Runtime Adapter
@@ -52,7 +52,8 @@ command/
 
 Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期，以及统一 Hibernate/JPA 持久化。PostgreSQL、Flyway 和 Hibernate 现在是默认生产启动依赖：`application.yml` 是唯一生产配置事实源，读取 `COMMAND_DB_URL`、`COMMAND_DB_USERNAME`、`COMMAND_DB_PASSWORD`，数据库不可用或密码缺失时应用启动失败。Flyway 使用 clean migration，Hibernate 使用 `ddl-auto=validate`。纯单元测试通过显式排除数据库自动配置隔离，不再把无数据库启动作为生产验收目标。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
 `command-boot` 根包只保留 `CommandApplication`；Spring 装配和类型化属性按 `configuration.definition`、`configuration.tool`、`configuration.runtime` 归档，定义加载、LLM Tool 注册和运行时生命周期不再与启动入口混放。
-`command-tools` 按 `tools.spi` 与 `tools.llm` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。Java 运行时不再注册 `text.llm.translate` 业务工具，翻译、摘要、分类、抽取等由 Capability Pipeline/Workflow 组合消息、模型和结构化输出完成。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
+`command-tools` 按 `tools.spi`、`tools.llm`、`tools.records`、`tools.text`、`tools.table`、`tools.txt` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。当前已完成 Java 化并接入 INPROC 运行时的纯数据能力包括 `records.merge.crosspage`、`text.dedup.values`、`text.verify.fidelity`、`txt.extract.text`、`table.classify.columns`，其中 `text.verify.fidelity` 提供可复用的数字、占位符、编号恒等、截断和英文残留质检。各 Tool 的输入输出协议由独立 Tool Catalog manifest/schema 管理。Java 运行时不再注册 `text.llm.translate` 业务工具，翻译、摘要、分类、抽取等由 Capability Pipeline/Workflow 组合消息、模型和结构化输出完成。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
+首批纯数据 Tool 已通过真实 Spring/PostgreSQL Scheduler 验收：后台任务领取、Java INPROC job、持久化输出、progress 事件、两步 Pipeline 输入映射和最终 Run 收口均在生产装配链路中验证。未迁移的 PDF/OCR、DOCX 渲染和外部模型能力继续保留在 HTTP/适配边界，不以 Java Bean 注册作为迁移完成标准。
 `command-definition` 按 `loader`、`validation`、`registry` 三个包归档：加载/解析、跨定义校验、不可变定义注册分别承担独立职责。它只维护 Workflow、Capability Pipeline 等定义，不吸收 `command-tool-catalog` 的 ToolDescriptor 目录，也不直接依赖 Java Tool 实现；Tool 描述目录与可执行实现继续保持独立。
 `command-tool-catalog` 现在从独立的 `tools/index.txt` 加载 Tool manifest：Java LLM Tool 与尚未迁移的 OCR HTTP Tool 均进入统一 `ToolCatalog`，但不会自动注册 Java 实现。`DefinitionConfiguration` 会排除数据库历史 `kind=tool` 记录，避免旧数据重新污染 DefinitionRegistry；`RunSubmissionPlanner` 和 `PipelineExecutionPlanner` 改由 ToolCatalog 校验 Tool 是否存在且 active，再冻结到运行计划。
 
@@ -63,9 +64,10 @@ Clean `task_executions` 已支持 `SKIP LOCKED` 认领、worker 心跳校验、t
 Clean `run_events/task_events` 已支持 PostgreSQL 生成事件 ID、JSON detail 追加和 `afterId` 增量查询，后续 SSE 直接消费新事件表。
 Clean 任务完成收口已在单事务内更新 `task_executions`、`run_steps`、`runs` 并追加两类事件；worker CAS 保证重复完成不重复推进或写事件。
 Clean 多步骤推进已独立为 `CleanStepCoordinatorRepository`：成功步骤原子创建下一 `run_step/task_execution` 并保持 run running；最后一步才收口 run succeeded。
-`PipelineExecutionPlanner` 已将 `CapabilityPipelineDefinition` 的 Tool steps 转换为有序执行计划；复合定义引用明确拒绝，必须经过独立 subrun 边界，不会伪装成普通 Tool。
+`PipelineExecutionPlanner` 已将 `CapabilityPipelineDefinition` 的 Tool steps 转换为有序执行计划；复合定义引用明确拒绝，必须经过独立 subrun 边界，不会伪装成普通 Tool。步骤可通过 `input` 显式声明 `$run.<path>` 和 `$step.<stepId>.<path>` 引用，解析器支持嵌套对象/数组并在引用不可用时明确失败。
 Clean 首次提交现在接收完整 Pipeline 计划：冻结全部定义和 task ID，但只落库首个 queued step/task，后续步骤由成功推进事务按顺序创建。
-Coordinator 通过当前 step index 消费冻结的 `PipelineRunSubmissionPlan`，校验 runId 归属，不在运行中重新解析定义。
+Coordinator 通过当前 step index 消费冻结的 `PipelineRunSubmissionPlan`，校验 runId 归属；后台推进时读取原始 run input 与已完成步骤 output 后解析下一步输入。未配置 `input` 的步骤继续使用初始输入。
+Pipeline 的 step/task ID 由 `PipelineExecutionIdentifiers` 按 `runId + stepIndex` 确定性生成；提交计划、首次落库和后台恢复共用同一规则，避免冻结计划与实际运行标识分叉。恢复 attempt 还把 attempt 编入确定性任务 ID，因此不会生成 `:retry:` 形式的临时主键。
 失败收口独立更新 task/step/run 并追加失败事件，不创建后续步骤；worker CAS 与重复失败均保持幂等。
 取消与中断使用不同终态：用户取消为 `cancelled`，进程/worker 中断为 `interrupted`；两者均通过新表原子收口，不创建后续步骤。
 恢复只针对 `interrupted`：保留历史执行记录，创建递增 attempt 的 queued retry；`cancelled`、`failed` 和成功运行不会被恢复。

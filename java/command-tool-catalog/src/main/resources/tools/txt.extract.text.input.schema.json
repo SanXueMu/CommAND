@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["file"],
+  "properties": {
+    "file": {
+      "title": "File path",
+      "type": "string",
+      "minLength": 1,
+      "description": "txt or md file path"
+    }
+  }
+}

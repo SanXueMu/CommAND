@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["statuses", "reasons", "ok_count", "total"],
+  "properties": {
+    "statuses": {"type": "array", "items": {"enum": ["ok", "review"]}},
+    "reasons": {"type": "array", "items": {"type": "string"}},
+    "ok_count": {"type": "integer"},
+    "total": {"type": "integer"}
+  }
+}

@@ -7,6 +7,7 @@ import com.zthcpa.command.persistence.event.CleanEventRepository;
 import com.zthcpa.command.persistence.task.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.task.CleanTaskRepository;
 import com.zthcpa.command.persistence.task.CleanTaskRow;
+import com.zthcpa.command.persistence.run.CleanStepCoordinatorRepository;
 import com.zthcpa.command.run.TaskStatus;
 
 import java.util.Map;
@@ -15,15 +16,26 @@ public final class PersistentTaskExecutionPort implements TaskExecutionPort {
     private final CleanTaskRepository tasks;
     private final CleanEventRepository events;
     private final CleanRunCompletionRepository completion;
+    private final CleanStepCoordinatorRepository coordinator;
 
     public PersistentTaskExecutionPort(
             CleanTaskRepository tasks,
             CleanEventRepository events,
             CleanRunCompletionRepository completion
     ) {
+        this(tasks, events, completion, null);
+    }
+
+    public PersistentTaskExecutionPort(
+            CleanTaskRepository tasks,
+            CleanEventRepository events,
+            CleanRunCompletionRepository completion,
+            CleanStepCoordinatorRepository coordinator
+    ) {
         this.tasks = tasks;
         this.events = events;
         this.completion = completion;
+        this.coordinator = coordinator;
     }
 
     @Override
@@ -43,7 +55,10 @@ public final class PersistentTaskExecutionPort implements TaskExecutionPort {
 
     @Override
     public void succeed(String taskId, String workerId, Map<String, Object> output) {
-        requireCompletion(completion.completeTask(taskId, workerId, TaskStatus.SUCCEEDED, output, null), taskId);
+        boolean completed = coordinator != null && coordinator.isPipelineTask(taskId)
+                ? coordinator.completeAndAdvance(taskId, workerId, output)
+                : completion.completeTask(taskId, workerId, TaskStatus.SUCCEEDED, output, null);
+        requireCompletion(completed, taskId);
     }
 
     @Override

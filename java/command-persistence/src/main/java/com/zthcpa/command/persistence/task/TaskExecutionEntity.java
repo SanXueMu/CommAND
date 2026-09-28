@@ -43,9 +43,17 @@ public class TaskExecutionEntity {
     }
 
     public TaskExecutionEntity(String id, String stepId, int maxAttempts, Map<String, Object> input) {
+        this(id, stepId, 1, maxAttempts, input);
+    }
+
+    public TaskExecutionEntity(String id, String stepId, int attempt, int maxAttempts,
+                               Map<String, Object> input) {
         this.id = id;
         this.stepId = stepId;
-        this.attempt = 1;
+        if (attempt < 1) {
+            throw new IllegalArgumentException("Attempt must be positive");
+        }
+        this.attempt = attempt;
         this.maxAttempts = maxAttempts;
         this.input = input;
         this.status = "queued";

@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class WorkflowDefinitionReaderTest {
     private final JsonDefinitionParser parser = new JsonDefinitionParser(new ObjectMapper());
@@ -42,6 +43,42 @@ class WorkflowDefinitionReaderTest {
         assertEquals(2, pipeline.steps().size());
         assertInstanceOf(com.zthcpa.command.contract.ToolKey.class, pipeline.steps().get(0).reference().tool());
         assertEquals("ocr.other", pipeline.steps().get(1).reference().definition().id());
+    }
+
+    @Test
+    void acceptsReferencesToPreviousSteps() {
+        CapabilityPipelineDefinition pipeline = reader.readPipeline(parse("""
+                {"schema_version":1,"kind":"capability_pipeline","id":"test.pipeline",
+                 "version":1,"status":"active","title":"Test",
+                 "steps":[
+                   {"id":"first","definition_ref":{"kind":"tool","id":"file.inspect","version":1}},
+                   {"id":"second","definition_ref":{"kind":"tool","id":"ocr.page.extract","version":1},
+                    "input":{"pages":"$step.first.pages","file":"$run.file"}}
+                 ]}
+                """));
+
+        assertEquals("$step.first.pages", pipeline.steps().get(1).inputTemplate().get("pages"));
+    }
+
+    @Test
+    void rejectsDuplicateAndForwardStepReferences() {
+        assertThrows(IllegalArgumentException.class, () -> reader.readPipeline(parse("""
+                {"schema_version":1,"kind":"capability_pipeline","id":"test.pipeline",
+                 "version":1,"status":"active","title":"Test",
+                 "steps":[
+                   {"id":"first","definition_ref":{"kind":"tool","id":"file.inspect","version":1}},
+                   {"id":"first","definition_ref":{"kind":"tool","id":"ocr.page.extract","version":1}}
+                 ]}
+                """)));
+        assertThrows(IllegalArgumentException.class, () -> reader.readPipeline(parse("""
+                {"schema_version":1,"kind":"capability_pipeline","id":"test.pipeline",
+                 "version":1,"status":"active","title":"Test",
+                 "steps":[
+                   {"id":"first","definition_ref":{"kind":"tool","id":"file.inspect","version":1},
+                    "input":{"pages":"$step.second.pages"}},
+                   {"id":"second","definition_ref":{"kind":"tool","id":"ocr.page.extract","version":1}}
+                 ]}
+                """)));
     }
 
     private DefinitionDocument parse(String json) {

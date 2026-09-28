@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "table.classify.columns",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Classify table columns",
+  "entry": "com.zthcpa.command.tools.table.ClassifyColumnsTool",
+  "input_schema": "tools/table.classify.columns.input.schema.json",
+  "output_schema": "tools/table.classify.columns.output.schema.json"
+}

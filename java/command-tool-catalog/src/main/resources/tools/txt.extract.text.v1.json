@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "txt.extract.text",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Extract text file",
+  "entry": "com.zthcpa.command.tools.txt.TxtExtractTextTool",
+  "input_schema": "tools/txt.extract.text.input.schema.json",
+  "output_schema": "tools/txt.extract.text.output.schema.json"
+}

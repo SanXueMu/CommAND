@@ -4,3 +4,8 @@ tools/llm.chat.complete-json.v1.json
 tools/file.inspect.v1.json
 tools/ocr.page.extract.v1.json
 tools/ocr.result.persist.v1.json
+tools/records.merge.crosspage.v1.json
+tools/text.dedup.values.v1.json
+tools/text.verify.fidelity.v1.json
+tools/table.classify.columns.v1.json
+tools/txt.extract.text.v1.json

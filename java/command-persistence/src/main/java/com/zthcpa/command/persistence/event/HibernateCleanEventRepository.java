@@ -1,11 +1,12 @@
 package com.zthcpa.command.persistence.event;
 
 import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 
-public final class HibernateCleanEventRepository implements CleanEventRepository {
+public class HibernateCleanEventRepository implements CleanEventRepository {
     private final EntityManager entityManager;
 
     public HibernateCleanEventRepository(EntityManager entityManager) {
@@ -13,6 +14,7 @@ public final class HibernateCleanEventRepository implements CleanEventRepository
     }
 
     @Override
+    @Transactional
     public long appendRunEvent(String runId, String stepId, String kind, String actor,
                                Map<String, Object> detail) {
         require(runId, "Run id");
@@ -26,6 +28,7 @@ public final class HibernateCleanEventRepository implements CleanEventRepository
     }
 
     @Override
+    @Transactional
     public long appendTaskEvent(String taskId, String kind, Map<String, Object> detail) {
         require(taskId, "Task id");
         require(kind, "Event kind");

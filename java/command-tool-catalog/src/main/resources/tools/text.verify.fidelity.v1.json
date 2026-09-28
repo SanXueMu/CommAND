@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "text.verify.fidelity",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Verify translation fidelity",
+  "entry": "com.zthcpa.command.tools.text.VerifyFidelityTool",
+  "input_schema": "tools/text.verify.fidelity.input.schema.json",
+  "output_schema": "tools/text.verify.fidelity.output.schema.json"
+}
