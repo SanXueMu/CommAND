@@ -1,0 +1,1 @@
+{"type":"object","required":["file"],"properties":{"file":{"type":"string"},"dpi":{"type":"integer","minimum":36,"maximum":300}},"additionalProperties":false}

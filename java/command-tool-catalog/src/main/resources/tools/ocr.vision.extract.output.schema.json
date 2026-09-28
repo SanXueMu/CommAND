@@ -1,0 +1,1 @@
+{"type":"object","required":["file","model","records","records_count","usage"],"properties":{"file":{"type":"string"},"model":{"type":"string"},"records":{"type":"array","items":{"type":"object"}},"records_count":{"type":"integer"},"usage":{"type":"object"}}}

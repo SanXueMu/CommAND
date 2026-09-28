@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zthcpa.command.tools.llm.LlmChatCompleteJsonTool;
 import com.zthcpa.command.tools.llm.LlmChatCompleteTool;
 import com.zthcpa.command.tools.llm.OpenAiCompatibleLlmClient;
+import com.zthcpa.command.tools.ocr.OpenAiCompatibleVisionClient;
+import com.zthcpa.command.tools.ocr.VisionOcrTool;
 import com.zthcpa.command.tools.spi.JavaToolRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -40,6 +42,20 @@ public class LlmToolConfiguration {
     @ConditionalOnProperty(prefix = "command.tools.llm", name = "enabled", havingValue = "true")
     LlmChatCompleteJsonTool llmChatCompleteJsonTool(OpenAiCompatibleLlmClient client, ObjectMapper objectMapper) {
         return new LlmChatCompleteJsonTool(client, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "command.tools.llm", name = "enabled", havingValue = "true")
+    OpenAiCompatibleVisionClient visionClient(ObjectMapper objectMapper, LlmToolProperties properties) {
+        return new OpenAiCompatibleVisionClient(
+                HttpClient.newHttpClient(), objectMapper, URI.create(required(properties.getBaseUrl(), "baseUrl")),
+                required(properties.getApiKey(), "apiKey"), positive(properties.getRequestTimeout(), "requestTimeout"));
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "command.tools.llm", name = "enabled", havingValue = "true")
+    VisionOcrTool visionOcrTool(OpenAiCompatibleVisionClient client, ObjectMapper objectMapper) {
+        return new VisionOcrTool(client, objectMapper);
     }
 
     @Bean

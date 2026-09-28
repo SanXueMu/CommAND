@@ -1,0 +1,1 @@
+{"type":"object","required":["file","pages","pages_total","dpi"],"properties":{"file":{"type":"string"},"pages":{"type":"array"},"pages_total":{"type":"integer"},"dpi":{"type":"integer"}}}

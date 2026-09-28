@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "ocr.vision.extract",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Extract structured OCR records from an image",
+  "entry": "com.zthcpa.command.tools.ocr.VisionOcrTool",
+  "input_schema": "tools/ocr.vision.extract.input.schema.json",
+  "output_schema": "tools/ocr.vision.extract.output.schema.json"
+}

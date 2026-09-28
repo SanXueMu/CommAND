@@ -11,12 +11,19 @@
       "definition_ref": {"kind": "tool", "id": "file.inspect", "version": 1}
     },
     {
+      "id": "pages",
+      "definition_ref": {"kind": "tool", "id": "pdf.pages.to.images", "version": 1},
+      "input": {"file": "$run.file"}
+    },
+    {
       "id": "extract",
-      "definition_ref": {"kind": "tool", "id": "ocr.page.extract", "version": 1}
+      "definition_ref": {"kind": "tool", "id": "ocr.vision.extract", "version": 1},
+      "input": {"file": "$step.pages.pages.0.file", "fields": "$run.fields", "model": "$run.model", "prompt": "$run.prompt"}
     },
     {
       "id": "persist",
-      "definition_ref": {"kind": "tool", "id": "ocr.result.persist", "version": 1}
+      "definition_ref": {"kind": "tool", "id": "ocrdb.write.records", "version": 1},
+      "input": {"records": "$step.extract.records", "source_path": "$run.file", "name": "$run.result_name"}
     }
   ]
 }

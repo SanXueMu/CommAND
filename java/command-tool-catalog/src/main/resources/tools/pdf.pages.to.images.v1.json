@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "pdf.pages.to.images",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Render PDF pages to images",
+  "entry": "com.zthcpa.command.tools.pdf.PdfPagesToImagesTool",
+  "input_schema": "tools/pdf.pages.to.images.input.schema.json",
+  "output_schema": "tools/pdf.pages.to.images.output.schema.json"
+}

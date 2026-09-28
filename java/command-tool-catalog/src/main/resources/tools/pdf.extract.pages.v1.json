@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "pdf.extract.pages",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Extract PDF text pages",
+  "entry": "com.zthcpa.command.tools.pdf.PdfExtractPagesTool",
+  "input_schema": "tools/pdf.extract.pages.input.schema.json",
+  "output_schema": "tools/pdf.extract.pages.output.schema.json"
+}

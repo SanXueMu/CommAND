@@ -3,7 +3,10 @@
   "id": "file.inspect",
   "version": 1,
   "status": "active",
-  "runtime": "http",
+  "runtime": "inproc",
+  "entry": "com.zthcpa.command.tools.file.FileInspectTool",
   "title": "Inspect an input file",
-  "protocol": "worker-job"
+  "protocol": "inproc",
+  "input_schema": "tools/file.inspect.input.schema.json",
+  "output_schema": "tools/file.inspect.output.schema.json"
 }

@@ -14,8 +14,12 @@
     "type": "object",
     "required": ["file", "template_id"],
     "properties": {
-      "file": {"type": "object"},
-      "template_id": {"type": "string", "minLength": 1}
+        "file": {"type": "string"},
+        "template_id": {"type": "string", "minLength": 1},
+        "fields": {"type": "array", "items": {"type": "string"}},
+        "model": {"type": "string"},
+        "prompt": {"type": "string"},
+        "result_name": {"type": "string"}
     },
     "additionalProperties": false
   },

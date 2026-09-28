@@ -1,0 +1,1 @@
+{"type":"object","required":["file"],"properties":{"file":{"type":"string"},"model":{"type":"string"},"fields":{"type":"array","items":{"type":"string"}},"prompt":{"type":"string"}},"additionalProperties":false}

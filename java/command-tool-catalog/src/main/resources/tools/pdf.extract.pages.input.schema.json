@@ -1,0 +1,1 @@
+{"type":"object","required":["file"],"properties":{"file":{"type":"string"},"min_chars_per_page":{"type":"integer","minimum":0}},"additionalProperties":false}
