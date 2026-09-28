@@ -13,6 +13,8 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,16 +57,23 @@ class JavaToolRuntimeIntegrationTest {
         WorkerJob verify = runtime.createJob("text.verify.fidelity", new WorkerJobRequest(
                 "text.verify.fidelity", 1, "task-verify", 1,
                 Map.of("sources", List.of("Total 2024", "hello world"),
-                        "translations", List.of("总计 2024", "hello world"))));
+                         "translations", List.of("总计 2024", "hello world"))));
+        WorkerJob export = runtime.createJob("records.export.csv", new WorkerJobRequest(
+                "records.export.csv", 1, "task-export", 1,
+                Map.of("columns", List.of("部门", "备注"),
+                        "rows", List.of(Map.of("部门", "审计部", "备注", "含,逗号")),
+                        "name", "runtime-export-" + System.nanoTime())));
 
         WorkerJob mergeResult = await(runtime, merge.jobId());
         WorkerJob dedupResult = await(runtime, dedup.jobId());
         WorkerJob classifyResult = await(runtime, classify.jobId());
         WorkerJob verifyResult = await(runtime, verify.jobId());
+        WorkerJob exportResult = await(runtime, export.jobId());
         assertEquals("succeeded", mergeResult.status());
         assertEquals("succeeded", dedupResult.status());
         assertEquals("succeeded", classifyResult.status());
         assertEquals("succeeded", verifyResult.status());
+        assertEquals("succeeded", exportResult.status());
         assertEquals(1, ((Number) mergeResult.output().get("records_count")).intValue());
         assertEquals(List.of(0, 0), dedupResult.output().get("index_map"));
         assertEquals("enum", ((List<?>) ((Map<?, ?>) classifyResult.output().get("col_classes"))
@@ -74,6 +83,11 @@ class JavaToolRuntimeIntegrationTest {
         assertTrue(runtime.listEvents(classify.jobId(), 0).stream().map(WorkerEvent::type).anyMatch("progress"::equals));
         assertEquals(List.of("ok", "review"), verifyResult.output().get("statuses"));
         assertTrue(runtime.listEvents(verify.jobId(), 0).stream().map(WorkerEvent::type).anyMatch("progress"::equals));
+        assertTrue(runtime.listEvents(export.jobId(), 0).stream().map(WorkerEvent::type).anyMatch("progress"::equals));
+        Path exportedFile = Path.of((String) exportResult.output().get("file"));
+        assertTrue(Files.exists(exportedFile));
+        assertEquals(1, ((Number) exportResult.output().get("rows_count")).intValue());
+        Files.deleteIfExists(exportedFile);
     }
 
     private WorkerJob await(InProcessToolRuntime worker, String jobId) throws InterruptedException {

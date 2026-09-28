@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "kind": "capability_pipeline",
+  "id": "translate.text",
+  "version": 1,
+  "status": "active",
+  "title": "Translate text",
+  "steps": [
+    {"id": "translate", "definition_ref": {"kind": "tool", "id": "text.translate", "version": 1}}
+  ]
+}

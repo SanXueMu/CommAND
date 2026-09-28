@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "ocrdb.write.records",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Write OCR result records",
+  "entry": "com.zthcpa.command.tools.ocr.OcrWriteRecordsTool",
+  "input_schema": "tools/ocrdb.write.records.input.schema.json",
+  "output_schema": "tools/ocrdb.write.records.output.schema.json"
+}

@@ -1,0 +1,1 @@
+{"type":"object","required":["units","records_count","units_count"],"properties":{"units":{"type":"array"},"records_count":{"type":"integer"},"units_count":{"type":"integer"}}}

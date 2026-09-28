@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "required": ["sources", "translations"],
-  "properties": {
-    "sources": {"title": "原文数组", "type": "array", "items": {"type": "string"}},
-    "translations": {"title": "译文数组", "type": "array", "items": {"type": "string"}, "description": "与 sources 逐位对齐"}
-  }
-}

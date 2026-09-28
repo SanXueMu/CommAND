@@ -2,41 +2,25 @@
 
 **小工具调度系统**——协议立骨，注册为籍，队列作脉，管线成势。
 
-不做任何具体业务，只做三件事：**给小工具立规矩（协议）、上户口（注册表）、派活计（调度）**。工具的血肉来自 translee / commocr / rag 的拆分与未来的无限新增；前端筋络由 CommWEB 生长（仅与本项目 API 对话）。
+不做任何具体业务，只做三件事：**给小工具立规矩（协议）、上户口（注册表）、派活计（调度）**。工具能力按通用 Tool、Capability Pipeline、Workflow 和 Workbench 组合；前端筋络由 CommWEB 生长（仅与本项目 API 对话）。
 
 ## 快速开始
 
 ```bash
-# 1. 启动 PostgreSQL（Colima / Docker，端口 5433）
-docker compose up -d
+# 1. 启动 PostgreSQL（按 application.yml 配置连接）
+# 2. 启动 Java API（默认 8080；启动时执行 Flyway 并校验 Hibernate Schema）
+cd java
+COMMAND_DB_PASSWORD=root mvn spring-boot:run -pl command-boot -am
 
-# 2. 安装依赖
-uv sync
-
-# 3. 启动（API 8800；启动时自动执行版本化迁移）
-bash run.sh            # 等价 uv run main.py serve
-
-# 4. 注册小工具（扫描 tools/ 落位区）
-uv run main.py register
-
-# 5. 测试
-uv run pytest
+# 3. 运行 Java 测试
+mvn test
 ```
 
 ## 目录结构（七层契约）
 
 ```
 command/
-├── main.py / run.sh           # L0 入口：CLI（serve/register）+ app 工厂
-├── config.py                  # L1 配置：frozen dataclass + .env 覆盖
-├── deps.py                    # L2 装配：lru_cache 单例工厂，只装配不使用
-├── api/                       # L3 路由：system / tools / tasks / pipelines + schemas
-├── services/                  # L4 编排：registry / dispatch / pipeline / definition / lifecycle / recovery / query / rerun / batch / artifact / submission / completion / deletion / cleanup / subrun
-├── core/                      # L5 调度域：protocol / runner / scheduler / pipeline / errors
-├── store/                     # L6 PostgreSQL：db + migrations + 三仓储
-├── models/                    # 数据模型集中（TaskView / ToolView / EventView）
-├── tools/                     # 小工具落位区（每目录一工具，见 tools/README.md）
-├── java/                      # Java 17/Spring Boot 平台（迁移期与 Python 并存）
+├── java/                      # Java 17/Spring Boot 平台
 │   ├── command-boot/          # 启动模块
 │   ├── command-contract/      # 与框架无关的协议类型
 │   ├── command-definition/    # 四类定义加载与校验
@@ -47,15 +31,15 @@ command/
 │   ├── command-runtime/       # Worker/Runtime Adapter
 │   ├── command-api/           # HTTP API
 │   └── command-persistence/   # Hibernate/Flyway 唯一数据库边界
-└── tests/                     # 镜像 core/ 结构，Fake 客户端零外部依赖
+└── data/                      # 本地运行数据与输出目录（不纳入代码职责）
 ```
 
 Java 平台使用 Java 17 和 Spring Boot 3.5.7，已具备定义加载/校验、类型化工作流、运行与任务生命周期，以及统一 Hibernate/JPA 持久化。PostgreSQL、Flyway 和 Hibernate 现在是默认生产启动依赖：`application.yml` 是唯一生产配置事实源，读取 `COMMAND_DB_URL`、`COMMAND_DB_USERNAME`、`COMMAND_DB_PASSWORD`，数据库不可用或密码缺失时应用启动失败。Flyway 使用 clean migration，Hibernate 使用 `ddl-auto=validate`。纯单元测试通过显式排除数据库自动配置隔离，不再把无数据库启动作为生产验收目标。迁移目标不是逐文件翻译 Python，而是按 Tool、Capability Pipeline、Workflow、Workbench 四层重新提纯和组合。
 `command-boot` 根包只保留 `CommandApplication`；Spring 装配和类型化属性按 `configuration.definition`、`configuration.tool`、`configuration.runtime` 归档，定义加载、LLM Tool 注册和运行时生命周期不再与启动入口混放。
-`command-tools` 按 `tools.spi`、`tools.llm`、`tools.records`、`tools.text`、`tools.table`、`tools.txt` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。当前已完成 Java 化并接入 INPROC 运行时的纯数据能力包括 `records.merge.crosspage`、`text.dedup.values`、`text.verify.fidelity`、`txt.extract.text`、`table.classify.columns`，其中 `text.verify.fidelity` 提供可复用的数字、占位符、编号恒等、截断和英文残留质检。各 Tool 的输入输出协议由独立 Tool Catalog manifest/schema 管理。Java 运行时不再注册 `text.llm.translate` 业务工具，翻译、摘要、分类、抽取等由 Capability Pipeline/Workflow 组合消息、模型和结构化输出完成。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
+`command-tools` 按 `tools.spi`、`tools.llm`、`tools.records`、`tools.text`、`tools.table`、`tools.txt`、`tools.ocr` 归类：SPI 只定义 Java Tool、进度事件和注册表；LLM 类提供 `llm.chat.complete`、`llm.chat.complete-json` 两个通用原子能力及 OpenAI-compatible client。当前已完成 Java 化并接入 INPROC 运行时的纯数据能力包括 `records.merge.crosspage`、`records.export.csv`、`text.dedup.values`、`text.verify.fidelity`、`txt.extract.text`、`table.classify.columns`，以及 OCR 第一批的 `spec.template.resolve`、`ocrdb.extract.units`、`ocrdb.write.records`、`records.view.query`。翻译工作台新增可复用的 `text.translate` Tool 和 `translate.text` Workflow，OCR 工作台通过 `ocr.studio` 视图和 `/api/ocr/*` 协议投影注册到 CommWEB；OCR 页面视觉识别、PDF 适配器、正式结果库和 XLSX 导出仍待后续 Java 批次，不把 HTTP 占位 Tool 视为迁移完成。各 Tool 的输入输出协议由独立 Tool Catalog manifest/schema 管理。真实模型调用仅在显式开启 `command.tools.llm.enabled=true` 且提供 `COMMAND_LLM_BASE_URL`、`COMMAND_LLM_API_KEY` 时装配。
 首批纯数据 Tool 已通过真实 Spring/PostgreSQL Scheduler 验收：后台任务领取、Java INPROC job、持久化输出、progress 事件、两步 Pipeline 输入映射和最终 Run 收口均在生产装配链路中验证。未迁移的 PDF/OCR、DOCX 渲染和外部模型能力继续保留在 HTTP/适配边界，不以 Java Bean 注册作为迁移完成标准。
 `command-definition` 按 `loader`、`validation`、`registry` 三个包归档：加载/解析、跨定义校验、不可变定义注册分别承担独立职责。它只维护 Workflow、Capability Pipeline 等定义，不吸收 `command-tool-catalog` 的 ToolDescriptor 目录，也不直接依赖 Java Tool 实现；Tool 描述目录与可执行实现继续保持独立。
-`command-tool-catalog` 现在从独立的 `tools/index.txt` 加载 Tool manifest：Java LLM Tool 与尚未迁移的 OCR HTTP Tool 均进入统一 `ToolCatalog`，但不会自动注册 Java 实现。`DefinitionConfiguration` 会排除数据库历史 `kind=tool` 记录，避免旧数据重新污染 DefinitionRegistry；`RunSubmissionPlanner` 和 `PipelineExecutionPlanner` 改由 ToolCatalog 校验 Tool 是否存在且 active，再冻结到运行计划。
+`command-tool-catalog` 现在从独立的 `tools/index.txt` 加载 Tool manifest：Java LLM Tool、OCR 第一批纯数据 Tool 与尚未迁移的 OCR HTTP Tool 均进入统一 `ToolCatalog`，但不会自动注册 Java 实现。`DefinitionConfiguration` 会排除数据库历史 `kind=tool` 记录，避免旧数据重新污染 DefinitionRegistry；`RunSubmissionPlanner` 和 `PipelineExecutionPlanner` 改由 ToolCatalog 校验 Tool 是否存在且 active，再冻结到运行计划。
 
 运行提交当前已具备纯领域计划器：Workflow → CapabilityPipeline → 首个 Tool step 会生成运行 ID、任务 handle、定义快照集合和首任务输入；首步 subrun 暂明确拒绝。真正持久化前会先完成新架构的运行、步骤、任务表设计，不把旧 `pipelines`/`tasks` 表作为长期模型。
 Clean schema 已在本地 `command_dev.command_runtime` 验证：独立 Flyway V1 创建 `runs`、`run_steps`、`task_executions`、`run_events`、`task_events`、`artifacts`、`command_definitions`、`run_definition_snapshots`；不创建旧表。`public` 旧表仅为当前迁移参考，最终切换后清理。
@@ -91,7 +75,7 @@ Worker job 创建成功后的超时、ownership 丢失、轮询中断、未知�
 `command-api` 按 `controller`、`application`、`stream`、`model`、`port` 五个包组织：HTTP 路由、运行提交与查询、SSE 事件生命周期、API DTO、运行状态端口分别归属独立边界；Controller 不直接承担运行编排或流生命周期管理。
 `CleanScheduler` 已提供无状态 `pollOnce(workerId)` 边界：一次只认领并派发一个 clean task，返回是否实际派发；`CleanSchedulerLoop` 在默认数据库装配下仅于 `enabled=true` 时由 `SchedulerActivation` 完成可选 readiness check 后启动。
 `CleanSchedulerLoop` 已提供可控后台生命周期：按固定间隔调用单次 poll，`stop()/close()` 中断等待并等待线程退出；单轮异常交给 error handler 后继续轮询。Worker 地址、identity、超时和轮询策略均由 `command.clean.scheduler` 配置并在 Bean 创建时校验。
-Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=false`，显式开启后创建 INPROC runtime、runtime router、task execution port、dispatcher 和后台 loop；`worker-id`、`poll-interval` 与任务超时在 Bean 创建时校验。`worker-base-url` 为可选的外部工具回退配置。
+Scheduler 配置位于 `command.clean.scheduler`：默认 `enabled=true`，使用 `COMMAND_WORKER_ID`（默认 `command-local-1`）作为 Worker 身份，启动后创建 INPROC runtime、runtime router、task execution port、dispatcher 和后台 loop；`poll-interval` 与任务超时在 Bean 创建时校验。`worker-base-url` 为可选的外部工具回退配置。
 配置 `worker-base-url` 时，scheduler 启动前执行 `GET {worker-base-url}/health`；只有 2xx 响应才启动后台 loop。未配置时按 Java-only 模式启动，不创建 HTTP Worker 或健康检查；遇到未注册 Tool 时明确失败，不静默选择错误 runtime。
 `SchedulerActivation` 统一管理 activate/deactivate/close；当前 Spring 启用配置在 Bean 初始化时执行一次 activate，未来动态恢复需创建新的 loop/activation 实例，不复用已停止的 executor。
 `SchedulerMetrics` 已记录 scheduler 自身的 poll/dispatched/idle/error 计数、最后轮询时间、最后错误摘要和 active 快照；计数线程安全且暂存内存，不引入 Micrometer/Actuator，也不记录任务输入输出。
@@ -103,7 +87,7 @@ PostgreSQL、Flyway 和 Hibernate 是默认生产装配，`application.yml` 固�
 `command_definitions` 及 clean run/step/task/event/artifact 的 Hibernate EntityManagerFactory 已通过真实 `command_dev.command_runtime` schema 校验。clean runtime 已删除旧 `RunRepository`、`TaskRepository`、JDBC SQL/RowMapper 和相关 LocalOpsRunner，不再保留第二套持久层。真实 PostgreSQL 回归已覆盖默认应用启动、Flyway V1-V2 校验、Hibernate schema validation、定义查询、运行提交/查询/事件/SSE、Scheduler disabled 状态与 Recovery enabled 生命周期；事务仓储使用可代理类型，Recovery 后台线程由 Spring `SmartLifecycle` 在上下文完成后启动。
 Java clean API 已提供 `POST /api/runs`、`GET /api/runs/{runId}`、`GET /api/runs/{runId}/events?afterId=0&limit=100` 和 `GET /api/runs/{runId}/events/stream?afterId=0`：提交接口只接收 Workflow、可选版本和用户输入，详情接口只返回运行/步骤/最新任务状态，事件接口按数据库事件 ID 增量读取 run events，stream 接口在终态 run 发送完待处理事件后自动关闭；API 不暴露定义快照、内部 task ID 或任务输入。默认生产装配已通过真实 PostgreSQL MockMvc 集成测试，重复运行数据自动清理。
 
-当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计；Python `api/core/services/store` 只作为重构参考，不作为 Java 长期依赖。旧 API、旧表、旧运行模型和兼容代理不进入重构完成态；历史数据通过一次性离线迁移转换或归档后停止旧模型。
+当前内部边界：Java 新平台按 Definition、Workflow、Run、Step、Task、Runtime、Artifact、Audit 分层设计。旧 API、旧表、旧运行模型和兼容代理已从代码仓库清除；历史数据通过一次性离线迁移转换或归档后不再由 CommAND 旧模型管理。
 
 ## 工具协议 v1 摘要
 
@@ -164,6 +148,6 @@ Java clean API 已提供 `POST /api/runs`、`GET /api/runs/{runId}`、`GET /api/
 ## 基础设施
 
 - PostgreSQL 16（`docker-compose.yml`，本地 5433，弱口令仅限本地）
-- Python 3.13 + uv；FastAPI + pydantic v2 + psycopg3
+- Java 17 + Spring Boot 3.5.7；PostgreSQL + Flyway + Hibernate/JPA
 - 架构蓝图与决策留档见知识库 `02Sessions/02-个人/01Projects-项目/Web/01Result/`
 | 2026-09-10 | 协议 v2：GET /api/meta/site 站点清单下发（视图集/顺序/落地页/when 能力条件），渲染控制权移交前端声明驱动（蓝图03） | 是 | — | 否 | 是（视图声明变更即前端导航变更） | 通过 |

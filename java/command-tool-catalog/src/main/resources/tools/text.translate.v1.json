@@ -1,0 +1,15 @@
+{
+  "kind": "tool",
+  "id": "text.translate",
+  "version": 1,
+  "schema_version": 1,
+  "status": "active",
+  "title": "Translate text",
+  "description": "Translate text with language, glossary, and instruction controls",
+  "runtime": "inproc",
+  "entry": "com.zthcpa.command.tools.text.TranslateTextTool",
+  "input_schema": "tools/text.translate.input.schema.json",
+  "output_schema": "tools/text.translate.output.schema.json",
+  "resources": {"timeout_seconds": 1800, "concurrency": 2, "max_attempts": 2},
+  "capabilities": ["translation", "text"]
+}

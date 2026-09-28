@@ -1,0 +1,1 @@
+{"type":"object","required":["id","prompt","fields"],"properties":{"id":{"type":"string"},"prompt":{"type":"string"},"fields":{"type":"array"},"hooks":{"type":"array"},"record_mode":{"type":["string","null"]},"view_spec":{},"input_schema":{}}}

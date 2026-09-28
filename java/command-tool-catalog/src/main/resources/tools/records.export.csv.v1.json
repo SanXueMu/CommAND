@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "records.export.csv",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Export records as CSV",
+  "entry": "com.zthcpa.command.tools.records.ExportCsvTool",
+  "input_schema": "tools/records.export.csv.input.schema.json",
+  "output_schema": "tools/records.export.csv.output.schema.json"
+}

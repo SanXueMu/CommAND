@@ -1,3 +1,5 @@
 # One classpath JSON definition resource per line.
 definitions/workflows/ocr.extract-document.v1.json
 definitions/pipelines/ocr.extract-by-template.v1.json
+definitions/pipelines/translate.text.v1.json
+definitions/workflows/translate.text.v1.json

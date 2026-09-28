@@ -1,0 +1,1 @@
+{"type":"object","required":["records"],"properties":{"records":{"type":"array","items":{"type":"object"}},"long_value_chars":{"type":"integer","minimum":1}},"additionalProperties":false}

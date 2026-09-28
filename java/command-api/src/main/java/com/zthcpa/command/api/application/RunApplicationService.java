@@ -85,7 +85,8 @@ public final class RunApplicationService {
     private StepResponse toStep(CleanStepSnapshot step) {
         CleanTaskSnapshot task = step.latestTask();
         return new StepResponse(step.index(), step.status(), task == null ? null : new TaskResponse(
-                task.attempt(), task.maxAttempts(), task.status(), task.startedAt(), task.finishedAt()
+                task.attempt(), task.maxAttempts(), task.status(), task.startedAt(), task.finishedAt(),
+                task.input(), task.output(), task.error()
         ));
     }
 }

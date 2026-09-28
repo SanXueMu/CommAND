@@ -1,0 +1,1 @@
+{"type":"object","required":["columns","rows","splits"],"properties":{"columns":{"type":"array"},"rows":{"type":"array"},"splits":{"type":"array"},"view_name":{"type":"string"}}}

@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "spec.template.resolve",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Resolve OCR template",
+  "entry": "com.zthcpa.command.tools.ocr.OcrTemplateResolveTool",
+  "input_schema": "tools/spec.template.resolve.input.schema.json",
+  "output_schema": "tools/spec.template.resolve.output.schema.json"
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "records.view.query",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Query OCR record view",
+  "entry": "com.zthcpa.command.tools.ocr.RecordsViewQueryTool",
+  "input_schema": "tools/records.view.query.input.schema.json",
+  "output_schema": "tools/records.view.query.output.schema.json"
+}

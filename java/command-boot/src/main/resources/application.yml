@@ -24,14 +24,15 @@ spring:
 command:
   tools:
     llm:
-      enabled: false
+      enabled: ${COMMAND_LLM_ENABLED:false}
       base-url: ${COMMAND_LLM_BASE_URL:}
       api-key: ${COMMAND_LLM_API_KEY:}
       connect-timeout: 10s
       request-timeout: 120s
   clean:
     scheduler:
-      enabled: false
+      enabled: true
+      worker-id: ${COMMAND_WORKER_ID:command-local-1}
       poll-interval: 1s
       worker-timeout: 30s
       job-poll-interval: 250ms

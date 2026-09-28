@@ -1,0 +1,1 @@
+{"type":"object","required":["template"],"properties":{"template":{"type":"object"}},"additionalProperties":false}

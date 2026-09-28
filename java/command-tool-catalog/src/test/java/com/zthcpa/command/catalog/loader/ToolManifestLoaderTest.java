@@ -18,7 +18,7 @@ class ToolManifestLoaderTest {
         var descriptor = catalog.get(new ToolKey("llm.chat.complete-json", 1));
         assertEquals(RuntimeKind.INPROC, descriptor.runtimeKind());
         assertEquals("com.zthcpa.command.tools.llm.LlmChatCompleteJsonTool", descriptor.manifest().get("entry"));
-        assertEquals(10, catalog.list().size());
+        assertEquals(16, catalog.list().size());
         assertTrue(descriptor.manifest().containsKey("output_schema"));
     }
 }

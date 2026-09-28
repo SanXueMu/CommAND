@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["text", "target_lang", "model"],
+  "properties": {
+    "text": {"type": "string", "minLength": 1},
+    "source_lang": {"type": "string"},
+    "target_lang": {"type": "string", "minLength": 1},
+    "model": {"type": "string", "minLength": 1},
+    "glossary": {"type": "string"},
+    "instruction": {"type": "string"}
+  },
+  "additionalProperties": false
+}

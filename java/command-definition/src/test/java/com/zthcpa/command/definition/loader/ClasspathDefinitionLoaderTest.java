@@ -17,7 +17,7 @@ class ClasspathDefinitionLoaderTest {
 
         var definitions = loader.load();
 
-        assertEquals(2, definitions.size());
+        assertEquals(4, definitions.size());
         var workflow = definitions.stream()
                 .filter(definition -> definition.key().kind() == DefinitionKind.WORKFLOW)
                 .findFirst()

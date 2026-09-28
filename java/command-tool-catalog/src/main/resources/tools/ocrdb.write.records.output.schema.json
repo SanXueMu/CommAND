@@ -1,0 +1,1 @@
+{"type":"object","required":["file","written","records"],"properties":{"file":{"type":"string"},"written":{"type":"integer"},"records":{"type":"array"}}}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["translation", "target_lang"],
+  "properties": {
+    "translation": {"type": "string"},
+    "source_lang": {"type": "string"},
+    "target_lang": {"type": "string"},
+    "model": {"type": "string"},
+    "usage": {"type": "object"}
+  },
+  "additionalProperties": false
+}

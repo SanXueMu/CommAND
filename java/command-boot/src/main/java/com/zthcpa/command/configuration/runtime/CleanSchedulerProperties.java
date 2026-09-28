@@ -7,7 +7,7 @@ import java.time.Duration;
 @ConfigurationProperties("command.clean.scheduler")
 public class CleanSchedulerProperties {
     private boolean enabled;
-    private String workerId;
+    private String workerId = "command-local-1";
     private String workerBaseUrl;
     private Duration pollInterval = Duration.ofSeconds(1);
     private Duration workerTimeout = Duration.ofSeconds(30);
