@@ -108,6 +108,33 @@ class RunApiIntegrationTest {
     }
 
     @Test
+    void retriesFailedRunByCreatingNextAttempt() throws Exception {
+        String body = mapper.writeValueAsString(Map.of(
+                "workflowId", "ocr.extract-document",
+                "workflowVersion", 1,
+                "input", Map.of("file", "retry.pdf")
+        ));
+        String response = mockMvc.perform(post("/api/runs")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        runId = mapper.readTree(response).get("runId").asText();
+        jdbc.update("UPDATE command_runtime.task_executions SET max_attempts=2 WHERE step_id IN (SELECT id FROM command_runtime.run_steps WHERE run_id=?)", runId);
+        jdbc.update("UPDATE command_runtime.runs SET status='failed', error='{}'::jsonb, finished_at=CURRENT_TIMESTAMP WHERE id=?", runId);
+        jdbc.update("UPDATE command_runtime.run_steps SET status='failed', finished_at=CURRENT_TIMESTAMP WHERE run_id=?", runId);
+        jdbc.update("UPDATE command_runtime.task_executions SET status='failed', error='{}'::jsonb, finished_at=CURRENT_TIMESTAMP WHERE step_id IN (SELECT id FROM command_runtime.run_steps WHERE run_id=?)", runId);
+
+        mockMvc.perform(post("/api/runs/{runId}/retry", runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("running")))
+                .andExpect(jsonPath("$.steps[0].task.attempt", is(2)))
+                .andExpect(jsonPath("$.steps[0].task.status", is("queued")));
+        mockMvc.perform(post("/api/runs/{runId}/retry", runId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void exposesDisabledSchedulerStatusWithoutWorkerDetails() throws Exception {
         mockMvc.perform(get("/api/system/scheduler"))
                 .andExpect(status().isOk())

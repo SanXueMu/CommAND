@@ -122,6 +122,11 @@ public final class RunApplicationService {
         return get(runId);
     }
 
+    public RunResponse retry(String runId) {
+        if (!recovery.retryFailedRun(runId)) return null;
+        return get(runId);
+    }
+
     private RunEventResponse toEvent(CleanRunEvent event) {
         return new RunEventResponse(
                 event.id(), event.runId(), event.stepId(), event.kind(), event.actor(),

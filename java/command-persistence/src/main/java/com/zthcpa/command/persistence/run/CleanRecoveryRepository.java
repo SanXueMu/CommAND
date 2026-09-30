@@ -50,6 +50,33 @@ public class CleanRecoveryRepository {
         return true;
     }
 
+    public boolean retryFailedRun(String runId) {
+        require(runId, "Run id");
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = entityManager.createNativeQuery("""
+                SELECT r.status, s.id, s.step_index, t.attempt, t.max_attempts, t.input::text
+                FROM command_runtime.runs r
+                JOIN command_runtime.run_steps s ON s.run_id = r.id
+                JOIN command_runtime.task_executions t ON t.step_id = s.id
+                WHERE r.id=:runId AND r.status='failed' AND s.status='failed' AND t.status='failed'
+                ORDER BY s.step_index DESC, t.attempt DESC LIMIT 1
+                FOR UPDATE OF r, s, t
+                """).setParameter("runId", runId).getResultList();
+        if (rows.isEmpty()) return false;
+        Object[] row = rows.get(0);
+        int attempt = number(row[3]);
+        int maxAttempts = number(row[4]);
+        if (attempt >= maxAttempts) return false;
+        String stepId = row[1].toString();
+        int stepIndex = number(row[2]);
+        restore(runId, stepId);
+        String retryId = PipelineExecutionIdentifiers.recoveryTaskId(runId, stepIndex, attempt + 1);
+        entityManager.persist(new TaskExecutionEntity(retryId, stepId, attempt + 1, maxAttempts,
+                PostgresJson.read(mapper, row[5].toString())));
+        appendEvents(runId, stepId, retryId, "run.retried", "task.retried", attempt + 1);
+        return true;
+    }
+
     public int recoverStaleTasks(Instant staleBefore, int limit) {
         if (staleBefore == null) throw new IllegalArgumentException("staleBefore must not be null");
         if (limit <= 0) throw new IllegalArgumentException("limit must be positive");

@@ -184,7 +184,8 @@ public final class CatalogController {
                           action("submit-run", "提交运行", "POST", "/api/runs"),
                           action("upload-file", "上传文件", "POST", "/api/files/upload"),
                           action("cancel-run", "取消运行", "POST", "/api/runs/{runId}/cancel"),
-                                         action("recover-run", "恢复运行", "POST", "/api/runs/{runId}/recover")
+                                          action("recover-run", "恢复运行", "POST", "/api/runs/{runId}/recover"),
+                                          action("retry-run", "重试运行", "POST", "/api/runs/{runId}/retry")
                 ))
         );
     }

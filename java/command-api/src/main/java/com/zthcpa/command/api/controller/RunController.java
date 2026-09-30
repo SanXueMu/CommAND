@@ -90,6 +90,12 @@ public final class RunController {
         return response == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{runId}/retry")
+    public ResponseEntity<RunResponse> retry(@PathVariable String runId) {
+        RunResponse response = service.retry(runId);
+        return response == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(response);
+    }
+
     @GetMapping(value = "/{runId}/events/stream", produces = "text/event-stream")
     public ResponseEntity<SseEmitter> eventStream(
             @PathVariable String runId,
