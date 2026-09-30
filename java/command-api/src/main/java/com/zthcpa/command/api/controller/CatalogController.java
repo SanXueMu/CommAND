@@ -137,9 +137,16 @@ public final class CatalogController {
                                                   Map.of("key", "currentStep", "label", "当前步骤"),
                                                   Map.of("key", "createdAt", "label", "创建时间")
                                          ), "searchable", true), "runs"),
-                                         component("task-detail-summary", "detail-panel", "detail", Map.of("title", "运行摘要", "drawer", true), "active-run"),
-                                         component("task-detail-progress", "progress-panel", "detail", Map.of("title", "步骤进度"), "active-run"),
-                                         component("task-detail-result", "result-preview", "detail", Map.of("title", "节点结果"), "active-run"),
+                                          component("task-detail-summary", "detail-panel", "detail", Map.of("title", "运行摘要", "drawer", true), "active-run"),
+                                          component("task-detail-progress", "progress-panel", "detail", Map.of("title", "步骤进度"), "active-run"),
+                                          component("task-detail-steps", "data-table", "detail", Map.of("title", "步骤明细", "columns", List.of(
+                                                  Map.of("key", "index", "label", "序号"),
+                                                  Map.of("key", "stepKey", "label", "节点"),
+                                                  Map.of("key", "status", "label", "状态"),
+                                                  Map.of("key", "attempt", "label", "尝试次数"),
+                                                  Map.of("key", "hasOutput", "label", "结果")
+                                          )), "active-run"),
+                                          component("task-detail-result", "result-preview", "detail", Map.of("title", "节点结果"), "active-run"),
                                          component("task-detail-timeline", "timeline", "detail", Map.of("title", "事件时间线"), "run-events")
                                 )),
                         page("workbenches", "工作台", "workbench", "desktop-outlined", false,

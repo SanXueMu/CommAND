@@ -130,9 +130,11 @@ class RunApiIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        runId = mapper.readTree(response).get("runId").asText();
+         runId = mapper.readTree(response).get("runId").asText();
 
-        Number firstId = jdbc.queryForObject(
+         jdbc.update("DELETE FROM command_runtime.run_events WHERE run_id = ?", runId);
+
+         Number firstId = jdbc.queryForObject(
                 "INSERT INTO command_runtime.run_events (run_id, kind, actor, detail) "
                         + "VALUES (?, 'run.started', 'test', '{}'::jsonb) RETURNING id",
                 Number.class,
