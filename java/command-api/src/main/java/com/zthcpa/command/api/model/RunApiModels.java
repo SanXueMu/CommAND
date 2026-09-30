@@ -16,14 +16,23 @@ public final class RunApiModels {
 
     public record RunResponse(
             String runId,
+            String displayId,
             String workflowId,
+            String workflowName,
             int workflowVersion,
             String status,
+            String statusLabel,
             Instant createdAt,
             Instant finishedAt,
-            List<StepResponse> steps
+            List<StepResponse> steps,
+            int completedSteps,
+            int totalSteps,
+            int progressPercent,
+            String currentStep
     ) {
     }
+
+    public record RunListResponse(List<RunResponse> items, long total, int offset, int limit) { }
 
     public record StepResponse(int index, String status, TaskResponse task) {
     }

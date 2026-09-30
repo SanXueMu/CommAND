@@ -15,11 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TxtExtractTextToolTest {
     @Test
     void extractsTrimmedTextAndSha256IntoOneUnit() throws Exception {
-        Path file = Files.createTempFile("command-text-", ".txt");
+        Path data = Files.createTempDirectory("command-text-");
+        Path file = data.resolve("sample.txt");
         try {
             Files.writeString(file, "  hello\nworld  ", StandardCharsets.UTF_8);
-            Map<String, Object> output = new TxtExtractTextTool().execute(
-                    Map.of("file", file.toString()), event -> { });
+            Map<String, Object> output = new TxtExtractTextTool(data).execute(
+                    Map.of("file", "sample.txt"), event -> { });
 
             assertEquals(file.toString(), output.get("file"));
             assertEquals(sha256("  hello\nworld  "), output.get("file_hash"));
@@ -30,7 +31,7 @@ class TxtExtractTextToolTest {
                     "text", "hello\nworld"
             ), ((List<?>) output.get("units")).get(0));
         } finally {
-            assertTrue(Files.deleteIfExists(file));
+            Files.walk(data).sorted(java.util.Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
         }
     }
 

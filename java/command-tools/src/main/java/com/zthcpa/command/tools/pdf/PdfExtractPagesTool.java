@@ -30,7 +30,7 @@ public final class PdfExtractPagesTool implements JavaTool {
 
     @Override
     public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
-        Path file = Path.of(required(input.get("file"), "file")).toAbsolutePath().normalize();
+        Path file = resolve(required(input.get("file"), "file"));
         if (!file.startsWith(dataDirectory) || !Files.isRegularFile(file)) throw new IllegalArgumentException("file must be a readable data file");
         int minChars = input.get("min_chars_per_page") == null ? 20 : Integer.parseInt(String.valueOf(input.get("min_chars_per_page")));
         try (PDDocument document = Loader.loadPDF(file.toFile())) {
@@ -56,6 +56,10 @@ public final class PdfExtractPagesTool implements JavaTool {
     }
 
     private static String required(Object value, String name) { if (value == null || String.valueOf(value).isBlank()) throw new IllegalArgumentException(name + " must not be blank"); return String.valueOf(value); }
+    private Path resolve(String raw) {
+        Path supplied = Path.of(raw);
+        return (supplied.isAbsolute() ? supplied : dataDirectory.resolve(supplied)).toAbsolutePath().normalize();
+    }
     private static String sha256(Path file) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

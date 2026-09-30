@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "required": ["kind", "media_type", "file", "operation", "sha256"],
+  "properties": {
+    "kind": {"const": "image"},
+    "media_type": {"const": "image/png"},
+    "file": {"type": "string"},
+    "file_name": {"type": "string"},
+    "operation": {"type": "string"},
+    "width": {"type": "integer"},
+    "height": {"type": "integer"},
+    "sha256": {"type": "string"}
+  }
+}

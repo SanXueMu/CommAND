@@ -17,9 +17,10 @@ class ClasspathDefinitionLoaderTest {
 
         var definitions = loader.load();
 
-        assertEquals(4, definitions.size());
+        assertEquals(6, definitions.size());
         var workflow = definitions.stream()
                 .filter(definition -> definition.key().kind() == DefinitionKind.WORKFLOW)
+                .filter(definition -> definition.key().id().equals("ocr.extract-document"))
                 .findFirst()
                 .orElseThrow();
         assertEquals("ocr.extract-document", workflow.key().id());

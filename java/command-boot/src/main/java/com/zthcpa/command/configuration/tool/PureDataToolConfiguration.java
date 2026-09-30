@@ -12,6 +12,7 @@ import com.zthcpa.command.tools.ocr.OcrExtractUnitsTool;
 import com.zthcpa.command.tools.ocr.OcrWriteRecordsTool;
 import com.zthcpa.command.tools.ocr.RecordsViewQueryTool;
 import com.zthcpa.command.tools.file.FileInspectTool;
+import com.zthcpa.command.tools.image.ImageTransformTool;
 import com.zthcpa.command.tools.pdf.PdfExtractPagesTool;
 import com.zthcpa.command.tools.pdf.PdfPagesToImagesTool;
 import com.zthcpa.command.tools.records.RecordsExportXlsxTool;
@@ -71,6 +72,9 @@ public class PureDataToolConfiguration {
 
     @Bean
     FileInspectTool fileInspectTool() { return new FileInspectTool(); }
+
+    @Bean
+    ImageTransformTool imageTransformTool() { return new ImageTransformTool(); }
 
     @Bean
     PdfExtractPagesTool pdfExtractPagesTool() { return new PdfExtractPagesTool(); }

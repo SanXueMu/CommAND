@@ -31,12 +31,43 @@ public final class CleanRunQueryRepository {
         return snapshot(run, steps);
     }
 
-    public List<CleanRunSnapshot> list(int offset, int limit) {
+    public List<CleanRunSnapshot> list(int offset, int limit, String status) {
+        return list(offset, limit, status, null, null);
+    }
+
+    public List<CleanRunSnapshot> list(int offset, int limit, String status, String query, String workflowId) {
         if (offset < 0 || limit < 1 || limit > 1000) throw new IllegalArgumentException("Invalid offset or limit");
-        return entityManager.createQuery(
-                        "select r from RunEntity r order by r.createdAt desc, r.id desc", RunEntity.class)
-                .setFirstResult(offset).setMaxResults(limit).getResultList().stream()
-                .map(run -> snapshot(run, List.of())).toList();
+        var runQuery = entityManager.createQuery(
+                        "select r from RunEntity r where (:status is null or r.status = :status) " +
+                                "and (:workflowId is null or r.workflowId = :workflowId) " +
+                                "and (:queryText is null or lower(r.id) like :pattern or lower(r.workflowId) like :pattern) " +
+                                "order by r.createdAt desc, r.id desc", RunEntity.class)
+                .setParameter("status", status == null || status.isBlank() ? null : status)
+                .setParameter("workflowId", workflowId == null || workflowId.isBlank() ? null : workflowId)
+                .setParameter("queryText", query == null || query.isBlank() ? null : query.trim().toLowerCase())
+                .setParameter("pattern", "%" + (query == null ? "" : query.trim().toLowerCase()) + "%")
+                .setFirstResult(offset).setMaxResults(limit);
+        return runQuery.getResultList().stream()
+                .map(run -> snapshot(run, stepsFor(run.getId()))).toList();
+    }
+
+    public List<CleanRunSnapshot> list(int offset, int limit) {
+        return list(offset, limit, null);
+    }
+
+    public long count(String status) {
+        return count(status, null, null);
+    }
+
+    public long count(String status, String query, String workflowId) {
+        return entityManager.createQuery("select count(r) from RunEntity r where (:status is null or r.status = :status) " +
+                        "and (:workflowId is null or r.workflowId = :workflowId) " +
+                        "and (:queryText is null or lower(r.id) like :pattern or lower(r.workflowId) like :pattern)", Long.class)
+                .setParameter("status", status == null || status.isBlank() ? null : status)
+                .setParameter("workflowId", workflowId == null || workflowId.isBlank() ? null : workflowId)
+                .setParameter("queryText", query == null || query.isBlank() ? null : query.trim().toLowerCase())
+                .setParameter("pattern", "%" + (query == null ? "" : query.trim().toLowerCase()) + "%")
+                .getSingleResult();
     }
 
     public List<CleanRunEvent> listEvents(String runId, long afterId, int limit) {
@@ -56,6 +87,13 @@ public final class CleanRunQueryRepository {
         return new CleanRunSnapshot(run.getId(), run.getWorkflowId(), run.getWorkflowVersion(),
                 run.getInput(), run.getStatus(), run.getError(), run.getCreatedAt(), run.getFinishedAt(),
                 steps.stream().map(this::step).toList());
+    }
+
+    private List<RunStepEntity> stepsFor(String runId) {
+        return entityManager.createQuery(
+                        "select s from RunStepEntity s where s.runId = :runId order by s.stepIndex",
+                        RunStepEntity.class)
+                .setParameter("runId", runId).getResultList();
     }
 
     private CleanStepSnapshot step(RunStepEntity step) {

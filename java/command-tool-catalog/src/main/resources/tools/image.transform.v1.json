@@ -1,0 +1,12 @@
+{
+  "kind": "tool",
+  "id": "image.transform",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Transform image",
+  "description": "翻转受控图片并生成可预览的 PNG 结果。",
+  "entry": "com.zthcpa.command.tools.image.ImageTransformTool",
+  "input_schema": "tools/image.transform.input.schema.json",
+  "output_schema": "tools/image.transform.output.schema.json"
+}

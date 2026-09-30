@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "kind": "workflow",
+  "id": "image.transform",
+  "version": 1,
+  "status": "active",
+  "title": "图片翻转",
+  "capability_pipeline_ref": {"kind": "capability_pipeline", "id": "image.transform", "version": 1},
+  "input_schema": {"type": "object", "required": ["file", "operation"]}
+}

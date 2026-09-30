@@ -18,6 +18,10 @@ import java.util.Map;
 /** Extracts a UTF-8 text file into one text unit. */
 public final class TxtExtractTextTool implements JavaTool {
     public static final ToolKey KEY = new ToolKey("txt.extract.text", 1);
+    private final Path dataDirectory;
+
+    public TxtExtractTextTool() { this(Path.of(System.getenv().getOrDefault("COMMAND_DATA_DIR", "data"))); }
+    public TxtExtractTextTool(Path dataDirectory) { this.dataDirectory = dataDirectory.toAbsolutePath().normalize(); }
 
     @Override
     public ToolKey key() {
@@ -31,7 +35,9 @@ public final class TxtExtractTextTool implements JavaTool {
             throw new IllegalArgumentException("file must not be blank");
         }
 
-        Path path = Path.of(String.valueOf(fileValue));
+        Path supplied = Path.of(String.valueOf(fileValue));
+        Path path = (supplied.isAbsolute() ? supplied : dataDirectory.resolve(supplied)).toAbsolutePath().normalize();
+        if (!path.startsWith(dataDirectory)) throw new IllegalArgumentException("file must be inside COMMAND_DATA_DIR");
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("File does not exist: " + path);
         }

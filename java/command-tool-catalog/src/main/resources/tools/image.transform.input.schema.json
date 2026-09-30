@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "required": ["file", "operation"],
+  "properties": {
+    "file": {"type": "string", "description": "COMMAND_DATA_DIR 下的受控图片文件路径"},
+    "operation": {"type": "string", "enum": ["flip_horizontal", "flip_vertical"]}
+  }
+}

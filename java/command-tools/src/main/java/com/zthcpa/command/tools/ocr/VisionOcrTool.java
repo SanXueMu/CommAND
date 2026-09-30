@@ -34,7 +34,7 @@ public final class VisionOcrTool implements JavaTool {
 
     @Override
     public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
-        Path file = Path.of(required(input.get("file"), "file")).toAbsolutePath().normalize();
+        Path file = resolve(required(input.get("file"), "file"));
         if (!file.startsWith(dataDirectory) || !Files.isRegularFile(file)) throw new IllegalArgumentException("file must be a readable data file");
         String mediaType = mediaType(file);
         if (!mediaType.startsWith("image/")) throw new IllegalArgumentException("ocr.vision.extract currently accepts image files only");
@@ -73,4 +73,5 @@ public final class VisionOcrTool implements JavaTool {
     private static List<String> strings(Object value) { return value instanceof List<?> list ? list.stream().map(String::valueOf).toList() : List.of(); }
     private static String required(Object value, String name) { if (value == null || String.valueOf(value).isBlank()) throw new IllegalArgumentException(name + " must not be blank"); return String.valueOf(value); }
     private static String mediaType(Path file) { try { return Files.probeContentType(file) == null ? "application/octet-stream" : Files.probeContentType(file); } catch (Exception exception) { return "application/octet-stream"; } }
+    private Path resolve(String raw) { Path supplied = Path.of(raw); return (supplied.isAbsolute() ? supplied : dataDirectory.resolve(supplied)).toAbsolutePath().normalize(); }
 }

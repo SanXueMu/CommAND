@@ -47,7 +47,7 @@ class CommandApplicationTest {
 
     @Test
     void loadsToolCatalogSeparatelyFromDefinitionRegistry() {
-        assertEquals(18, toolCatalog.list().size());
+        assertEquals(19, toolCatalog.list().size());
         assertEquals(0, definitionRegistry.list(DefinitionKind.TOOL).size());
     }
 

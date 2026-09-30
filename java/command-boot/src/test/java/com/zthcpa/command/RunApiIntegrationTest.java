@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
-@SpringBootTest
+@SpringBootTest(properties = "command.clean.scheduler.enabled=false")
 @AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "COMMAND_DB_PASSWORD", matches = ".+")
 class RunApiIntegrationTest {
@@ -86,11 +86,33 @@ class RunApiIntegrationTest {
     }
 
     @Test
-    void exposesEnabledSchedulerStatusWithoutWorkerDetails() throws Exception {
+    void cancelsQueuedRunThroughRunOperation() throws Exception {
+        String body = mapper.writeValueAsString(Map.of(
+                "workflowId", "ocr.extract-document",
+                "workflowVersion", 1,
+                "input", Map.of("file", "cancel.pdf")
+        ));
+        String response = mockMvc.perform(post("/api/runs")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        runId = mapper.readTree(response).get("runId").asText();
+
+        mockMvc.perform(post("/api/runs/{runId}/cancel", runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("cancelled")))
+                .andExpect(jsonPath("$.statusLabel", is("已取消")));
+        mockMvc.perform(post("/api/runs/{runId}/cancel", runId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void exposesDisabledSchedulerStatusWithoutWorkerDetails() throws Exception {
         mockMvc.perform(get("/api/system/scheduler"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(true))
-                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.active").value(false))
                 .andExpect(jsonPath("$.workerBaseUrl").doesNotExist());
     }
 

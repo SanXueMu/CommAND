@@ -23,6 +23,7 @@ import static com.zthcpa.command.api.model.RunApiModels.RunResponse;
 import static com.zthcpa.command.api.model.RunApiModels.RunEventResponse;
 import static com.zthcpa.command.api.model.RunApiModels.SubmitRunRequest;
 import static com.zthcpa.command.api.model.RunApiModels.SubmitRunResponse;
+import static com.zthcpa.command.api.model.RunApiModels.RunListResponse;
 
 @RestController
 @RequestMapping("/api/runs")
@@ -50,6 +51,20 @@ public final class RunController {
         return response == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(response);
     }
 
+    @GetMapping
+    public ResponseEntity<RunListResponse> list(
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String workflowId
+    ) {
+        if (offset < 0 || limit < 1 || limit > 1000) {
+            throw new RunSubmissionException("offset must be non-negative and limit must be between 1 and 1000");
+        }
+        return ResponseEntity.ok(service.list(offset, limit, status, q, workflowId));
+    }
+
     @GetMapping("/{runId}/events")
     public ResponseEntity<List<RunEventResponse>> events(
             @PathVariable String runId,
@@ -61,6 +76,18 @@ public final class RunController {
         }
         List<RunEventResponse> events = service.events(runId, afterId, limit);
         return events == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(events);
+    }
+
+    @PostMapping("/{runId}/cancel")
+    public ResponseEntity<RunResponse> cancel(@PathVariable String runId) {
+        RunResponse response = service.cancel(runId);
+        return response == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{runId}/recover")
+    public ResponseEntity<RunResponse> recover(@PathVariable String runId) {
+        RunResponse response = service.recover(runId);
+        return response == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(response);
     }
 
     @GetMapping(value = "/{runId}/events/stream", produces = "text/event-stream")

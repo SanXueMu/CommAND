@@ -33,7 +33,7 @@ public final class PdfPagesToImagesTool implements JavaTool {
 
     @Override
     public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
-        Path file = Path.of(required(input.get("file"), "file")).toAbsolutePath().normalize();
+        Path file = resolve(required(input.get("file"), "file"));
         if (!file.startsWith(dataDirectory) || !Files.isRegularFile(file)) throw new IllegalArgumentException("file must be a readable data file");
         int dpi = input.get("dpi") == null ? 144 : Integer.parseInt(String.valueOf(input.get("dpi")));
         if (dpi < 36 || dpi > 300) throw new IllegalArgumentException("dpi must be between 36 and 300");
@@ -62,6 +62,7 @@ public final class PdfPagesToImagesTool implements JavaTool {
     }
 
     private static String stem(Path file) { String name = file.getFileName().toString(); int dot = name.lastIndexOf('.'); return dot > 0 ? name.substring(0, dot).replaceAll("[^A-Za-z0-9._-]", "_") : name; }
+    private Path resolve(String raw) { Path supplied = Path.of(raw); return (supplied.isAbsolute() ? supplied : dataDirectory.resolve(supplied)).toAbsolutePath().normalize(); }
     private static String required(Object value, String name) { if (value == null || String.valueOf(value).isBlank()) throw new IllegalArgumentException(name + " must not be blank"); return String.valueOf(value); }
     private static String sha256(Path file) throws IOException { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file))); } catch (Exception exception) { throw new IllegalStateException("Unable to hash rendered page", exception); } }
 }

@@ -32,7 +32,8 @@ public final class FileInspectTool implements JavaTool {
     public Map<String, Object> execute(Map<String, Object> input, ProgressSink progress) {
         String rawPath = input.get("file") == null ? "" : String.valueOf(input.get("file"));
         if (rawPath.isBlank()) throw new IllegalArgumentException("file must not be blank");
-        Path file = Path.of(rawPath).toAbsolutePath().normalize();
+        Path supplied = Path.of(rawPath);
+        Path file = (supplied.isAbsolute() ? supplied : dataDirectory.resolve(supplied)).toAbsolutePath().normalize();
         if (!file.startsWith(dataDirectory)) throw new IllegalArgumentException("file must be inside COMMAND_DATA_DIR");
         if (!Files.isRegularFile(file)) throw new IllegalArgumentException("file does not exist: " + rawPath);
         try {

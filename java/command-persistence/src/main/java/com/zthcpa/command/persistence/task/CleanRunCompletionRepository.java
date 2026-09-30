@@ -43,6 +43,38 @@ public class CleanRunCompletionRepository {
         return close(taskId, workerId, status, Map.of(), detail);
     }
 
+    /** Requests cancellation for every queued/running task owned by a Run. */
+    public boolean cancelRun(String runId) {
+        require(runId, "Run id");
+        int runUpdated = entityManager.createNativeQuery("""
+                UPDATE command_runtime.runs
+                SET status='cancelled', finished_at=CURRENT_TIMESTAMP,
+                    error=CAST(:error AS jsonb)
+                WHERE id=:runId AND status IN ('queued', 'running', 'interrupted')
+                """).setParameter("runId", runId)
+                .setParameter("error", PostgresJson.write(mapper, Map.of("code", "RUN_CANCELLED", "message", "运行已取消")))
+                .executeUpdate();
+        if (runUpdated != 1) return false;
+        entityManager.createNativeQuery("""
+                UPDATE command_runtime.task_executions t
+                SET status='cancelled', finished_at=CURRENT_TIMESTAMP,
+                    error=CAST(:error AS jsonb)
+                FROM command_runtime.run_steps s
+                WHERE t.step_id=s.id AND s.run_id=:runId
+                  AND t.status IN ('queued', 'running')
+                """).setParameter("runId", runId)
+                .setParameter("error", PostgresJson.write(mapper, Map.of("code", "RUN_CANCELLED", "message", "运行已取消")))
+                .executeUpdate();
+        entityManager.createNativeQuery("""
+                UPDATE command_runtime.run_steps
+                SET status='cancelled', finished_at=CURRENT_TIMESTAMP
+                WHERE run_id=:runId AND status IN ('queued', 'running', 'interrupted')
+                """).setParameter("runId", runId).executeUpdate();
+        entityManager.persist(new RunEventEntity(runId, null, "run.cancelled", "api",
+                Map.of("code", "RUN_CANCELLED", "message", "运行已取消")));
+        return true;
+    }
+
     private boolean close(String taskId, String workerId, TaskStatus taskStatus,
                           Map<String, Object> output, Map<String, Object> error) {
         int updated = entityManager.createNativeQuery("""
