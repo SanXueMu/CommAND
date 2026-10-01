@@ -154,7 +154,8 @@ public final class CatalogController {
                                         component("workbench-header", "page-header", "header", Map.of("title", "工作台", "description", "选择工作台并提交正式工作流运行")),
                                          component("workbench-form", "form", "input", Map.of("title", "工作台输入", "description", "选择工作流、上传文件或输入文本，然后提交任务", "fields", List.of("workflowId", "input"), "workbenches", List.of(
                                                   Map.of("id", "ocr.extract-document", "title", "OCR 文档提取", "description", "上传 PDF 或图片，查看页面、识别字段和结果表格", "inputMode", "file", "accept", ".pdf,.png,.jpg,.jpeg"),
-                                                  Map.of("id", "translate.text", "title", "文本翻译", "description", "输入文本，设置语言和术语，查看最终译文", "inputMode", "text"),
+                                                   Map.of("id", "translate.text", "title", "文本翻译", "description", "输入文本，设置语言和术语，查看最终译文", "inputMode", "text"),
+                                                   Map.of("id", "translate.file-text", "title", "文本文件翻译", "description", "上传 TXT 或 Markdown 文件，提取文本后翻译", "inputMode", "file", "accept", ".txt,.md"),
                                                   Map.of("id", "image.transform", "title", "图片翻转", "description", "上传图片并查看翻转后的真实结果", "inputMode", "image", "accept", ".png,.jpg,.jpeg", "operations", List.of("flip_horizontal", "flip_vertical"))
                                           ))),
                                          component("workbench-progress", "progress-panel", "status", Map.of("title", "运行进度"), "active-run"),
@@ -460,6 +461,7 @@ public final class CatalogController {
         return switch (id) {
             case "ocr.extract-document" -> "OCR 文档提取";
             case "translate.text" -> "文本翻译";
+            case "translate.file-text" -> "文本文件翻译";
             case "ocr.extract-by-template" -> "按模板提取 OCR 结果";
             case "llm.chat.complete" -> "文本模型对话";
             case "llm.chat.complete-json" -> "结构化模型提取";

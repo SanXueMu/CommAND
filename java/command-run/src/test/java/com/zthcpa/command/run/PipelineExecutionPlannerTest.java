@@ -59,6 +59,28 @@ class PipelineExecutionPlannerTest {
         ));
     }
 
+    @Test
+    void plansTextFileTranslationWithExplicitExtractedTextMapping() {
+        var parser = new JsonDefinitionParser(new ObjectMapper());
+        DefinitionDocument pipeline = parse(parser, """
+                {"kind":"capability_pipeline","id":"translate.file-text","version":1,
+                 "title":"Text file translation","schema_version":1,"status":"active","steps":[
+                  {"id":"extract","definition_ref":{"kind":"tool","id":"txt.extract.text","version":1}},
+                  {"id":"translate","definition_ref":{"kind":"tool","id":"text.translate","version":1},
+                   "input":{"text":"$step.extract.units.0.text","target_lang":"$run.target_lang"}}
+                 ]}
+                """);
+        DefinitionRegistry registry = new InMemoryDefinitionRegistry(
+                List.of(pipeline), new DefinitionSetValidator(), new DefinitionReferenceValidator()
+        );
+        PipelineExecutionPlan plan = new PipelineExecutionPlanner(registry, new InMemoryToolCatalog(List.of(
+                tool("txt.extract.text"), tool("text.translate")
+        ))).plan(pipeline.key(), Map.of("file", "input.txt", "target_lang", "English"));
+
+        assertEquals(List.of("txt.extract.text", "text.translate"), plan.steps().stream().map(step -> step.tool().id()).toList());
+        assertEquals("$step.extract.units.0.text", plan.steps().get(1).inputTemplate().get("text"));
+    }
+
     private DefinitionRegistry registry() {
         var parser = new JsonDefinitionParser(new ObjectMapper());
         DefinitionDocument workflow = parse(parser, """

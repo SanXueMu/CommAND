@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "kind": "capability_pipeline",
+  "id": "translate.file-text",
+  "version": 1,
+  "status": "active",
+  "title": "Translate text file",
+  "steps": [
+    {
+      "id": "extract",
+      "definition_ref": {"kind": "tool", "id": "txt.extract.text", "version": 1}
+    },
+    {
+      "id": "translate",
+      "definition_ref": {"kind": "tool", "id": "text.translate", "version": 1},
+      "input": {
+        "text": "$step.extract.units.0.text",
+        "source_lang": "$run.source_lang",
+        "target_lang": "$run.target_lang",
+        "model": "$run.model",
+        "terms": "$run.terms",
+        "instructions": "$run.instructions"
+      }
+    }
+  ]
+}
