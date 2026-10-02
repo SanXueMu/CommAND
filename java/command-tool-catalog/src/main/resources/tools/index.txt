@@ -18,3 +18,4 @@ tools/text.translate.v1.json
 tools/text.verify.fidelity.v1.json
 tools/table.classify.columns.v1.json
 tools/txt.extract.text.v1.json
+tools/docx.extract.text.v1.json

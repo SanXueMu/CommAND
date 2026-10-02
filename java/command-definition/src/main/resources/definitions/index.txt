@@ -5,5 +5,7 @@ definitions/pipelines/translate.text.v1.json
 definitions/workflows/translate.text.v1.json
 definitions/pipelines/translate.file-text.v1.json
 definitions/workflows/translate.file-text.v1.json
+definitions/pipelines/translate.file-docx.v1.json
+definitions/workflows/translate.file-docx.v1.json
 definitions/workflows/image.transform.v1.json
 definitions/pipelines/image.transform.v1.json

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "kind": "workflow",
+  "id": "translate.file-docx",
+  "version": 1,
+  "status": "active",
+  "title": "Translate DOCX file",
+  "capability_pipeline_ref": {"kind":"capability_pipeline","id":"translate.file-docx","version":1},
+  "input_schema": {"type":"object","required":["file","target_lang","model"]},
+  "output": {"result_kind":"translation","source_kind":"docx"}
+}

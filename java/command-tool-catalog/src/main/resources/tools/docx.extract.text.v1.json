@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "docx.extract.text",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Extract DOCX text",
+  "entry": "com.zthcpa.command.tools.docx.DocxExtractTextTool",
+  "input_schema": "tools/docx.extract.text.input.schema.json",
+  "output_schema": "tools/docx.extract.text.output.schema.json"
+}

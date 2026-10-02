@@ -1,0 +1,1 @@
+{"type":"object","required":["file","file_hash","kind","units"],"properties":{"file":{"type":"string"},"file_hash":{"type":"string"},"kind":{"const":"docx"},"units":{"type":"array"}}}

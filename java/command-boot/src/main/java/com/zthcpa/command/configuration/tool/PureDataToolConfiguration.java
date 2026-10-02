@@ -15,6 +15,7 @@ import com.zthcpa.command.tools.file.FileInspectTool;
 import com.zthcpa.command.tools.image.ImageTransformTool;
 import com.zthcpa.command.tools.pdf.PdfExtractPagesTool;
 import com.zthcpa.command.tools.pdf.PdfPagesToImagesTool;
+import com.zthcpa.command.tools.docx.DocxExtractTextTool;
 import com.zthcpa.command.tools.records.RecordsExportXlsxTool;
 import com.zthcpa.command.persistence.ocr.OcrPersistenceService;
 import org.springframework.context.annotation.Bean;
@@ -84,4 +85,7 @@ public class PureDataToolConfiguration {
 
     @Bean
     RecordsExportXlsxTool recordsExportXlsxTool() { return new RecordsExportXlsxTool(); }
+
+    @Bean
+    DocxExtractTextTool docxExtractTextTool() { return new DocxExtractTextTool(); }
 }
