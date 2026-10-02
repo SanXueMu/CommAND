@@ -481,6 +481,8 @@ public final class CatalogController {
             case "text.dedup.values" -> "文本去重";
             case "text.verify.fidelity" -> "文本保真检查";
             case "txt.extract.text" -> "提取文本文件内容";
+            case "docx.extract.text" -> "提取 DOCX 文本";
+            case "xlsx.extract.values" -> "提取 Excel 单元格";
             case "table.classify.columns" -> "识别表格列类型";
             case "image.transform" -> "图片翻转";
             default -> containsCjk(fallback) ? fallback : id;
@@ -503,6 +505,8 @@ public final class CatalogController {
             case "text.dedup.values" -> "清理重复文本值并保留原值到去重结果的索引关系。";
             case "text.verify.fidelity" -> "检查文本转换前后的数字、占位符和关键内容是否保持一致。";
             case "txt.extract.text" -> "读取受控文本文件并输出文本内容与文件摘要。";
+            case "docx.extract.text" -> "提取 DOCX 段落和表格中的纯文本，供翻译和其他文本处理流程使用。";
+            case "xlsx.extract.values" -> "读取 Excel 工作表中的非空单元格，保留工作表、行列坐标和格式化值。";
             case "table.classify.columns" -> "根据表格样例识别列的数据类型和处理方式。";
             case "llm.chat.complete" -> "使用配置的大模型对话接口生成文本结果。";
             case "llm.chat.complete-json" -> "调用大模型并按 JSON 对象格式返回结构化结果。";

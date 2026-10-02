@@ -1,0 +1,1 @@
+{"type":"object","required":["file","file_hash","kind","sheets"],"properties":{"file":{"type":"string"},"file_hash":{"type":"string"},"kind":{"const":"xlsx"},"sheets":{"type":"array"},"rows":{"type":"integer"}}}

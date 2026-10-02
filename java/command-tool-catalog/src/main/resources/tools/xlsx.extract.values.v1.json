@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "xlsx.extract.values",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Extract XLSX values",
+  "entry": "com.zthcpa.command.tools.xlsx.XlsxExtractValuesTool",
+  "input_schema": "tools/xlsx.extract.values.input.schema.json",
+  "output_schema": "tools/xlsx.extract.values.output.schema.json"
+}
