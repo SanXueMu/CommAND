@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "kind": "capability_pipeline",
+  "id": "translate.file-xlsx",
+  "version": 1,
+  "status": "active",
+  "title": "Translate XLSX file",
+  "steps": [
+    {"id":"translate","definition_ref":{"kind":"tool","id":"xlsx.translate.file","version":1}}
+  ]
+}

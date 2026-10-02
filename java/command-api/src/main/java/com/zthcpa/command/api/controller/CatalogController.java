@@ -157,6 +157,7 @@ public final class CatalogController {
                                                    Map.of("id", "translate.text", "title", "文本翻译", "description", "输入文本，设置语言和术语，查看最终译文", "inputMode", "text"),
                                                    Map.of("id", "translate.file-text", "title", "文本文件翻译", "description", "上传 TXT 或 Markdown 文件，提取文本后翻译", "inputMode", "file", "accept", ".txt,.md"),
                                                    Map.of("id", "translate.file-docx", "title", "DOCX 文件翻译", "description", "提取 DOCX 段落和表格文本后翻译", "inputMode", "file", "accept", ".docx"),
+                                                   Map.of("id", "translate.file-xlsx", "title", "Excel 文件翻译", "description", "翻译文本单元格并生成新的 Excel 文件", "inputMode", "file", "accept", ".xlsx"),
                                                   Map.of("id", "image.transform", "title", "图片翻转", "description", "上传图片并查看翻转后的真实结果", "inputMode", "image", "accept", ".png,.jpg,.jpeg", "operations", List.of("flip_horizontal", "flip_vertical"))
                                           ))),
                                          component("workbench-progress", "progress-panel", "status", Map.of("title", "运行进度"), "active-run"),

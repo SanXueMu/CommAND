@@ -17,6 +17,7 @@ import com.zthcpa.command.tools.pdf.PdfExtractPagesTool;
 import com.zthcpa.command.tools.pdf.PdfPagesToImagesTool;
 import com.zthcpa.command.tools.docx.DocxExtractTextTool;
 import com.zthcpa.command.tools.xlsx.XlsxExtractValuesTool;
+import com.zthcpa.command.tools.xlsx.XlsxTranslateFileTool;
 import com.zthcpa.command.tools.records.RecordsExportXlsxTool;
 import com.zthcpa.command.persistence.ocr.OcrPersistenceService;
 import org.springframework.context.annotation.Bean;
@@ -92,4 +93,8 @@ public class PureDataToolConfiguration {
 
     @Bean
     XlsxExtractValuesTool xlsxExtractValuesTool() { return new XlsxExtractValuesTool(); }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnBean(com.zthcpa.command.tools.llm.LlmClient.class)
+    XlsxTranslateFileTool xlsxTranslateFileTool(com.zthcpa.command.tools.llm.LlmClient client) { return new XlsxTranslateFileTool(client); }
 }

@@ -1,0 +1,1 @@
+{"type":"object","required":["file","target_lang","model"],"properties":{"file":{"type":"string"},"source_lang":{"type":"string"},"target_lang":{"type":"string"},"model":{"type":"string"},"terms":{"type":"string"},"name":{"type":"string"}},"additionalProperties":false}

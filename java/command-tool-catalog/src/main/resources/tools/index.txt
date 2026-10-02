@@ -20,3 +20,4 @@ tools/table.classify.columns.v1.json
 tools/txt.extract.text.v1.json
 tools/docx.extract.text.v1.json
 tools/xlsx.extract.values.v1.json
+tools/xlsx.translate.file.v1.json

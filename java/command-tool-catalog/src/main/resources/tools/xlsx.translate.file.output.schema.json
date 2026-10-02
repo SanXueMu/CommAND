@@ -1,0 +1,1 @@
+{"type":"object","required":["file","file_name","translated_cells"],"properties":{"file":{"type":"string"},"file_name":{"type":"string"},"translated_cells":{"type":"integer"},"source_file":{"type":"string"}}}

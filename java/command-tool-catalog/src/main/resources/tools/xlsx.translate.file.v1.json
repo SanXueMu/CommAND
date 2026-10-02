@@ -1,0 +1,11 @@
+{
+  "kind": "tool",
+  "id": "xlsx.translate.file",
+  "version": 1,
+  "status": "active",
+  "runtime": "inproc",
+  "title": "Translate XLSX file",
+  "entry": "com.zthcpa.command.tools.xlsx.XlsxTranslateFileTool",
+  "input_schema": "tools/xlsx.translate.file.input.schema.json",
+  "output_schema": "tools/xlsx.translate.file.output.schema.json"
+}
