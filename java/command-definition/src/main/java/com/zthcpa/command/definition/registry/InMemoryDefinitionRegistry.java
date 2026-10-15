@@ -43,13 +43,31 @@ public final class InMemoryDefinitionRegistry implements DefinitionRegistry {
                 );
             }
         }
-        this.byKey = Map.copyOf(definitionsByKey);
-        this.active = Map.copyOf(activeDefinitions);
+        this.byKey = new LinkedHashMap<>(definitionsByKey);
+        this.active = new LinkedHashMap<>(activeDefinitions);
+    }
+
+    @Override
+    public synchronized void register(DefinitionDocument definition) {
+        if (byKey.containsKey(definition.key())) {
+            throw new IllegalArgumentException("Definition version already exists: " + definition.key());
+        }
+        if (definition.status() == DefinitionStatus.ACTIVE) {
+            ActiveKey activeKey = new ActiveKey(definition.key().kind(), definition.key().id());
+            if (active.containsKey(activeKey)) {
+                throw new IllegalArgumentException("Active definition already exists: " + activeKey);
+            }
+            active.put(activeKey, definition);
+        }
+        byKey.put(definition.key(), definition);
     }
 
     @Override
     public DefinitionDocument get(DefinitionKey key) {
-        DefinitionDocument definition = byKey.get(key);
+        DefinitionDocument definition;
+        synchronized (this) {
+            definition = byKey.get(key);
+        }
         if (definition == null) {
             throw new DefinitionNotFoundException("Definition not found: " + key);
         }
@@ -58,7 +76,10 @@ public final class InMemoryDefinitionRegistry implements DefinitionRegistry {
 
     @Override
     public DefinitionDocument getActive(DefinitionKind kind, String id) {
-        DefinitionDocument definition = active.get(new ActiveKey(kind, id));
+        DefinitionDocument definition;
+        synchronized (this) {
+            definition = active.get(new ActiveKey(kind, id));
+        }
         if (definition == null) {
             throw new DefinitionNotFoundException("Active definition not found: " + kind + "/" + id);
         }
@@ -67,7 +88,11 @@ public final class InMemoryDefinitionRegistry implements DefinitionRegistry {
 
     @Override
     public List<DefinitionDocument> list(DefinitionKind kind) {
-        return byKey.values().stream()
+        List<DefinitionDocument> definitions;
+        synchronized (this) {
+            definitions = List.copyOf(byKey.values());
+        }
+        return definitions.stream()
                 .filter(definition -> definition.key().kind() == kind)
                 .sorted(Comparator
                         .comparing((DefinitionDocument definition) -> definition.key().id())

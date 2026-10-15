@@ -2,6 +2,7 @@ package com.zthcpa.command.tools.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zthcpa.command.contract.LlmConfigurationPort;
 
 import java.io.IOException;
 import java.net.URI;
@@ -18,6 +19,7 @@ public final class OpenAiCompatibleLlmClient implements LlmClient {
     private final ObjectMapper mapper;
     private final URI endpoint;
     private final String apiKey;
+    private final LlmConfigurationPort configuration;
     private final Duration timeout;
 
     public OpenAiCompatibleLlmClient(
@@ -31,12 +33,25 @@ public final class OpenAiCompatibleLlmClient implements LlmClient {
         this.mapper = mapper;
         this.endpoint = endpoint(baseUri);
         this.apiKey = require(apiKey, "apiKey");
+        this.configuration = null;
         this.timeout = timeout == null ? Duration.ofSeconds(120) : timeout;
+    }
+
+    public OpenAiCompatibleLlmClient(HttpClient client, ObjectMapper mapper, LlmConfigurationPort configuration, Duration timeout) {
+        this.client = client; this.mapper = mapper; this.configuration = configuration;
+        this.endpoint = null; this.apiKey = null; this.timeout = timeout == null ? Duration.ofSeconds(120) : timeout;
     }
 
     @Override
     public LlmResponse complete(LlmRequest request) {
         try {
+            URI requestEndpoint = endpoint;
+            String requestApiKey = apiKey;
+            if (configuration != null) {
+                var settings = configuration.get().orElseThrow(() -> new LlmToolException("LLM 未配置，请先在系统管理中保存 API Key"));
+                requestEndpoint = endpoint(URI.create(settings.baseUrl()));
+                requestApiKey = settings.apiKey();
+            }
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("model", request.model());
             body.put("messages", request.messages().stream()
@@ -52,9 +67,9 @@ public final class OpenAiCompatibleLlmClient implements LlmClient {
                 body.put("response_format", Map.of("type", "json_object"));
             }
 
-            HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
+            HttpRequest httpRequest = HttpRequest.newBuilder(requestEndpoint)
                     .timeout(timeout)
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + requestApiKey)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
                     .build();

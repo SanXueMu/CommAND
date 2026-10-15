@@ -10,3 +10,7 @@ data/
 
 # CJK 字体源文件（仅保留生成后的静态 TTF）
 assets/fonts/*-var.ttf
+
+# Java 本地开发密钥（勿提交）
+dev.env
+*.env.local

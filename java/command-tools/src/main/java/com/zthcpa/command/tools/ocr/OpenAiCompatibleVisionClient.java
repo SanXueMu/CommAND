@@ -2,6 +2,7 @@ package com.zthcpa.command.tools.ocr;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zthcpa.command.contract.LlmConfigurationPort;
 
 import java.io.IOException;
 import java.net.URI;
@@ -21,24 +22,38 @@ public final class OpenAiCompatibleVisionClient implements VisionClient {
     private final URI endpoint;
     private final String apiKey;
     private final Duration timeout;
+    private final LlmConfigurationPort configuration;
 
     public OpenAiCompatibleVisionClient(HttpClient client, ObjectMapper mapper, URI baseUri, String apiKey, Duration timeout) {
         this.client = client;
         this.mapper = mapper;
         this.endpoint = endpoint(baseUri);
         this.apiKey = required(apiKey, "apiKey");
+        this.configuration = null;
         this.timeout = timeout == null ? Duration.ofSeconds(120) : timeout;
+    }
+
+    public OpenAiCompatibleVisionClient(HttpClient client, ObjectMapper mapper, LlmConfigurationPort configuration, Duration timeout) {
+        this.client = client; this.mapper = mapper; this.configuration = configuration;
+        this.endpoint = null; this.apiKey = null; this.timeout = timeout == null ? Duration.ofSeconds(120) : timeout;
     }
 
     @Override
     public VisionResponse extract(String model, String instruction, String mediaType, String base64Data) {
         try {
+            URI requestEndpoint = endpoint;
+            String requestApiKey = apiKey;
+            if (configuration != null) {
+                var settings = configuration.get().orElseThrow(() -> new IllegalStateException("LLM 未配置，请先在系统管理中保存 API Key"));
+                requestEndpoint = endpoint(URI.create(settings.baseUrl()));
+                requestApiKey = settings.apiKey();
+            }
             Map<String, Object> image = Map.of("type", "image_url", "image_url", Map.of("url", "data:" + mediaType + ";base64," + base64Data));
             Map<String, Object> text = Map.of("type", "text", "text", instruction);
             Map<String, Object> message = Map.of("role", "user", "content", List.of(text, image));
             Map<String, Object> body = Map.of("model", required(model, "model"), "messages", List.of(message), "temperature", 0);
-            HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(timeout)
-                    .header("Authorization", "Bearer " + apiKey).header("Content-Type", "application/json")
+            HttpRequest request = HttpRequest.newBuilder(requestEndpoint).timeout(timeout)
+                    .header("Authorization", "Bearer " + requestApiKey).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))).build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) throw new IllegalStateException("Vision provider returned HTTP " + response.statusCode());

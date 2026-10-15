@@ -9,6 +9,7 @@ public class LlmToolProperties {
     private boolean enabled;
     private String baseUrl;
     private String apiKey;
+    private String model = "deepseek-v3.2";
     private Duration connectTimeout = Duration.ofSeconds(10);
     private Duration requestTimeout = Duration.ofSeconds(120);
 
@@ -34,6 +35,14 @@ public class LlmToolProperties {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
     }
 
     public Duration getConnectTimeout() {

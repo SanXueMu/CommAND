@@ -27,6 +27,7 @@ command:
       enabled: ${COMMAND_LLM_ENABLED:false}
       base-url: ${COMMAND_LLM_BASE_URL:}
       api-key: ${COMMAND_LLM_API_KEY:}
+      model: ${COMMAND_LLM_MODEL:deepseek-v3.2}
       connect-timeout: 10s
       request-timeout: 120s
   clean:

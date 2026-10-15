@@ -12,6 +12,7 @@ import com.zthcpa.command.persistence.run.CleanStepCoordinatorRepository;
 import com.zthcpa.command.persistence.task.CleanRunCompletionRepository;
 import com.zthcpa.command.persistence.task.CleanTaskRepository;
 import com.zthcpa.command.persistence.task.HibernateCleanTaskRepository;
+import com.zthcpa.command.contract.LlmConfigurationPort;
 import jakarta.persistence.EntityManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -64,6 +65,11 @@ public class HibernatePersistenceConfiguration {
     @Bean
     CleanRunSubmissionRepository cleanRunSubmissionRepository(EntityManager entityManager) {
         return new CleanRunSubmissionRepository(entityManager);
+    }
+
+    @Bean
+    LlmConfigurationPort llmConfigurationPort(EntityManager entityManager) {
+        return new HibernateLlmConfigurationService(entityManager);
     }
 
 }

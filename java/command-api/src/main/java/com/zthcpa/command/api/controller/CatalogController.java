@@ -40,7 +40,10 @@ public final class CatalogController {
                 "views", List.of(
                         view("capabilities", "工具与工作流", "resource", "appstore-outlined"),
                         view("tasks", "任务中心", "console", "unordered-list-outlined"),
-                        view("workbenches", "工作台", "workbench", "desktop-outlined"),
+                         view("workbenches", "工作台", "workbench", "desktop-outlined"),
+                         view("translate-studio", "翻译工作台", "workbench", "translation-outlined"),
+                         view("ocr-studio", "OCR 工作台", "workbench", "scan-outlined"),
+                         view("system", "系统管理", "console", "setting-outlined"),
                          studioView("translate", "翻译工作台", "translate.studio", "translation-outlined", true,
                                  new LinkedHashMap<>(Map.of(
                                         "description", "文本翻译、术语和翻译任务管理",
@@ -152,13 +155,14 @@ public final class CatalogController {
                         page("workbenches", "工作台", "workbench", "desktop-outlined", false,
                                 List.of(
                                         component("workbench-header", "page-header", "header", Map.of("title", "工作台", "description", "选择工作台并提交正式工作流运行")),
-                                         component("workbench-form", "form", "input", Map.of("title", "工作台输入", "description", "选择工作流、上传文件或输入文本，然后提交任务", "fields", List.of("workflowId", "input"), "workbenches", List.of(
+                                          component("workbench-form", "form", "input", Map.of("title", "工作台输入", "description", "选择预置工作流，或从工具目录组合自己的工作流", "fields", List.of("workflowId", "input"), "customizable", true, "compositionResource", "capabilities", "compositionKind", "tool", "workbenches", List.of(
                                                   Map.of("id", "ocr.extract-document", "title", "OCR 文档提取", "description", "上传 PDF 或图片，查看页面、识别字段和结果表格", "inputMode", "file", "accept", ".pdf,.png,.jpg,.jpeg"),
                                                    Map.of("id", "translate.text", "title", "文本翻译", "description", "输入文本，设置语言和术语，查看最终译文", "inputMode", "text"),
                                                    Map.of("id", "translate.file-text", "title", "文本文件翻译", "description", "上传 TXT 或 Markdown 文件，提取文本后翻译", "inputMode", "file", "accept", ".txt,.md"),
                                                    Map.of("id", "translate.file-docx", "title", "DOCX 文件翻译", "description", "提取 DOCX 段落和表格文本后翻译", "inputMode", "file", "accept", ".docx"),
                                                    Map.of("id", "translate.file-xlsx", "title", "Excel 文件翻译", "description", "翻译文本单元格并生成新的 Excel 文件", "inputMode", "file", "accept", ".xlsx"),
-                                                  Map.of("id", "image.transform", "title", "图片翻转", "description", "上传图片并查看翻转后的真实结果", "inputMode", "image", "accept", ".png,.jpg,.jpeg", "operations", List.of("flip_horizontal", "flip_vertical"))
+                                                   Map.of("id", "image.transform", "title", "图片翻转", "description", "上传图片并查看翻转后的真实结果", "inputMode", "image", "accept", ".png,.jpg,.jpeg", "operations", List.of("flip_horizontal", "flip_vertical")),
+                                                     Map.of("id", "custom.workflow", "title", "自定义工作流", "description", "从工具目录组合执行步骤，先预览后保存", "inputMode", "composer")
                                           ))),
                                          component("workbench-progress", "progress-panel", "status", Map.of("title", "运行进度"), "active-run"),
                                          component("workbench-result", "result-preview", "result", Map.of("title", "节点结果"), "active-run"),
@@ -168,7 +172,42 @@ public final class CatalogController {
                                                  Map.of("id", "translate-templates", "label", "翻译模板", "resource", "translate-templates"),
                                                  Map.of("id", "translate-dictionary", "label", "翻译字典", "resource", "translate-dictionary")
                                          )))
-                                ))
+                                 )),
+                         page("translate-studio", "翻译工作台", "workbench", "translation-outlined", false,
+                                 List.of(
+                                         component("translate-header", "page-header", "header", Map.of("title", "翻译工作台", "description", "文本、TXT、DOCX 和 XLSX 文件翻译")),
+                                         component("translate-form", "form", "input", Map.of("title", "翻译输入", "description", "选择翻译流程、语言、术语和文件", "workbenches", List.of(
+                                                 Map.of("id", "translate.text", "title", "文本翻译", "inputMode", "text"),
+                                                 Map.of("id", "translate.file-text", "title", "TXT / Markdown", "inputMode", "file", "accept", ".txt,.md"),
+                                                 Map.of("id", "translate.file-docx", "title", "DOCX 文件", "inputMode", "file", "accept", ".docx"),
+                                                 Map.of("id", "translate.file-xlsx", "title", "Excel 文件", "inputMode", "file", "accept", ".xlsx")
+                                         ))),
+                                         component("translate-progress", "progress-panel", "status", Map.of("title", "翻译进度"), "active-run"),
+                                         component("translate-result", "result-preview", "result", Map.of("title", "翻译结果"), "active-run"),
+                                         component("translate-resources", "tabs", "result", Map.of("title", "翻译资料", "items", List.of(
+                                                 Map.of("id", "templates", "label", "翻译模板", "resource", "translate-templates"),
+                                                 Map.of("id", "dictionary", "label", "术语字典", "resource", "translate-dictionary")
+                                         )))
+                                 )),
+                         page("ocr-studio", "OCR 工作台", "workbench", "scan-outlined", false,
+                                 List.of(
+                                         component("ocr-header", "page-header", "header", Map.of("title", "OCR 工作台", "description", "模板驱动的文档识别、结果复核和导出")),
+                                         component("ocr-form", "form", "input", Map.of("title", "识别输入", "description", "上传 PDF 或图片，选择识别模板", "workbenches", List.of(Map.of("id", "ocr.extract-document", "title", "OCR 文档提取", "inputMode", "file", "accept", ".pdf,.png,.jpg,.jpeg")))),
+                                         component("ocr-progress", "progress-panel", "status", Map.of("title", "识别进度"), "active-run"),
+                                         component("ocr-result", "result-preview", "result", Map.of("title", "识别结果"), "active-run"),
+                                         component("ocr-resources", "tabs", "result", Map.of("title", "识别资料", "items", List.of(
+                                                 Map.of("id", "templates", "label", "识别模板", "resource", "ocr-templates"),
+                                                 Map.of("id", "results", "label", "结果库", "resource", "ocr-results"),
+                                                 Map.of("id", "views", "label", "结果视图", "resource", "ocr-views")
+                                         )))
+                                 )),
+                         page("system", "系统管理", "console", "setting-outlined", false,
+                                 List.of(
+                                         component("system-header", "page-header", "header", Map.of("title", "系统管理", "description", "查看平台运行状态和模型服务配置")),
+                                         component("system-llm", "detail-panel", "main", Map.of("title", "LLM 服务配置"), "llm-status"),
+                                         component("system-scheduler", "detail-panel", "main", Map.of("title", "调度器状态"), "scheduler-status"),
+                                         component("system-recovery", "detail-panel", "main", Map.of("title", "恢复器状态"), "recovery-status")
+                                 ))
                 ),
                 "resources", Map.of("version", "1", "resources", List.of(
                         resource("capabilities", "工具与工作流", "/api/capabilities"),
@@ -180,8 +219,11 @@ public final class CatalogController {
                          resource("ocr-results", "OCR 结果库", "/api/ocr/results"),
                          resource("ocr-records", "OCR 记录", "/api/ocr/records"),
                          resource("ocr-views", "OCR 视图", "/api/ocr/views"),
-                         resource("translate-templates", "翻译模板", "/api/translate/templates"),
-                         resource("translate-dictionary", "翻译字典", "/api/translate/dict")
+                          resource("translate-templates", "翻译模板", "/api/translate/templates"),
+                          resource("translate-dictionary", "翻译字典", "/api/translate/dict"),
+                          resource("llm-status", "LLM 服务配置", "/api/system/llm"),
+                          resource("scheduler-status", "调度器状态", "/api/system/scheduler"),
+                          resource("recovery-status", "恢复器状态", "/api/system/recovery")
                  )),
                  "actions", Map.of("version", "1", "actions", List.of(
                           action("submit-run", "提交运行", "POST", "/api/runs"),
